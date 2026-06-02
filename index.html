@@ -835,7 +835,11 @@ async function confirmBatch() {
           if (srcSub) {
             await bvPost('/bv/cms/v1/auto-tagging', {
               source: { id: vodId, type: 'AUTO_TAGGING_SOURCE_TYPE_VOD' },
-              setting: { content_types: ['AUTO_TAGGING_CONTENT_TYPE_TAGS'], subtitle_id: srcSub.id }
+              setting: {
+                content_types: ['AUTO_TAGGING_CONTENT_TYPE_TAGS'],
+                subtitle_id: srcSub.id,
+                auto_tagging_by: 'AUTO_TAGGING_BY_SUBTITLE',
+              }
             });
             log('  ✅ タグ トリガー', 'done');
           } else {
