@@ -1,0 +1,1519 @@
+<!DOCTYPE html>
+<html lang="ja">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>BV Dashboard</title>
+<style>
+:root {
+  --bg: #0f1117;
+  --surface: #1a1d27;
+  --surface2: #222536;
+  --surface3: #2a2e42;
+  --border: #2e3248;
+  --text: #e8eaf0;
+  --muted: #6b7090;
+  --accent: #4f6ef7;
+  --accent2: #7b93ff;
+  --green: #34d399;
+  --yellow: #fbbf24;
+  --red: #f87171;
+  --purple: #a78bfa;
+  --radius: 8px;
+  --font: 'DM Sans', system-ui, sans-serif;
+}
+@import url('https://fonts.googleapis.com/css2?family=DM+Sans:wght@400;500;600&family=DM+Mono:wght@400;500&display=swap');
+
+* { box-sizing: border-box; margin: 0; padding: 0; }
+body { font-family: var(--font); background: var(--bg); color: var(--text); min-height: 100vh; display: flex; font-size: 13px; }
+
+/* ── Layout ── */
+.sidebar { width: 200px; min-width: 200px; background: var(--surface); border-right: 1px solid var(--border); display: flex; flex-direction: column; padding: 20px 0; position: fixed; top: 0; left: 0; height: 100vh; z-index: 100; }
+.sidebar-logo { padding: 0 18px 20px; font-size: 15px; font-weight: 600; color: var(--text); border-bottom: 1px solid var(--border); margin-bottom: 12px; }
+.sidebar-logo span { display: block; font-size: 10px; color: var(--muted); font-weight: 400; margin-top: 2px; }
+.nav-item { display: flex; align-items: center; gap: 9px; padding: 8px 18px; cursor: pointer; color: var(--muted); border-radius: 0; transition: all 0.15s; font-size: 12.5px; font-weight: 500; border-left: 2px solid transparent; }
+.nav-item:hover { color: var(--text); background: var(--surface2); }
+.nav-item.active { color: var(--accent2); border-left-color: var(--accent); background: var(--surface2); }
+.main { margin-left: 200px; flex: 1; padding: 24px; max-width: calc(100vw - 200px); }
+.page { display: none; }
+.page.active { display: block; }
+
+/* ── Card ── */
+.card { background: var(--surface); border: 1px solid var(--border); border-radius: var(--radius); padding: 20px; margin-bottom: 16px; }
+.card-title { font-size: 13px; font-weight: 600; margin-bottom: 16px; display: flex; align-items: center; gap: 8px; color: var(--text); }
+.page-title { font-size: 18px; font-weight: 600; margin-bottom: 20px; color: var(--text); }
+
+/* ── Form ── */
+.form-grid { display: grid; grid-template-columns: 1fr 1fr; gap: 12px; }
+.form-group { display: flex; flex-direction: column; gap: 5px; }
+.form-group.full { grid-column: 1/-1; }
+.form-group label { font-size: 11px; color: var(--muted); font-weight: 500; text-transform: uppercase; letter-spacing: 0.4px; }
+input, select, textarea { background: var(--surface2); border: 1px solid var(--border); border-radius: 6px; color: var(--text); padding: 8px 10px; font-size: 12.5px; font-family: var(--font); width: 100%; outline: none; transition: border-color 0.15s; }
+input:focus, select:focus, textarea:focus { border-color: var(--accent); }
+input[type=password] { font-family: var(--font-mono, monospace); }
+.hint { font-size: 10.5px; color: var(--muted); }
+
+/* ── Button ── */
+.btn { display: inline-flex; align-items: center; gap: 6px; padding: 7px 14px; border-radius: 6px; border: none; cursor: pointer; font-size: 12px; font-weight: 500; font-family: var(--font); transition: all 0.15s; white-space: nowrap; }
+.btn-primary { background: var(--accent); color: #fff; }
+.btn-primary:hover { background: var(--accent2); }
+.btn-secondary { background: var(--surface2); color: var(--text); border: 1px solid var(--border); }
+.btn-secondary:hover { border-color: var(--accent); color: var(--accent2); }
+.btn-danger { background: transparent; color: var(--red); border: 1px solid var(--border); }
+.btn-danger:hover { background: rgba(248,113,113,0.1); border-color: var(--red); }
+.btn-sm { padding: 5px 10px; font-size: 11px; }
+.btn-xs { padding: 3px 8px; font-size: 11px; }
+.btn:disabled { opacity: 0.4; cursor: not-allowed; }
+.btn-row { display: flex; gap: 8px; flex-wrap: wrap; align-items: center; }
+
+/* ── Table ── */
+.table-wrap { overflow-x: auto; }
+table { width: 100%; border-collapse: collapse; font-size: 12px; }
+th { background: var(--surface2); padding: 8px 12px; text-align: left; font-size: 10.5px; color: var(--muted); font-weight: 600; text-transform: uppercase; letter-spacing: 0.4px; border-bottom: 1px solid var(--border); white-space: nowrap; }
+td { padding: 9px 12px; border-bottom: 1px solid var(--border); vertical-align: middle; }
+tr:hover td { background: rgba(255,255,255,0.02); }
+tr:last-child td { border-bottom: none; }
+
+/* ── Badge ── */
+.badge { display: inline-flex; align-items: center; gap: 4px; padding: 2px 8px; border-radius: 20px; font-size: 10.5px; font-weight: 500; white-space: nowrap; }
+.badge-green { background: rgba(52,211,153,0.12); color: var(--green); }
+.badge-yellow { background: rgba(251,191,36,0.12); color: var(--yellow); }
+.badge-red { background: rgba(248,113,113,0.12); color: var(--red); }
+.badge-gray { background: var(--surface2); color: var(--muted); }
+.badge-blue { background: rgba(79,110,247,0.12); color: var(--accent2); }
+
+/* ── Log ── */
+.log-box { background: var(--bg); border: 1px solid var(--border); border-radius: 6px; padding: 12px; max-height: 320px; overflow-y: auto; font-family: 'DM Mono', monospace; font-size: 11.5px; line-height: 1.7; }
+.log-line { padding: 1px 0; }
+.log-done { color: var(--green); }
+.log-error { color: var(--red); }
+.log-info { color: var(--accent2); }
+
+/* ── Filter bar ── */
+.filter-bar { display: flex; gap: 6px; align-items: center; flex-wrap: wrap; margin-bottom: 12px; }
+.filter-btn { padding: 4px 12px; border-radius: 20px; border: 1px solid var(--border); background: transparent; color: var(--muted); font-size: 11px; cursor: pointer; font-family: var(--font); transition: all 0.15s; }
+.filter-btn:hover { border-color: var(--accent); color: var(--text); }
+.filter-btn.active { background: var(--accent); border-color: var(--accent); color: #fff; font-weight: 600; }
+
+/* ── Toolbar ── */
+.toolbar { display: flex; align-items: center; gap: 8px; flex-wrap: wrap; margin-bottom: 14px; }
+.toolbar-right { margin-left: auto; display: flex; gap: 6px; flex-wrap: wrap; }
+
+/* ── Modal ── */
+.modal-bg { position: fixed; inset: 0; background: rgba(0,0,0,0.7); z-index: 500; display: flex; align-items: center; justify-content: center; }
+.modal { background: var(--surface); border: 1px solid var(--border); border-radius: 12px; padding: 28px; width: 460px; max-width: 95vw; max-height: 90vh; overflow-y: auto; }
+.modal-title { font-size: 15px; font-weight: 600; margin-bottom: 16px; }
+
+/* ── Upload zone ── */
+.upload-zone { border: 2px dashed var(--border); border-radius: 8px; padding: 28px; text-align: center; cursor: pointer; color: var(--muted); font-size: 12px; transition: all 0.2s; }
+.upload-zone:hover, .upload-zone.drag-over { border-color: var(--accent); color: var(--accent2); background: rgba(79,110,247,0.04); }
+
+/* ── Tab ── */
+.tabs { display: flex; gap: 0; border-bottom: 1px solid var(--border); margin-bottom: 20px; }
+.tab-btn { padding: 9px 20px; border: none; background: none; color: var(--muted); cursor: pointer; font-family: var(--font); font-size: 12.5px; font-weight: 500; border-bottom: 2px solid transparent; margin-bottom: -1px; transition: all 0.15s; }
+.tab-btn.active { color: var(--accent2); border-bottom-color: var(--accent); }
+.tab-btn:hover { color: var(--text); }
+
+/* ── Toast ── */
+.toast-container { position: fixed; bottom: 20px; right: 20px; z-index: 1000; display: flex; flex-direction: column; gap: 8px; }
+.toast { padding: 10px 16px; border-radius: 8px; font-size: 12px; max-width: 320px; animation: slideIn 0.2s; }
+.toast-success { background: rgba(52,211,153,0.15); border: 1px solid rgba(52,211,153,0.3); color: var(--green); }
+.toast-error { background: rgba(248,113,113,0.15); border: 1px solid rgba(248,113,113,0.3); color: var(--red); }
+.toast-info { background: rgba(79,110,247,0.15); border: 1px solid rgba(79,110,247,0.3); color: var(--accent2); }
+@keyframes slideIn { from { transform: translateX(20px); opacity: 0; } to { transform: translateX(0); opacity: 1; } }
+
+/* ── CPM ── */
+.vod-checkbox-list { max-height: 300px; overflow-y: auto; border: 1px solid var(--border); border-radius: 6px; }
+.vod-checkbox-list label { display: flex; align-items: center; gap: 10px; padding: 7px 12px; border-bottom: 1px solid var(--border); cursor: pointer; font-size: 12px; }
+.vod-checkbox-list label:last-child { border-bottom: none; }
+.vod-checkbox-list label:hover { background: var(--surface2); }
+
+/* ── Pagination ── */
+.pagination { display: flex; align-items: center; gap: 8px; justify-content: center; margin-top: 16px; font-size: 12px; color: var(--muted); }
+
+/* ── Progress ── */
+.progress-bar-wrap { background: var(--surface2); border-radius: 20px; height: 4px; overflow: hidden; margin: 8px 0; }
+.progress-bar { height: 100%; background: var(--accent); border-radius: 20px; transition: width 0.3s; }
+</style>
+</head>
+<body>
+
+<nav class="sidebar">
+  <div class="sidebar-logo">BV Dashboard<span>BlendVision 管理ツール</span></div>
+  <div class="nav-item active" onclick="showPage('settings')">⚙️ 設定</div>
+  <div class="nav-item" onclick="showPage('vods')">🎬 動画管理</div>
+  <div class="nav-item" onclick="showPage('subtitles')">📄 字幕管理</div>
+  <div class="nav-item" onclick="showPage('cpm')">📝 CPM 管理</div>
+</nav>
+
+<main class="main">
+
+<!-- ══ 設定 ══ -->
+<div id="page-settings" class="page active">
+  <div class="page-title">⚙️ 設定</div>
+  <div class="card">
+    <div class="card-title">API 認証情報</div>
+    <div class="form-grid">
+      <div class="form-group full">
+        <label>BV API Token</label>
+        <input type="password" id="s-token" placeholder="Bearer token...">
+      </div>
+      <div class="form-group">
+        <label>Org ID</label>
+        <input type="text" id="s-org-id" placeholder="xxxxxxxx-xxxx-xxxx-xxxx-xxxxxxxxxxxx">
+      </div>
+      <div class="form-group">
+        <label>CPM Site ID</label>
+        <input type="text" id="s-site-id" placeholder="xxxxxxxx-xxxx-xxxx-xxxx-xxxxxxxxxxxx">
+      </div>
+      <div class="form-group">
+        <label>デフォルト字幕言語</label>
+        <select id="s-lang">
+          <option value="ja-JP">日本語 (ja-JP)</option>
+          <option value="zh-TW">繁體中文 (zh-TW)</option>
+          <option value="en-US">English (en-US)</option>
+          <option value="ko-KR">한국어 (ko-KR)</option>
+        </select>
+      </div>
+      <div class="form-group">
+        <label>API Base URL</label>
+        <input type="text" id="s-base-url" value="https://api.one.blendvision.com">
+      </div>
+    </div>
+    <div class="btn-row" style="margin-top:16px;">
+      <button class="btn btn-primary" onclick="saveSettings()">💾 保存</button>
+      <button class="btn btn-secondary" onclick="testConnection()">🔗 接続テスト</button>
+      <span id="conn-status" style="font-size:12px;color:var(--muted);"></span>
+    </div>
+  </div>
+  <div class="card">
+    <div class="card-title">バッチ設定</div>
+    <div class="form-grid">
+      <div class="form-group">
+        <label>要約フォーマット</label>
+        <select id="s-sum-format">
+          <option value="paragraph">段落</option>
+          <option value="bullet">箇条書き</option>
+        </select>
+      </div>
+      <div class="form-group">
+        <label>要約タイプ</label>
+        <select id="s-sum-type">
+          <option value="general">一般</option>
+          <option value="educational">教育</option>
+        </select>
+      </div>
+      <div class="form-group">
+        <label>要約長さ</label>
+        <select id="s-sum-length">
+          <option value="brief">短い (10)</option>
+          <option value="average">普通 (20)</option>
+        </select>
+      </div>
+      <div class="form-group">
+        <label>翻訳先言語</label>
+        <select id="s-trans-lang">
+          <option value="en-US">English (en-US)</option>
+          <option value="zh-TW">繁體中文 (zh-TW)</option>
+          <option value="zh-CN">简体中文 (zh-CN)</option>
+          <option value="ko-KR">한국어 (ko-KR)</option>
+        </select>
+      </div>
+    </div>
+    <div class="btn-row" style="margin-top:16px;">
+      <button class="btn btn-primary" onclick="saveSettings()">💾 保存</button>
+    </div>
+  </div>
+</div>
+
+<!-- ══ 動画管理 ══ -->
+<div id="page-vods" class="page">
+  <div class="page-title">🎬 動画管理</div>
+
+  <div class="card">
+    <div class="toolbar">
+      <div class="filter-bar" style="margin:0;">
+        <button class="filter-btn active" id="f-all" onclick="setVodFilter('all')">全件</button>
+        <button class="filter-btn" id="f-incomplete" onclick="setVodFilter('incomplete')">⚠️ 未完了</button>
+        <span id="filter-status" style="font-size:11px;color:var(--muted);"></span>
+      </div>
+      <div class="toolbar-right">
+        <button class="btn btn-secondary btn-sm" onclick="loadVods()">🔄 更新</button>
+        <button class="btn btn-secondary btn-sm" onclick="selectAllVods()">☑ 全選択</button>
+        <button class="btn btn-secondary btn-sm" onclick="selectNoneVods()">✕ 解除</button>
+        <button class="btn btn-primary btn-sm" onclick="runBatch()" id="batch-btn">▶ バッチ実行</button>
+      </div>
+    </div>
+
+    <!-- バッチ設定 -->
+    <div id="batch-options" style="display:none;background:var(--surface2);border-radius:6px;padding:12px;margin-bottom:12px;font-size:12px;">
+      <div style="display:flex;gap:16px;flex-wrap:wrap;align-items:center;">
+        <label style="display:flex;align-items:center;gap:6px;cursor:pointer;"><input type="checkbox" id="b-subtitle" checked> 字幕生成</label>
+        <label style="display:flex;align-items:center;gap:6px;cursor:pointer;"><input type="checkbox" id="b-translate"> 字幕翻訳</label>
+        <label style="display:flex;align-items:center;gap:6px;cursor:pointer;"><input type="checkbox" id="b-summary" checked> 要約生成</label>
+        <label style="display:flex;align-items:center;gap:6px;cursor:pointer;"><input type="checkbox" id="b-tag"> タグ生成</label>
+        <button class="btn btn-primary btn-sm" onclick="confirmBatch()">🚀 実行</button>
+        <button class="btn btn-secondary btn-sm" onclick="document.getElementById('batch-options').style.display='none'">✕</button>
+      </div>
+    </div>
+
+    <div class="table-wrap">
+      <table>
+        <thead>
+          <tr>
+            <th width="28"><input type="checkbox" id="vod-check-all" onchange="toggleAllVods(this)"></th>
+            <th>動画名</th>
+            <th>字幕</th>
+            <th>要約</th>
+            <th>タグ</th>
+            <th width="80">操作</th>
+          </tr>
+        </thead>
+        <tbody id="vod-tbody">
+          <tr><td colspan="6" style="text-align:center;color:var(--muted);padding:32px;">「更新」ボタンを押して動画を読み込んでください</td></tr>
+        </tbody>
+      </table>
+    </div>
+    <div class="pagination" id="vod-pagination"></div>
+  </div>
+
+  <!-- バッチ Log -->
+  <div class="card" id="batch-log-card" style="display:none;">
+    <div class="card-title">📋 実行ログ <button class="btn btn-secondary btn-xs" style="margin-left:auto;" onclick="document.getElementById('batch-log-card').style.display='none'">✕</button></div>
+    <div class="log-box" id="batch-log"></div>
+  </div>
+</div>
+
+<!-- ══ 字幕管理 ══ -->
+<div id="page-subtitles" class="page">
+  <div class="page-title">📄 字幕管理</div>
+  <div class="card">
+    <div class="toolbar">
+      <input type="text" id="sub-search" placeholder="🔍 動画名で検索..." style="width:240px;" oninput="filterSubVods()">
+      <div class="toolbar-right">
+        <button class="btn btn-secondary btn-sm" onclick="loadSubVods()">🔄 更新</button>
+      </div>
+    </div>
+    <div class="table-wrap">
+      <table>
+        <thead>
+          <tr>
+            <th>動画名</th>
+            <th>字幕一覧</th>
+            <th width="100">操作</th>
+          </tr>
+        </thead>
+        <tbody id="sub-tbody">
+          <tr><td colspan="3" style="text-align:center;color:var(--muted);padding:32px;">「更新」ボタンを押してください</td></tr>
+        </tbody>
+      </table>
+    </div>
+  </div>
+</div>
+
+<!-- ══ CPM 管理 ══ -->
+<div id="page-cpm" class="page">
+  <div class="page-title">📝 CPM 管理</div>
+  <div class="tabs">
+    <button class="tab-btn active" id="tab-quiz" onclick="switchTab('quiz')">🧠 Quiz</button>
+    <button class="tab-btn" id="tab-program" onclick="switchTab('program')">📚 Program</button>
+  </div>
+
+  <!-- Quiz Tab -->
+  <div id="cpm-tab-quiz">
+    <div class="card">
+      <div class="card-title">🧠 Quiz 一括生成</div>
+      <div class="form-grid" style="margin-bottom:16px;">
+        <div class="form-group full">
+          <label>Quiz 名</label>
+          <input type="text" id="quiz-title" placeholder="例：経営戦略コース Quiz">
+        </div>
+        <div class="form-group full">
+          <label>既存 Quiz ID <span style="font-weight:400;color:var(--muted);font-size:10px;">（入力すると新規作成せず追加）</span></label>
+          <input type="text" id="quiz-existing-id" placeholder="空白 → 新規作成" style="font-family:monospace;font-size:11px;">
+        </div>
+        <div class="form-group">
+          <label>動画ごとの問題数</label>
+          <select id="quiz-q-per-vod">
+            <option value="1">1 問</option>
+            <option value="2" selected>2 問</option>
+            <option value="3">3 問</option>
+            <option value="5">5 問</option>
+            <option value="10">10 問</option>
+          </select>
+        </div>
+        <div class="form-group">
+          <label>合計問題数（予定）</label>
+          <div id="quiz-total-preview" style="padding:8px 10px;background:var(--surface2);border-radius:6px;color:var(--accent2);font-size:12px;">0 問</div>
+        </div>
+      </div>
+
+      <div style="display:flex;align-items:center;gap:8px;margin-bottom:8px;flex-wrap:wrap;">
+        <span style="font-weight:600;font-size:12px;">動画を選択</span>
+        <button class="btn btn-secondary btn-sm" onclick="loadQuizVods()">🔄 読み込み</button>
+        <button class="btn btn-secondary btn-sm" onclick="quizSelectAll()">全選択</button>
+        <button class="btn btn-secondary btn-sm" onclick="quizSelectNone()">解除</button>
+        <input type="text" placeholder="🔍 検索..." style="flex:1;min-width:140px;font-size:11px;" oninput="filterQuizVods(this.value)">
+      </div>
+      <div class="vod-checkbox-list" id="quiz-vod-list">
+        <div style="padding:20px;text-align:center;color:var(--muted);">「読み込み」を押してください</div>
+      </div>
+      <div style="margin-top:12px;display:flex;gap:8px;align-items:center;">
+        <button class="btn btn-primary" onclick="runQuizBatch()">🚀 Quiz 生成</button>
+        <span id="quiz-selected-count" style="font-size:11px;color:var(--muted);"></span>
+      </div>
+    </div>
+    <div class="card" id="quiz-log-card" style="display:none;">
+      <div class="card-title">📋 実行ログ <button class="btn btn-secondary btn-xs" style="margin-left:auto;" onclick="document.getElementById('quiz-log-card').style.display='none'">✕</button></div>
+      <div class="log-box" id="quiz-log"></div>
+    </div>
+  </div>
+
+  <!-- Program Tab -->
+  <div id="cpm-tab-program" style="display:none;">
+    <div class="card">
+      <div class="card-title">📚 Program CSV インポート</div>
+      <p style="color:var(--muted);font-size:12px;margin-bottom:16px;">テンプレートをダウンロード → 入力 → アップロードで自動作成</p>
+      <div class="btn-row" style="margin-bottom:20px;">
+        <button class="btn btn-secondary" onclick="downloadProgramTemplate()">⬇ テンプレートDL</button>
+        <button class="btn btn-secondary" onclick="document.getElementById('prog-csv-input').click()">⬆ CSV アップロード</button>
+        <input type="file" id="prog-csv-input" accept=".csv" style="display:none" onchange="handleProgramCSV(event)">
+      </div>
+      <div id="prog-preview" style="display:none;">
+        <div style="font-weight:600;font-size:12px;margin-bottom:10px;">プレビュー</div>
+        <div id="prog-preview-list"></div>
+        <div class="btn-row" style="margin-top:12px;">
+          <button class="btn btn-primary" onclick="runProgramImport()">🚀 インポート開始</button>
+          <button class="btn btn-secondary" onclick="clearProgramPreview()">✕ クリア</button>
+        </div>
+      </div>
+    </div>
+    <div class="card">
+      <div class="card-title">🖼️ Thumbnail 一括アップロード</div>
+      <p style="color:var(--muted);font-size:12px;margin-bottom:12px;">画像をドラッグ → Program 名でマッチング → 16:9 トリミング → アップロード</p>
+      <div style="display:flex;gap:8px;align-items:center;margin-bottom:10px;">
+        <button class="btn btn-secondary btn-sm" onclick="loadProgramList()">🔄 Program 一覧読み込み</button>
+        <span id="prog-list-count" style="font-size:11px;color:var(--muted);"></span>
+      </div>
+      <div class="upload-zone" id="thumb-zone"
+        onclick="document.getElementById('thumb-input').click()"
+        ondragover="event.preventDefault();this.classList.add('drag-over')"
+        ondragleave="this.classList.remove('drag-over')"
+        ondrop="handleThumbDrop(event)">
+        <input type="file" id="thumb-input" accept="image/*" multiple style="display:none" onchange="handleThumbSelect(event)">
+        🖼️ クリックまたはドラッグで画像をアップロード（複数可）
+      </div>
+      <div id="thumb-list" style="display:none;margin-top:12px;">
+        <table><thead><tr><th>ファイル名</th><th>マッチした Program</th><th>プレビュー</th><th></th></tr></thead>
+        <tbody id="thumb-tbody"></tbody></table>
+        <div class="btn-row" style="margin-top:10px;">
+          <button class="btn btn-primary" onclick="runThumbUpload()">🚀 一括アップロード</button>
+          <button class="btn btn-secondary" onclick="clearThumbList()">✕ クリア</button>
+        </div>
+      </div>
+    </div>
+    <div class="card" id="prog-log-card" style="display:none;">
+      <div class="card-title">📋 実行ログ <button class="btn btn-secondary btn-xs" style="margin-left:auto;" onclick="document.getElementById('prog-log-card').style.display='none'">✕</button></div>
+      <div class="log-box" id="prog-log"></div>
+    </div>
+  </div>
+</div>
+
+</main>
+
+<div class="toast-container" id="toasts"></div>
+
+<!-- 字幕アップロード Modal -->
+<div id="sub-upload-modal" style="display:none;" class="modal-bg" onclick="if(event.target===this)this.style.display='none'">
+  <div class="modal">
+    <div class="modal-title">📄 字幕アップロード</div>
+    <div class="form-group" style="margin-bottom:12px;">
+      <label>動画</label>
+      <div id="sub-upload-vod-name" style="padding:8px;background:var(--surface2);border-radius:6px;font-size:12px;"></div>
+    </div>
+    <div class="form-group" style="margin-bottom:12px;">
+      <label>言語</label>
+      <select id="sub-upload-lang">
+        <option value="ja-JP">日本語 (ja-JP)</option>
+        <option value="en-US">English (en-US)</option>
+        <option value="zh-TW">繁體中文 (zh-TW)</option>
+        <option value="zh-CN">简体中文 (zh-CN)</option>
+        <option value="ko-KR">한국어 (ko-KR)</option>
+      </select>
+    </div>
+    <div class="form-group" style="margin-bottom:12px;">
+      <label>表示名</label>
+      <input type="text" id="sub-upload-display" placeholder="例：日本語">
+    </div>
+    <div class="upload-zone" id="sub-file-zone"
+      onclick="document.getElementById('sub-file-input').click()"
+      ondragover="event.preventDefault();this.classList.add('drag-over')"
+      ondragleave="this.classList.remove('drag-over')"
+      ondrop="handleSubFileDrop(event)">
+      <input type="file" id="sub-file-input" accept=".srt,.vtt" style="display:none" onchange="handleSubFileSelect(event)">
+      <span id="sub-file-name">クリックまたはドラッグ（.srt / .vtt）</span>
+    </div>
+    <div id="sub-upload-progress" style="display:none;margin-top:10px;">
+      <div class="progress-bar-wrap"><div class="progress-bar" id="sub-progress-bar" style="width:0%"></div></div>
+      <div id="sub-progress-msg" style="font-size:11px;color:var(--muted);margin-top:4px;"></div>
+    </div>
+    <div class="btn-row" style="margin-top:16px;">
+      <button class="btn btn-primary" onclick="uploadSubtitle()">⬆ アップロード</button>
+      <button class="btn btn-secondary" onclick="document.getElementById('sub-upload-modal').style.display='none'">キャンセル</button>
+    </div>
+  </div>
+</div>
+
+<script>
+// ─── Config ────────────────────────────────────────────
+const BASE_URL = () => cfg('base_url') || 'https://api.one.blendvision.com';
+const HEADERS = () => ({
+  'Content-Type': 'application/json',
+  'Authorization': `Bearer ${cfg('token')}`,
+  'x-bv-org-id': cfg('org_id'),
+});
+
+function cfg(key) { return localStorage.getItem('bv_' + key) || ''; }
+function setCfg(key, val) { localStorage.setItem('bv_' + key, val); }
+
+function saveSettings() {
+  setCfg('token', document.getElementById('s-token').value.trim());
+  setCfg('org_id', document.getElementById('s-org-id').value.trim());
+  setCfg('site_id', document.getElementById('s-site-id').value.trim());
+  setCfg('lang', document.getElementById('s-lang').value);
+  setCfg('base_url', document.getElementById('s-base-url').value.trim());
+  setCfg('sum_format', document.getElementById('s-sum-format').value);
+  setCfg('sum_type', document.getElementById('s-sum-type').value);
+  setCfg('sum_length', document.getElementById('s-sum-length').value);
+  setCfg('trans_lang', document.getElementById('s-trans-lang').value);
+  toast('設定を保存しました', 'success');
+}
+
+function loadSettings() {
+  const fields = ['token','org_id','site_id','lang','base_url','sum_format','sum_type','sum_length','trans_lang'];
+  const ids = ['s-token','s-org-id','s-site-id','s-lang','s-base-url','s-sum-format','s-sum-type','s-sum-length','s-trans-lang'];
+  fields.forEach((k, i) => { const v = cfg(k); if (v && document.getElementById(ids[i])) document.getElementById(ids[i]).value = v; });
+}
+
+async function testConnection() {
+  const el = document.getElementById('conn-status');
+  el.textContent = '接続中...'; el.style.color = 'var(--muted)';
+  try {
+    const r = await bvGet('/bv/cms/v1/vods?page_size=1');
+    el.textContent = '✅ 接続成功'; el.style.color = 'var(--green)';
+  } catch(e) {
+    el.textContent = '❌ ' + e.message; el.style.color = 'var(--red)';
+  }
+}
+
+// ─── API helpers ────────────────────────────────────────
+async function bvRequest(method, path, body) {
+  const url = BASE_URL() + path;
+  const opts = { method, headers: HEADERS() };
+  if (body) opts.body = JSON.stringify(body);
+  const r = await fetch(url, opts);
+  const text = await r.text();
+  let data;
+  try { data = JSON.parse(text); } catch { data = { _raw: text }; }
+  if (!r.ok) throw new Error(`${r.status}: ${JSON.stringify(data).substring(0,200)}`);
+  return data;
+}
+const bvGet = (path) => bvRequest('GET', path);
+const bvPost = (path, body) => bvRequest('POST', path, body);
+const bvPut = (path, body) => bvRequest('PUT', path, body);
+const bvDelete = (path) => bvRequest('DELETE', path);
+
+function siteId() {
+  const id = cfg('site_id');
+  if (!id) throw new Error('設定ページで CPM Site ID を入力してください');
+  return id;
+}
+
+function sumLength() {
+  const v = cfg('sum_length') || 'brief';
+  return v === 'average' ? 20 : 10;
+}
+function sumFormat() {
+  const v = cfg('sum_format') || 'paragraph';
+  return v === 'bullet' ? 'SUMMARY_FORMAT_BULLET' : 'SUMMARY_FORMAT_PARAGRAPH';
+}
+function sumContentType() {
+  const v = cfg('sum_type') || 'general';
+  return v === 'educational' ? 'SUMMARY_CONTENT_TYPE_EDUCATIONAL' : 'SUMMARY_CONTENT_TYPE_GENERAL';
+}
+
+// ─── Navigation ─────────────────────────────────────────
+function showPage(name) {
+  document.querySelectorAll('.page').forEach(p => p.classList.remove('active'));
+  document.querySelectorAll('.nav-item').forEach(n => n.classList.remove('active'));
+  document.getElementById('page-' + name).classList.add('active');
+  document.querySelectorAll('.nav-item').forEach(n => {
+    if (n.getAttribute('onclick')?.includes(`'${name}'`)) n.classList.add('active');
+  });
+  if (name === 'vods') loadVods();
+  if (name === 'subtitles') loadSubVods();
+  if (name === 'cpm') loadQuizVods();
+}
+
+// ─── Toast ──────────────────────────────────────────────
+function toast(msg, type = 'info') {
+  const c = document.getElementById('toasts');
+  const el = document.createElement('div');
+  el.className = `toast toast-${type}`;
+  el.textContent = msg;
+  c.appendChild(el);
+  setTimeout(() => el.remove(), 3500);
+}
+
+// ─── Status helpers ─────────────────────────────────────
+function statusBadge(status) {
+  const s = (status || '').toUpperCase();
+  if (s.includes('SUCCEED') || s.includes('READY') || s === 'SUCCEEDED') return '<span class="badge badge-green">✅ 完了</span>';
+  if (s.includes('PROCESS') || s.includes('PENDING') || s === 'PROCESSING') return '<span class="badge badge-yellow">⏳ 処理中</span>';
+  if (s.includes('FAIL') || s.includes('ERROR')) return '<span class="badge badge-red">❌ 失敗</span>';
+  return '<span class="badge badge-gray">—</span>';
+}
+
+function subtitleLabel(subs) {
+  if (!subs?.length) return '<span class="badge badge-gray">—</span>';
+  const labels = [...new Set(subs.map(s => s.display || s.lang_code || '').filter(Boolean))].join(' / ');
+  return `<span class="badge badge-green">✅ ${labels}</span>`;
+}
+
+// ─── VOD 管理 ────────────────────────────────────────────
+let vodsData = [];
+let vodFilter = 'all';
+let vodPage = 1;
+const VOD_PAGE_SIZE = 20;
+let selectedVodIds = new Set();
+
+async function loadVods() {
+  document.getElementById('vod-tbody').innerHTML = '<tr><td colspan="6" style="text-align:center;color:var(--muted);padding:24px;">読み込み中...</td></tr>';
+  try {
+    let allVods = [];
+    if (vodFilter === 'incomplete') {
+      // 全件取得
+      let page = 1;
+      while (true) {
+        const d = await bvGet(`/bv/cms/v1/vods?current_page=${page}&page_size=100`);
+        const vods = d.vods || d.data || [];
+        allVods.push(...vods);
+        if (vods.length < 100) break;
+        page++;
+      }
+      vodsData = allVods;
+      renderVodTable();
+      // detail を batch 読み込み
+      document.getElementById('filter-status').textContent = `全件読み込み中（0 / ${allVods.length}）...`;
+      for (let i = 0; i < allVods.length; i += 5) {
+        const batch = allVods.slice(i, i + 5);
+        await Promise.all(batch.map(v => loadVodDetail(v.id).catch(() => {})));
+        document.getElementById('filter-status').textContent = `読み込み中（${Math.min(i+5, allVods.length)} / ${allVods.length}）...`;
+        applyVodFilter();
+      }
+      const visible = document.querySelectorAll('#vod-tbody tr:not([style*="none"])').length;
+      document.getElementById('filter-status').textContent = `未完了 ${visible} 件`;
+    } else {
+      const d = await bvGet(`/bv/cms/v1/vods?current_page=${vodPage}&page_size=${VOD_PAGE_SIZE}`);
+      vodsData = d.vods || d.data || [];
+      renderVodTable();
+      renderPagination(d.pagination || d.page_info || {});
+    }
+  } catch(e) {
+    document.getElementById('vod-tbody').innerHTML = `<tr><td colspan="6" style="text-align:center;color:var(--red);padding:24px;">${e.message}</td></tr>`;
+  }
+}
+
+async function loadVodDetail(vodId) {
+  try {
+    const subResp = await bvGet(`/bv/cms/v1/vods/${vodId}/subtitles`);
+    const subs = subResp.subtitles || [];
+    // 要約（最初の字幕で確認）
+    let sumStatus = 'NONE';
+    const firstSub = subs.find(s => s.status === 'SUBTITLE_STATUS_SUCCEED');
+    if (firstSub) {
+      try {
+        const sumResp = await bvPost('/bv/cms/v2alpha1/summaries:fetch', {
+          source_id: vodId, source_type: 'SUMMARY_SOURCE_TYPE_VOD',
+          vod: { subtitle_id: firstSub.id }
+        });
+        const genJob = (sumResp.summary || {}).generate_job || {};
+        const rawStatus = genJob.status || (sumResp.summary || {}).status || '';
+        sumStatus = rawStatus.includes('READY') || rawStatus.includes('SUCCEED') ? 'SUCCEEDED' :
+                    rawStatus.includes('PROCESS') ? 'PROCESSING' : 'NOT_STARTED';
+        if (sumStatus === 'NOT_STARTED' && ((sumResp.summary || {}).literal_content || (sumResp.summary || {}).structural_content)) sumStatus = 'SUCCEEDED';
+      } catch {}
+    }
+    // タグ
+    let tagStatus = 'NONE';
+    try {
+      const tagResp = await bvGet(`/bv/cms/v1/auto-tagging?source.id=${vodId}&source.type=AUTO_TAGGING_SOURCE_TYPE_VOD`);
+      const tag = tagResp.auto_tagging || {};
+      const ts = (tag.status || '').toUpperCase();
+      tagStatus = ts.includes('SUCCEED') ? 'SUCCEEDED' : ts.includes('PROCESS') ? 'PROCESSING' : 'NONE';
+    } catch {}
+
+    const subStatus = subs.some(s => s.status === 'SUBTITLE_STATUS_SUCCEED') ? 'SUCCEEDED' :
+                      subs.some(s => s.status?.includes('PROCESS')) ? 'PROCESSING' : 'NONE';
+
+    const idx = vodsData.findIndex(v => v.id === vodId);
+    if (idx >= 0) {
+      vodsData[idx]._detail = { subs, subStatus, sumStatus, tagStatus };
+      // 行を更新
+      const row = document.getElementById('vrow-' + vodId);
+      if (row) {
+        row.querySelector('.td-sub').innerHTML = subtitleLabel(subs);
+        row.querySelector('.td-sum').innerHTML = statusBadge(sumStatus);
+        row.querySelector('.td-tag').innerHTML = statusBadge(tagStatus);
+      }
+    }
+  } catch {}
+}
+
+function renderVodTable() {
+  const tbody = document.getElementById('vod-tbody');
+  if (!vodsData.length) {
+    tbody.innerHTML = '<tr><td colspan="6" style="text-align:center;color:var(--muted);padding:24px;">動画がありません</td></tr>';
+    return;
+  }
+  tbody.innerHTML = vodsData.map(vod => {
+    const id = vod.id || '';
+    const name = vod.name || id.substring(0,16);
+    const checked = selectedVodIds.has(id) ? 'checked' : '';
+    return `<tr id="vrow-${id}" style="display:none;">
+      <td><input type="checkbox" class="vod-cb" value="${id}" ${checked} onchange="onVodCheck(this)"></td>
+      <td style="max-width:260px;overflow:hidden;text-overflow:ellipsis;white-space:nowrap;" title="${name}">${name}</td>
+      <td class="td-sub"><span class="badge badge-gray">…</span></td>
+      <td class="td-sum"><span class="badge badge-gray">…</span></td>
+      <td class="td-tag"><span class="badge badge-gray">…</span></td>
+      <td><button class="btn btn-secondary btn-xs" onclick="loadVodDetail('${id}')">🔄</button></td>
+    </tr>`;
+  }).join('');
+  applyVodFilter();
+  // detail を非同期で読み込む
+  vodsData.forEach(v => loadVodDetail(v.id));
+}
+
+function applyVodFilter() {
+  const rows = document.querySelectorAll('#vod-tbody tr[id]');
+  let visible = 0;
+  rows.forEach(row => {
+    const id = row.id.replace('vrow-', '');
+    const vod = vodsData.find(v => v.id === id);
+    let show = true;
+    if (vodFilter === 'incomplete' && vod?._detail) {
+      const { subStatus, sumStatus, tagStatus } = vod._detail;
+      const ok = s => s === 'SUCCEEDED';
+      show = !ok(subStatus) || !ok(sumStatus) || !ok(tagStatus);
+    }
+    row.style.display = show ? '' : 'none';
+    if (show) visible++;
+  });
+  if (vodFilter === 'incomplete') {
+    document.getElementById('filter-status').textContent = `未完了 ${visible} 件`;
+  }
+}
+
+function setVodFilter(f) {
+  vodFilter = f;
+  document.getElementById('f-all').classList.toggle('active', f === 'all');
+  document.getElementById('f-incomplete').classList.toggle('active', f === 'incomplete');
+  document.getElementById('filter-status').textContent = '';
+  loadVods();
+}
+
+function renderPagination(info) {
+  const total = info.total_items || info.total || 0;
+  const totalPages = Math.ceil(total / VOD_PAGE_SIZE);
+  const el = document.getElementById('vod-pagination');
+  if (totalPages <= 1) { el.innerHTML = ''; return; }
+  el.innerHTML = `
+    <button class="btn btn-secondary btn-xs" ${vodPage<=1?'disabled':''} onclick="vodPage=${vodPage-1};loadVods()">« 前</button>
+    <span>${vodPage} / ${totalPages} ページ（全 ${total} 件）</span>
+    <button class="btn btn-secondary btn-xs" ${vodPage>=totalPages?'disabled':''} onclick="vodPage=${vodPage+1};loadVods()">次 »</button>`;
+}
+
+function onVodCheck(cb) { cb.checked ? selectedVodIds.add(cb.value) : selectedVodIds.delete(cb.value); }
+function selectAllVods() { document.querySelectorAll('.vod-cb').forEach(c => { if(c.closest('tr').style.display!=='none'){c.checked=true;selectedVodIds.add(c.value);} }); }
+function selectNoneVods() { document.querySelectorAll('.vod-cb').forEach(c => { c.checked=false;selectedVodIds.delete(c.value); }); }
+function toggleAllVods(cb) { cb.checked ? selectAllVods() : selectNoneVods(); }
+
+// ─── バッチ実行 ──────────────────────────────────────────
+function runBatch() {
+  const opts = document.getElementById('batch-options');
+  opts.style.display = opts.style.display === 'none' ? 'block' : 'none';
+}
+
+async function confirmBatch() {
+  const ids = [...selectedVodIds];
+  if (!ids.length) { toast('動画を選択してください', 'error'); return; }
+  const doSub = document.getElementById('b-subtitle').checked;
+  const doTrans = document.getElementById('b-translate').checked;
+  const doSum = document.getElementById('b-summary').checked;
+  const doTag = document.getElementById('b-tag').checked;
+  if (!doSub && !doTrans && !doSum && !doTag) { toast('実行内容を選択してください', 'error'); return; }
+
+  document.getElementById('batch-options').style.display = 'none';
+  const logCard = document.getElementById('batch-log-card');
+  const logEl = document.getElementById('batch-log');
+  logCard.style.display = 'block';
+  logEl.innerHTML = '';
+
+  const log = (msg, type='') => {
+    const div = document.createElement('div');
+    div.className = 'log-line' + (type ? ' log-'+type : '');
+    div.textContent = new Date().toLocaleTimeString() + ' ' + msg;
+    logEl.appendChild(div);
+    logEl.scrollTop = logEl.scrollHeight;
+  };
+
+  log(`▶ バッチ開始：${ids.length} 件`);
+  let ok = 0, fail = 0;
+
+  for (let i = 0; i < ids.length; i++) {
+    const vodId = ids[i];
+    const vod = vodsData.find(v => v.id === vodId);
+    const name = (vod?.name || vodId).substring(0, 30);
+    log(`[${i+1}/${ids.length}] ${name}`);
+
+    try {
+      // 字幕
+      if (doSub) {
+        try {
+          const lang = cfg('lang') || 'ja-JP';
+          await bvPut(`/bv/cms/v1/vods/${vodId}/subtitles`, {
+            stt_subtitles: [{ track_no: '1', lang_code: lang, display: lang === 'ja-JP' ? '日本語' : lang }],
+            ai_translate_subtitles: []
+          });
+          log('  ✅ 字幕生成 トリガー', 'done');
+        } catch(e) { log(`  ❌ 字幕: ${e.message}`, 'error'); }
+      }
+
+      // 翻訳（字幕が存在する場合）
+      if (doTrans) {
+        try {
+          const subResp = await bvGet(`/bv/cms/v1/vods/${vodId}/subtitles`);
+          const subs = subResp.subtitles || [];
+          const srcSub = subs.find(s => s.status === 'SUBTITLE_STATUS_SUCCEED');
+          if (srcSub) {
+            const tLang = cfg('trans_lang') || 'en-US';
+            const tDisplay = tLang === 'en-US' ? 'English' : tLang;
+            await bvPost(`/bv/cms/v1/vods/${vodId}/subtitles/${srcSub.id}:translate`, {
+              settings: [{ source_lang_code: srcSub.lang_code, target_lang_code: tLang, display: tDisplay }]
+            });
+            log(`  ✅ 翻訳 トリガー (→${tLang})`, 'done');
+          } else {
+            log('  ⏭ 翻訳スキップ（字幕なし）');
+          }
+        } catch(e) { log(`  ❌ 翻訳: ${e.message}`, 'error'); }
+      }
+
+      // 要約
+      if (doSum) {
+        try {
+          const subResp = await bvGet(`/bv/cms/v1/vods/${vodId}/subtitles`);
+          const subs = (subResp.subtitles || []).filter(s => s.status === 'SUBTITLE_STATUS_SUCCEED');
+          let triggered = 0;
+          for (const sub of subs) {
+            await bvPost('/bv/cms/v2alpha1/summaries:generate', {
+              source_id: vodId, source_type: 'SUMMARY_SOURCE_TYPE_VOD',
+              setting: { content_type: sumContentType(), format: sumFormat(), length: sumLength() },
+              vod: { subtitle_id: sub.id }
+            });
+            triggered++;
+          }
+          if (triggered) log(`  ✅ 要約 トリガー (${triggered} 件)`, 'done');
+          else log('  ⏭ 要約スキップ（字幕なし）');
+        } catch(e) { log(`  ❌ 要約: ${e.message}`, 'error'); }
+      }
+
+      // タグ
+      if (doTag) {
+        try {
+          const subResp = await bvGet(`/bv/cms/v1/vods/${vodId}/subtitles`);
+          const srcSub = (subResp.subtitles || []).find(s => s.status === 'SUBTITLE_STATUS_SUCCEED');
+          if (srcSub) {
+            await bvPost('/bv/cms/v1/auto-tagging', {
+              source: { id: vodId, type: 'AUTO_TAGGING_SOURCE_TYPE_VOD' },
+              setting: { content_types: ['AUTO_TAGGING_CONTENT_TYPE_TAGS'], subtitle_id: srcSub.id }
+            });
+            log('  ✅ タグ トリガー', 'done');
+          } else {
+            log('  ⏭ タグスキップ（字幕なし）');
+          }
+        } catch(e) { log(`  ❌ タグ: ${e.message}`, 'error'); }
+      }
+
+      ok++;
+    } catch(e) {
+      fail++;
+      log(`  ❌ エラー: ${e.message}`, 'error');
+    }
+  }
+
+  log(`🏁 完了：成功 ${ok} / 失敗 ${fail}`, ok > 0 ? 'done' : 'error');
+  toast(`バッチ完了：${ok} 件成功`, ok > 0 ? 'success' : 'error');
+}
+
+// ─── 字幕管理 ────────────────────────────────────────────
+let subVodsData = [];
+let subVodFile = null;
+let subVodId = '';
+
+async function loadSubVods() {
+  document.getElementById('sub-tbody').innerHTML = '<tr><td colspan="3" style="text-align:center;color:var(--muted);padding:24px;">読み込み中...</td></tr>';
+  try {
+    let allVods = [], page = 1;
+    while (true) {
+      const d = await bvGet(`/bv/cms/v1/vods?current_page=${page}&page_size=100`);
+      const vods = d.vods || d.data || [];
+      allVods.push(...vods);
+      if (vods.length < 100) break;
+      page++;
+    }
+    subVodsData = allVods;
+    renderSubTable(allVods);
+  } catch(e) {
+    document.getElementById('sub-tbody').innerHTML = `<tr><td colspan="3" style="text-align:center;color:var(--red);padding:24px;">${e.message}</td></tr>`;
+  }
+}
+
+function renderSubTable(vods) {
+  const tbody = document.getElementById('sub-tbody');
+  if (!vods.length) { tbody.innerHTML = '<tr><td colspan="3" style="text-align:center;color:var(--muted);padding:24px;">動画がありません</td></tr>'; return; }
+  tbody.innerHTML = vods.map(vod => {
+    const id = vod.id || '';
+    const name = vod.name || id;
+    return `<tr>
+      <td style="max-width:240px;overflow:hidden;text-overflow:ellipsis;white-space:nowrap;" title="${name}">${name}</td>
+      <td id="sublist-${id}"><span class="badge badge-gray">…</span></td>
+      <td>
+        <button class="btn btn-secondary btn-xs" onclick="refreshSubList('${id}')">🔄</button>
+        <button class="btn btn-secondary btn-xs" onclick="openSubUpload('${id}','${name.replace(/'/g,"\\'")}')">📄+</button>
+      </td>
+    </tr>`;
+  }).join('');
+  // 非同期で字幕読み込み
+  vods.forEach(v => refreshSubList(v.id));
+}
+
+async function refreshSubList(vodId) {
+  const el = document.getElementById('sublist-' + vodId);
+  if (!el) return;
+  try {
+    const r = await bvGet(`/bv/cms/v1/vods/${vodId}/subtitles`);
+    const subs = r.subtitles || [];
+    if (!subs.length) { el.innerHTML = '<span class="badge badge-gray">—</span>'; return; }
+    el.innerHTML = subs.map(s => {
+      const lang = s.display || s.lang_code || '';
+      const ok = s.status === 'SUBTITLE_STATUS_SUCCEED';
+      return `<span class="badge ${ok ? 'badge-green' : 'badge-yellow'}" style="margin-right:4px;">${ok ? '✅' : '⏳'} ${lang}</span>`;
+    }).join('');
+  } catch { el.innerHTML = '<span class="badge badge-red">error</span>'; }
+}
+
+function filterSubVods() {
+  const q = document.getElementById('sub-search').value.toLowerCase();
+  const filtered = q ? subVodsData.filter(v => (v.name || '').toLowerCase().includes(q)) : subVodsData;
+  renderSubTable(filtered);
+}
+
+function openSubUpload(vodId, vodName) {
+  subVodId = vodId;
+  subVodFile = null;
+  document.getElementById('sub-upload-vod-name').textContent = vodName;
+  document.getElementById('sub-file-name').textContent = 'クリックまたはドラッグ（.srt / .vtt）';
+  document.getElementById('sub-upload-progress').style.display = 'none';
+  document.getElementById('sub-upload-modal').style.display = 'flex';
+}
+
+function handleSubFileSelect(e) { if (e.target.files[0]) setSubFile(e.target.files[0]); }
+function handleSubFileDrop(e) {
+  e.preventDefault();
+  document.getElementById('sub-file-zone').classList.remove('drag-over');
+  if (e.dataTransfer.files[0]) setSubFile(e.dataTransfer.files[0]);
+}
+function setSubFile(f) {
+  subVodFile = f;
+  document.getElementById('sub-file-name').textContent = `📄 ${f.name} (${Math.round(f.size/1024)}KB)`;
+}
+
+async function uploadSubtitle() {
+  if (!subVodId || !subVodFile) { toast('動画とファイルを選択してください', 'error'); return; }
+  const lang = document.getElementById('sub-upload-lang').value;
+  const display = document.getElementById('sub-upload-display').value || lang;
+  const prog = document.getElementById('sub-upload-progress');
+  const bar = document.getElementById('sub-progress-bar');
+  const msg = document.getElementById('sub-progress-msg');
+  prog.style.display = 'block';
+
+  try {
+    // Step 1: 初期化
+    msg.textContent = 'Step 1/3: アップロード URL 取得...'; bar.style.width = '10%';
+    const initResp = await bvPost('/bv/cms/v1/library/files:upload', {
+      file: { type: 'FILE_TYPE_SUBTITLE', source: 'FILE_SOURCE_UNSPECIFIED', name: subVodFile.name, size: subVodFile.size, attrs: { 'content-type': 'application/x-subrip' } }
+    });
+    const fileId = (initResp.file || {}).id || '';
+    const uploadData = initResp.upload_data || {};
+    const uploadId = uploadData.id || '';
+    const parts = uploadData.parts || [];
+
+    // Step 2: S3 アップロード
+    msg.textContent = 'Step 2/3: ファイルアップロード中...'; bar.style.width = '40%';
+    const uploadedParts = [];
+    for (let i = 0; i < parts.length; i++) {
+      const part = parts[i];
+      const start = part.offset || 0;
+      const size = part.size || subVodFile.size;
+      const r = await fetch(part.presigned_url || part.url, { method: 'PUT', body: subVodFile.slice(start, start + size) });
+      uploadedParts.push({ part_number: part.part_number || (i+1), etag: r.headers.get('etag') || '' });
+      bar.style.width = `${40 + 30 * (i+1) / parts.length}%`;
+    }
+
+    // Step 3: 完了
+    msg.textContent = 'Step 3/3: 完了処理...'; bar.style.width = '75%';
+    await bvPost(`/bv/cms/v1/library/files/${fileId}:complete-upload`, {
+      complete_data: { id: uploadId, parts: uploadedParts }
+    });
+
+    // Step 4: VOD に紐付け
+    msg.textContent = 'Step 4/4: VOD に紐付け...'; bar.style.width = '90%';
+    await bvPost(`/bv/cms/v1/vods/${subVodId}/subtitles:batch-create`, {
+      subtitles: [{ code: lang, id: fileId, name: subVodFile.name, display }]
+    });
+
+    bar.style.width = '100%';
+    msg.textContent = '✅ 完了！';
+    toast('字幕をアップロードしました', 'success');
+    setTimeout(() => {
+      document.getElementById('sub-upload-modal').style.display = 'none';
+      refreshSubList(subVodId);
+    }, 1200);
+  } catch(e) {
+    msg.textContent = '❌ ' + e.message;
+    msg.style.color = 'var(--red)';
+    toast('アップロード失敗: ' + e.message, 'error');
+  }
+}
+
+// ─── CPM Quiz ────────────────────────────────────────────
+let quizVodsAll = [];
+let quizVodsFiltered = [];
+
+async function loadQuizVods() {
+  const el = document.getElementById('quiz-vod-list');
+  el.innerHTML = '<div style="padding:16px;text-align:center;color:var(--muted);">読み込み中...</div>';
+  try {
+    let allVods = [], page = 1;
+    while (true) {
+      const d = await bvGet(`/bv/cms/v1/vods?current_page=${page}&page_size=100`);
+      const vods = d.vods || d.data || [];
+      allVods.push(...vods);
+      if (vods.length < 100) break;
+      page++;
+    }
+    quizVodsAll = allVods;
+    quizVodsFiltered = [...allVods];
+    renderQuizVodList();
+  } catch(e) {
+    el.innerHTML = `<div style="padding:16px;color:var(--red);">${e.message}</div>`;
+  }
+}
+
+function renderQuizVodList() {
+  const el = document.getElementById('quiz-vod-list');
+  if (!quizVodsFiltered.length) { el.innerHTML = '<div style="padding:16px;text-align:center;color:var(--muted);">動画がありません</div>'; return; }
+  el.innerHTML = quizVodsFiltered.map(v =>
+    `<label><input type="checkbox" class="quiz-cb" value="${v.id}" data-name="${(v.name||'').replace(/"/g,'&quot;')}" onchange="updateQuizCount()"> ${v.name || v.id}</label>`
+  ).join('');
+  updateQuizCount();
+}
+
+function filterQuizVods(q) {
+  quizVodsFiltered = q ? quizVodsAll.filter(v => (v.name||'').toLowerCase().includes(q.toLowerCase())) : [...quizVodsAll];
+  renderQuizVodList();
+}
+
+function updateQuizCount() {
+  const n = document.querySelectorAll('.quiz-cb:checked').length;
+  const perVod = parseInt(document.getElementById('quiz-q-per-vod').value || '2');
+  document.getElementById('quiz-selected-count').textContent = n ? `${n} 件選択` : '';
+  document.getElementById('quiz-total-preview').textContent = `${n * perVod} 問`;
+}
+
+function quizSelectAll() { document.querySelectorAll('.quiz-cb').forEach(c => c.checked = true); updateQuizCount(); }
+function quizSelectNone() { document.querySelectorAll('.quiz-cb').forEach(c => c.checked = false); updateQuizCount(); }
+
+document.addEventListener('change', e => { if (e.target?.id === 'quiz-q-per-vod') updateQuizCount(); });
+
+async function runQuizBatch() {
+  const title = document.getElementById('quiz-title').value.trim();
+  if (!title) { toast('Quiz 名を入力してください', 'error'); return; }
+  const checked = [...document.querySelectorAll('.quiz-cb:checked')];
+  if (!checked.length) { toast('動画を選択してください', 'error'); return; }
+  const site = siteId();
+  const perVod = parseInt(document.getElementById('quiz-q-per-vod').value || '2');
+  const existingId = document.getElementById('quiz-existing-id').value.trim();
+
+  const logCard = document.getElementById('quiz-log-card');
+  const logEl = document.getElementById('quiz-log');
+  logCard.style.display = 'block';
+  logEl.innerHTML = '';
+
+  const log = (msg, type='') => {
+    const div = document.createElement('div');
+    div.className = 'log-line' + (type ? ' log-'+type : '');
+    div.textContent = new Date().toLocaleTimeString() + ' ' + msg;
+    logEl.appendChild(div);
+    logEl.scrollTop = logEl.scrollHeight;
+  };
+
+  let formId = existingId;
+  if (!formId) {
+    log(`📋 Quiz 作成中：「${title}」`);
+    try {
+      const r = await bvPost(`/bv/cpm/v1alpha1/sites/${site}/forms`, {
+        form: { title, type: 'FORM_TYPE_QUIZ', description: '', questions: [] }
+      });
+      formId = (r.form || r).id || '';
+      if (!formId) throw new Error('form_id が取得できません');
+      log(`✅ Quiz 作成完了（ID: ${formId.substring(0,16)}...）`, 'done');
+    } catch(e) { log(`❌ ${e.message}`, 'error'); return; }
+  } else {
+    log(`♻️ 既存 Quiz 使用（ID: ${formId.substring(0,16)}...）`);
+  }
+
+  let ok = 0, fail = 0, seqOffset = 0;
+  for (let i = 0; i < checked.length; i++) {
+    const vodId = checked[i].value;
+    const vodName = checked[i].dataset.name || vodId;
+    log(`[${i+1}/${checked.length}] 🎬 ${vodName.substring(0,30)}`);
+
+    // CPM content 検索
+    let contentId = '';
+    try {
+      const searchName = vodName.replace(/\.(mp4|mov|mkv|avi)$/i, '');
+      const candidates = [searchName, searchName.match(/^(\d+_\d+)/)?.[1]].filter(Boolean);
+      for (const q of candidates) {
+        const r = await fetch(`${BASE_URL()}/bv/cpm/v1alpha1/sites/${site}/contents?current_page=1&items_per_page=10&filter.title=${encodeURIComponent(q)}&filter.content_types=CONTENT_TYPE_VOD&filter.content_types=CONTENT_TYPE_FILE&filter.content_types=CONTENT_TYPE_AOD&filter.content_types=CONTENT_TYPE_ARTICLE`, { headers: HEADERS() });
+        const d = await r.json();
+        const hits = d.contents || [];
+        if (hits.length) {
+          const exact = hits.find(c => c.title === searchName);
+          contentId = (exact || hits[0]).content_id || '';
+          log(`  🔍 「${(exact || hits[0]).title}」`);
+          break;
+        }
+      }
+    } catch {}
+
+    if (!contentId) { log('  ⚠️ CPM content が見つかりません', 'error'); fail++; continue; }
+
+    // 問題生成（locked リトライ）
+    for (let attempt = 0; attempt < 3; attempt++) {
+      try {
+        await bvPost(`/bv/cpm/v2alpha1/sites/${site}/forms/${formId}/questions`, {
+          contents: [{ content_id: contentId, content_type: 'CONTENT_TYPE_VOD' }],
+          question_count: perVod,
+          question_type: 'QUESTION_TYPE_SINGLE_CHOICE',
+          lang_code: null,
+          sequence_offset: seqOffset > 0 ? seqOffset : null,
+        });
+        ok++;
+        seqOffset += perVod;
+        log(`  ✅ ${perVod} 問 生成完了`, 'done');
+        break;
+      } catch(e) {
+        if (e.message.includes('locked') && attempt < 2) {
+          log(`  ⏳ ロック中、20秒待機（${attempt+1}回目）`);
+          await new Promise(r => setTimeout(r, 20000));
+        } else {
+          log(`  ❌ ${e.message}`, 'error');
+          fail++;
+          break;
+        }
+      }
+    }
+  }
+
+  log(`🏁 完了：${ok} 件成功 / ${fail} 件失敗　Quiz ID: ${formId}`, ok > 0 ? 'done' : 'error');
+  toast(`Quiz 生成完了：${ok} 件`, ok > 0 ? 'success' : 'error');
+}
+
+// ─── CPM Program ─────────────────────────────────────────
+let programImportData = [];
+let programListCache = [];
+let thumbFiles = [];
+
+function switchTab(tab) {
+  document.querySelectorAll('.tab-btn').forEach(b => b.classList.remove('active'));
+  document.getElementById('tab-' + tab).classList.add('active');
+  document.getElementById('cpm-tab-quiz').style.display = tab === 'quiz' ? 'block' : 'none';
+  document.getElementById('cpm-tab-program').style.display = tab === 'program' ? 'block' : 'none';
+}
+
+function downloadProgramTemplate() {
+  const rows = [
+    ['field', 'value'],
+    ['', ''],
+    ['# ===== Program 1 =====', ''],
+    ['program_title', 'マネージャー層に必要とされるビジネス環境の先読み力'],
+    ['topic_labels', 'ビジネス基礎力,VUCA'],
+    ['highlight_1', '激動の時代における企業経営の基本的な考え方'],
+    ['highlight_2', 'VUCAの時代に事業戦略を担うためのスキルセット'],
+    ['highlight_3', '新規事業のアイデア創出のためのテクニックと検証方法'],
+    ['about', '先行きが不透明で将来の予測も困難な時代として...'],
+    ['author_name', '佐古 雅亮'],
+    ['author_title', 'Spready株式会社 代表取締役'],
+    ['author_desc', '著者説明文'],
+    ['author_avatar_library_id', ''],
+    ['background_library_id', ''],
+    ['part_numbers', 'E1000078'],
+    ['visibility', 'CONTENT_VISIBILITY_DRAFT'],
+    ['', ''],
+    ['# --- コンテンツ構成 ---', ''],
+    ['main_category', 'ビジネス環境の先読み力 前半'],
+    ['sub_category', 'Part 1'],
+    ['content', '71_1 VUCA変化の激しい時代'],
+    ['content', '71_2 ビジネス環境を「読む」ためのマインドセット'],
+    ['sub_category', 'Part 2'],
+    ['content', '71_3 ビジネス環境を「読む」ためのスキルセット'],
+    ['main_category', 'ビジネス環境の先読み力 後半'],
+    ['content', '71_4 ビジネス環境先読みの王道'],
+    ['', ''],
+    ['---', ''],
+    ['', ''],
+    ['# ===== Program 2 =====', ''],
+    ['program_title', '次のコースタイトル'],
+    ['highlight_1', '学習ポイント1'],
+    ['visibility', 'CONTENT_VISIBILITY_DRAFT'],
+    ['main_category', 'メインカテゴリ名'],
+    ['content', '実際の動画名'],
+  ];
+  const csv = rows.map(r => r.map(c => `"${(c||'').replace(/"/g,'""')}"`).join(',')).join('\n');
+  const blob = new Blob(['\uFEFF' + csv], { type: 'text/csv;charset=utf-8' });
+  const a = document.createElement('a'); a.href = URL.createObjectURL(blob);
+  a.download = 'bv_program_template.csv'; a.click();
+  toast('テンプレートをダウンロードしました', 'success');
+}
+
+function handleProgramCSV(event) {
+  const file = event.target.files?.[0];
+  event.target.value = '';
+  if (!file) return;
+  const reader = new FileReader();
+  reader.onload = e => {
+    try {
+      const lines = e.target.result.split(/\r?\n/);
+      const programs = [];
+      let current = null, currentMain = null;
+
+      for (const rawLine of lines) {
+        const line = rawLine.trim();
+        if (!line || line.startsWith('#')) continue;
+        const cols = parseCSVLine(line);
+        const field = (cols[0] || '').trim().toLowerCase();
+        const value = (cols[1] || '').trim();
+
+        if (field === '---') { currentMain = null; continue; }
+        if (field === 'program_title') {
+          current = { title: value, highlight: ['','',''], about_html: '', author_name: '', author_title: '', author_desc: '', author_avatar_library_id: '', background_library_id: '', labels: [], part_numbers: [], visibility: 'CONTENT_VISIBILITY_DRAFT', contents: [] };
+          programs.push(current); currentMain = null; continue;
+        }
+        if (!current) continue;
+        switch (field) {
+          case 'topic_labels': case 'labels': current.labels = value ? value.split(',').map(s=>s.trim()).filter(Boolean) : []; break;
+          case 'highlight_1': current.highlight[0] = value; break;
+          case 'highlight_2': current.highlight[1] = value; break;
+          case 'highlight_3': current.highlight[2] = value; break;
+          case 'about': current.about_html = value ? `<p style="margin:8px 0;overflow-wrap:anywhere;white-space:pre-wrap">${value}</p>` : ''; break;
+          case 'author_name': current.author_name = value; break;
+          case 'author_title': current.author_title = value; break;
+          case 'author_desc': current.author_desc = value; break;
+          case 'author_avatar_library_id': current.author_avatar_library_id = value; break;
+          case 'background_library_id': current.background_library_id = value; break;
+          case 'part_numbers': current.part_numbers = value ? value.split(',').map(s=>s.trim()).filter(Boolean) : []; break;
+          case 'visibility': current.visibility = value || 'CONTENT_VISIBILITY_DRAFT'; break;
+          case 'main_category': currentMain = { type: 'section', name: value }; current.contents.push(currentMain); break;
+          case 'sub_category': current.contents.push({ type: 'module', name: value }); break;
+          case 'content': current.contents.push({ type: 'content', content_title: value }); break;
+        }
+      }
+
+      programImportData = programs.filter(p => p.title);
+      renderProgramPreview();
+      toast(`${programImportData.length} 件読み込みました`, 'success');
+    } catch(err) { toast('解析失敗：' + err.message, 'error'); }
+  };
+  reader.readAsText(file, 'UTF-8');
+}
+
+function parseCSVLine(line) {
+  const result = []; let current = ''; let inQuote = false;
+  for (let i = 0; i < line.length; i++) {
+    if (line[i] === '"') {
+      if (inQuote && line[i+1] === '"') { current += '"'; i++; }
+      else inQuote = !inQuote;
+    } else if (line[i] === ',' && !inQuote) {
+      result.push(current); current = '';
+    } else { current += line[i]; }
+  }
+  result.push(current);
+  return result;
+}
+
+function renderProgramPreview() {
+  const el = document.getElementById('prog-preview');
+  const listEl = document.getElementById('prog-preview-list');
+  el.style.display = 'block';
+  listEl.innerHTML = programImportData.map(p => `
+    <div style="border:1px solid var(--border);border-radius:6px;padding:10px 14px;margin-bottom:8px;font-size:12px;">
+      <div style="font-weight:600;margin-bottom:4px;">📚 ${p.title}</div>
+      <div style="color:var(--muted);">ラベル: ${p.labels.join(',')||'なし'} ｜ 著者: ${p.author_name||'なし'} ｜ コンテンツ: ${p.contents.filter(c=>c.type==='content').length} 件</div>
+    </div>`).join('');
+}
+
+function clearProgramPreview() { programImportData = []; document.getElementById('prog-preview').style.display = 'none'; }
+
+async function runProgramImport() {
+  if (!programImportData.length) { toast('データがありません', 'error'); return; }
+  const site = siteId();
+  const logCard = document.getElementById('prog-log-card');
+  const logEl = document.getElementById('prog-log');
+  logCard.style.display = 'block';
+  logEl.innerHTML = '';
+
+  const log = (msg, type='') => {
+    const div = document.createElement('div');
+    div.className = 'log-line' + (type ? ' log-'+type : '');
+    div.textContent = new Date().toLocaleTimeString() + ' ' + msg;
+    logEl.appendChild(div);
+    logEl.scrollTop = logEl.scrollHeight;
+  };
+
+  log(`▶ ${programImportData.length} 件インポート開始`);
+
+  for (let i = 0; i < programImportData.length; i++) {
+    const prog = programImportData[i];
+    log(`[${i+1}/${programImportData.length}] 📚 「${prog.title}」`);
+
+    try {
+      // arrangement 構築
+      const arrangement = [];
+      let curSection = null, curModule = null;
+      for (const c of prog.contents) {
+        if (c.type === 'section') {
+          curSection = { type: 'PROGRAM_ARRANGEMENT_ITEM_TYPE_SECTION', sequence: 0, section: { name: c.name, items: [] } };
+          curModule = null;
+          arrangement.push(curSection);
+        } else if (c.type === 'module') {
+          curModule = { type: 'PROGRAM_ARRANGEMENT_ITEM_TYPE_MODULE', sequence: 0, module: { name: c.name, items: [] } };
+          (curSection ? curSection.section.items : arrangement).push(curModule);
+        } else if (c.type === 'content' && c.content_title) {
+          // content_id 検索
+          const searchName = c.content_title.replace(/\.(mp4|mov|mkv|avi)$/i, '');
+          let contentId = '';
+          try {
+            const r = await fetch(`${BASE_URL()}/bv/cpm/v1alpha1/sites/${site}/contents?current_page=1&items_per_page=5&filter.title=${encodeURIComponent(searchName)}&filter.content_types=CONTENT_TYPE_VOD&filter.content_types=CONTENT_TYPE_FORM`, { headers: HEADERS() });
+            const d = await r.json();
+            const hits = d.contents || [];
+            if (hits.length) contentId = (hits.find(h => h.title === searchName) || hits[0]).content_id || '';
+          } catch {}
+          if (!contentId) { log(`  ⚠️ 「${c.content_title}」が見つかりません`); continue; }
+          const contentItem = { type: 'PROGRAM_ARRANGEMENT_ITEM_TYPE_CONTENT', sequence: 0, content: { type: 'CONTENT_TYPE_VOD', name: searchName, vod: { id: contentId } } };
+          if (curModule) curModule.module.items.push(contentItem);
+          else if (curSection) curSection.section.items.push(contentItem);
+          else arrangement.push(contentItem);
+        }
+      }
+      // sequence を振り直す
+      const reseq = (items) => items.forEach((item, idx) => {
+        item.sequence = idx + 1;
+        if (item.section?.items) reseq(item.section.items);
+        if (item.module?.items) reseq(item.module.items);
+      });
+      reseq(arrangement);
+
+      // POST 作成
+      const createResp = await bvPost(`/bv/cpm/v1alpha1/sites/${site}/programs`, {
+        program: { title: prog.title, label_info: { displayable: true, labels: [] }, rating: { displayable: false }, highlight: { displayable: true, texts: ['','',''] }, about: { displayable: true, html_content: '' }, arrangement: { displayable: true, items: [] }, author_info: { name: '', title: '', description: '', displayable: true }, background: { type: 'PROGRAM_BACKGROUND_TYPE_DEFAULT' }, clip: { displayable: true, clips: [] }, level_info: { displayable: false, level: 'PROGRAM_LEVEL_BEGINNER' }, relation: { displayable: true, related_contents: [] } }
+      });
+      const progId = (createResp.program || createResp).id || '';
+      if (!progId) throw new Error('program_id が取得できません');
+      await new Promise(r => setTimeout(r, 1000));
+
+      // PUT 完全更新
+      const authorInfo = { displayable: true, name: prog.author_name, title: prog.author_title, description: prog.author_desc };
+      if (prog.author_avatar_library_id) authorInfo.avatar_library_id = prog.author_avatar_library_id;
+      const putBody = {
+        title: prog.title,
+        highlight: { displayable: true, texts: [...prog.highlight, '', '', ''].slice(0, 3) },
+        about: { displayable: true, html_content: prog.about_html },
+        author_info: authorInfo,
+        label_info: { displayable: true, labels: prog.labels.map(l => ({ name: l })) },
+        arrangement: { displayable: true, items: arrangement },
+        clip: { displayable: true, clips: [] },
+        rating: { displayable: false },
+        level_info: { displayable: false, level: 'PROGRAM_LEVEL_BEGINNER' },
+        relation: { displayable: true, related_contents: [] },
+        certification: { setting: { enabled: false, template_id: '', issuer_id: '', passing_threshold: 0 } },
+        background: prog.background_library_id ? { type: 'PROGRAM_BACKGROUND_TYPE_IMAGE', image: { id: prog.background_library_id } } : { type: 'PROGRAM_BACKGROUND_TYPE_DEFAULT' },
+      };
+
+      for (let attempt = 0; attempt < 3; attempt++) {
+        try {
+          await bvPut(`/bv/cpm/v1alpha1/sites/${site}/programs/${progId}`, { program: putBody });
+          break;
+        } catch(e) {
+          if (attempt < 2) await new Promise(r => setTimeout(r, 2000));
+          else throw e;
+        }
+      }
+
+      // contents/setting
+      await bvPut(`/bv/cpm/v1alpha1/sites/${site}/contents/setting`, {
+        content: { content_id: progId, content_type: 'CONTENT_TYPE_PROGRAM', visibility: prog.visibility, labels: prog.labels, part_numbers: prog.part_numbers, schedule: { start_time: null, end_time: null }, license_setting: { license: 'CONTENT_LICENSE_LICENSE_ONLY', custom_url_resource: '' }, note: '', form_type: null }
+      });
+
+      log(`  ✅ 完了（ID: ${progId.substring(0,16)}...）`, 'done');
+    } catch(e) {
+      log(`  ❌ ${e.message}`, 'error');
+    }
+  }
+
+  log('🏁 インポート完了', 'done');
+  toast('Program インポート完了', 'success');
+}
+
+// ─── Thumbnail ───────────────────────────────────────────
+async function loadProgramList() {
+  const el = document.getElementById('prog-list-count');
+  el.textContent = '読み込み中...';
+  try {
+    const site = siteId();
+    const r = await fetch(`${BASE_URL()}/bv/cpm/v1alpha1/sites/${site}/contents?current_page=1&items_per_page=200&filter.content_types=CONTENT_TYPE_PROGRAM`, { headers: HEADERS() });
+    const d = await r.json();
+    programListCache = (d.contents || []).map(c => ({ id: c.content_id, title: c.title }));
+    el.textContent = `${programListCache.length} 件`;
+  } catch(e) { el.textContent = '失敗：' + e.message; }
+}
+
+function handleThumbSelect(e) { addThumbFiles([...e.target.files]); }
+function handleThumbDrop(e) {
+  e.preventDefault();
+  document.getElementById('thumb-zone').classList.remove('drag-over');
+  addThumbFiles([...e.dataTransfer.files]);
+}
+
+function cropTo169(file) {
+  return new Promise(resolve => {
+    const img = new Image();
+    img.onload = () => {
+      const canvas = document.createElement('canvas');
+      const W = 1280, H = 720;
+      const sr = img.width / img.height, tr = 16/9;
+      let sx, sy, sw, sh;
+      if (sr > tr) { sh = img.height; sw = sh*tr; sy = 0; sx = (img.width-sw)/2; }
+      else { sw = img.width; sh = sw/tr; sx = 0; sy = (img.height-sh)/2; }
+      canvas.width = W; canvas.height = H;
+      canvas.getContext('2d').drawImage(img, sx, sy, sw, sh, 0, 0, W, H);
+      canvas.toBlob(blob => resolve(blob), 'image/jpeg', 0.9);
+    };
+    img.src = URL.createObjectURL(file);
+  });
+}
+
+function matchProgram(filename) {
+  const base = filename.replace(/\.[^/.]+$/, '').toLowerCase();
+  return programListCache.find(p => p.title.toLowerCase() === base || p.title.toLowerCase().includes(base) || base.includes(p.title.toLowerCase().substring(0, 8))) || null;
+}
+
+async function addThumbFiles(files) {
+  for (const file of files) {
+    const blob = await cropTo169(file);
+    const matched = matchProgram(file.name);
+    thumbFiles.push({ file, blob, progId: matched?.id || '', progTitle: matched?.title || '', matched: !!matched });
+  }
+  renderThumbList();
+}
+
+function renderThumbList() {
+  if (!thumbFiles.length) { document.getElementById('thumb-list').style.display = 'none'; return; }
+  document.getElementById('thumb-list').style.display = 'block';
+  document.getElementById('thumb-tbody').innerHTML = thumbFiles.map((item, i) => {
+    const preview = URL.createObjectURL(item.blob);
+    return `<tr>
+      <td style="font-size:11px;">${item.file.name}</td>
+      <td><select style="font-size:11px;" onchange="thumbFiles[${i}].progId=this.value;thumbFiles[${i}].progTitle=this.options[this.selectedIndex].text;">
+        <option value="">— 未マッチ</option>
+        ${programListCache.map(p => `<option value="${p.id}" ${p.id===item.progId?'selected':''}>${p.title}</option>`).join('')}
+      </select>${item.matched ? ' <span class="badge badge-green" style="font-size:10px;">自動</span>' : ''}</td>
+      <td><img src="${preview}" style="height:36px;width:64px;object-fit:cover;border-radius:4px;"></td>
+      <td><button class="btn btn-secondary btn-xs" onclick="thumbFiles.splice(${i},1);renderThumbList()">✕</button></td>
+    </tr>`;
+  }).join('');
+}
+
+function clearThumbList() { thumbFiles = []; document.getElementById('thumb-input').value = ''; document.getElementById('thumb-list').style.display = 'none'; }
+
+async function runThumbUpload() {
+  const valid = thumbFiles.filter(t => t.progId);
+  if (!valid.length) { toast('Program を選択してください', 'error'); return; }
+  const site = siteId();
+  const logCard = document.getElementById('prog-log-card');
+  const logEl = document.getElementById('prog-log');
+  logCard.style.display = 'block';
+  logEl.innerHTML = '';
+
+  const log = (msg, type='') => {
+    const div = document.createElement('div');
+    div.className = 'log-line' + (type ? ' log-'+type : '');
+    div.textContent = new Date().toLocaleTimeString() + ' ' + msg;
+    logEl.appendChild(div);
+    logEl.scrollTop = logEl.scrollHeight;
+  };
+
+  log(`▶ ${valid.length} 件アップロード開始`);
+
+  for (let i = 0; i < valid.length; i++) {
+    const item = valid[i];
+    log(`[${i+1}/${valid.length}] ${item.file.name} → ${item.progTitle.substring(0,20)}`);
+    try {
+      // Library にアップロード
+      const fname = item.file.name.replace(/\.[^/.]+$/, '') + '.jpg';
+      const initResp = await bvPost('/bv/cms/v1/library/files:upload', {
+        file: { type: 'FILE_TYPE_IMAGE', source: 'FILE_SOURCE_UNSPECIFIED', name: fname, size: item.blob.size, attrs: { 'content-type': 'image/jpeg' } }
+      });
+      const fileId = (initResp.file || {}).id || '';
+      const uploadData = initResp.upload_data || {};
+      const parts = uploadData.parts || [];
+      const uploadedParts = [];
+      for (let p = 0; p < parts.length; p++) {
+        const part = parts[p];
+        const r = await fetch(part.presigned_url || part.url, { method: 'PUT', body: item.blob.slice(part.offset || 0, (part.offset || 0) + (part.size || item.blob.size)) });
+        uploadedParts.push({ part_number: part.part_number || (p+1), etag: r.headers.get('etag') || '' });
+      }
+      await bvPost(`/bv/cms/v1/library/files/${fileId}:complete-upload`, { complete_data: { id: uploadData.id, parts: uploadedParts } });
+
+      // Program 更新
+      const progResp = await fetch(`${BASE_URL()}/bv/cpm/v1alpha1/sites/${site}/programs/${item.progId}?action=GET_FORM_REQUEST_ACTION_CURRENT&mode=FORM_MODE_EDIT`, { headers: HEADERS() });
+      const progData = await progResp.json();
+      const prog = progData.program || progData;
+      const putBody = Object.fromEntries(Object.entries(prog).filter(([k]) => !['id','created_at','updated_at','duration','stats'].includes(k)));
+      putBody.background = { type: 'PROGRAM_BACKGROUND_TYPE_IMAGE', image: { id: fileId } };
+      await bvPut(`/bv/cpm/v1alpha1/sites/${site}/programs/${item.progId}`, { program: putBody });
+
+      log(`  ✅ 完了`, 'done');
+    } catch(e) { log(`  ❌ ${e.message}`, 'error'); }
+  }
+
+  log('🏁 完了', 'done');
+  toast('Thumbnail アップロード完了', 'success');
+  clearThumbList();
+}
+
+// ─── Init ────────────────────────────────────────────────
+loadSettings();
+</script>
+</body>
+</html>
