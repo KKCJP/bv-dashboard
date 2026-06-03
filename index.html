@@ -88,11 +88,15 @@ tr:last-child td{border-bottom:none;}
 <body>
 
 <nav class="sidebar">
-  <div class="sidebar-logo">BV Dashboard<span>BlendVision 管理ツール</span></div>
-  <div class="nav-item active" onclick="showPage('settings')">⚙️ 設定</div>
-  <div class="nav-item" onclick="showPage('vods')">🎬 動画管理</div>
-  <div class="nav-item" onclick="showPage('subtitles')">📄 字幕管理</div>
-  <div class="nav-item" onclick="showPage('cpm')">📝 CPM 管理</div>
+  <div class="sidebar-logo">BV Dashboard<span id="nav-subtitle">管理ツール</span></div>
+  <div class="nav-item active" onclick="showPage('settings')">⚙️ <span data-i18n="nav_settings">設定</span></div>
+  <div class="nav-item" onclick="showPage('vods')">🎬 <span data-i18n="nav_vods">動画管理</span></div>
+  <div class="nav-item" onclick="showPage('subtitles')">📄 <span data-i18n="nav_subtitles">字幕管理</span></div>
+  <div class="nav-item" onclick="showPage('cpm')">📝 <span data-i18n="nav_cpm">CPM 管理</span></div>
+  <div style="margin-top:auto;padding:16px 18px;display:flex;gap:6px;">
+    <button class="btn btn-xs" id="lang-zh" onclick="setLang('zh')" style="flex:1;">繁中</button>
+    <button class="btn btn-xs btn-secondary" id="lang-ja" onclick="setLang('ja')" style="flex:1;">日本語</button>
+  </div>
 </nav>
 
 <main class="main">
@@ -145,14 +149,12 @@ tr:last-child td{border-bottom:none;}
         <button class="btn btn-secondary btn-sm" onclick="exportVodCsv()">⬇ CSV</button>
         <button class="btn btn-secondary btn-sm" onclick="document.getElementById('import-csv-input').click()">⬆ CSV改名</button>
         <input type="file" id="import-csv-input" accept=".csv" style="display:none" onchange="importRenameCsv(event)">
-        <button class="btn btn-secondary btn-sm" onclick="selectAllVods()">☑ 全選択</button>
-        <button class="btn btn-secondary btn-sm" onclick="selectNoneVods()">✕ 解除</button>
-        <button class="btn btn-danger btn-sm" onclick="deleteSelectedVods()">🗑 削除</button>
-        <button class="btn btn-primary btn-sm" onclick="confirmBatch()">▶ バッチ実行</button>
       </div>
     </div>
-    <div id="batch-options" style="background:var(--surface2);border-radius:6px;padding:12px;margin-bottom:12px;font-size:12px;">
+    <!-- 勾選時に表示 -->
+    <div id="batch-options" style="display:none;background:var(--surface2);border-radius:6px;padding:10px 14px;margin-bottom:12px;font-size:12px;">
       <div style="display:flex;gap:12px;flex-wrap:wrap;align-items:center;">
+        <span id="batch-selected-label" style="color:var(--accent2);font-weight:600;white-space:nowrap;"></span>
         <label style="display:flex;align-items:center;gap:6px;cursor:pointer;white-space:nowrap;"><input type="checkbox" id="b-subtitle"> 字幕生成</label>
         <label style="display:flex;align-items:center;gap:6px;cursor:pointer;white-space:nowrap;"><input type="checkbox" id="b-translate"> 字幕翻訳</label>
         <select id="b-trans-lang" style="width:auto;padding:4px 8px;font-size:11px;">
@@ -165,6 +167,8 @@ tr:last-child td{border-bottom:none;}
         <label style="display:flex;align-items:center;gap:6px;cursor:pointer;white-space:nowrap;"><input type="checkbox" id="b-summary" checked> 要約生成</label>
         <label style="display:flex;align-items:center;gap:6px;cursor:pointer;white-space:nowrap;"><input type="checkbox" id="b-tag" checked> タグ生成</label>
         <button class="btn btn-primary btn-sm" onclick="confirmBatch()">🚀 実行</button>
+        <button class="btn btn-danger btn-sm" onclick="deleteSelectedVods()">🗑 削除</button>
+        <button class="btn btn-secondary btn-sm" onclick="selectNoneVods()">✕ 解除</button>
       </div>
     </div>
     <div class="table-wrap">
@@ -321,6 +325,148 @@ tr:last-child td{border-bottom:none;}
 </div>
 
 <script>
+// ════ i18n ═══════════════════════════════════════════════
+const I18N = {
+  zh: {
+    nav_settings:'設定', nav_vods:'影片管理', nav_subtitles:'字幕管理', nav_cpm:'CPM 管理',
+    subtitle:'BlendVision 管理工具',
+    filter_all:'全部', filter_incomplete:'⚠️ 任一未完成',
+    filter_loading:(done,total)=>`載入狀態中（${done}/${total}）...`,
+    filter_result:n=>`未完成 ${n} 筆`,
+    batch_selected:n=>`已選 ${n} 筆`,
+    batch_subtitle:'字幕生成', batch_translate:'字幕翻譯', batch_summary:'摘要生成', batch_tag:'標記生成',
+    batch_run:'🚀 執行', btn_delete:'🗑 刪除', btn_deselect:'✕ 取消',
+    btn_refresh:'🔄 更新', btn_csv_dl:'⬇ CSV', btn_csv_import:'⬆ CSV 改名',
+    col_name:'影片名稱', col_sub:'字幕', col_sum:'摘要', col_tag:'標記', col_action:'操作',
+    loading:'載入中...', no_vod:'按「更新」載入影片', no_vod_found:'沒有影片',
+    settings_title:'⚙️ 設定', api_title:'API 認證資訊',
+    token_label:'BV API Token', org_label:'Org ID', site_label:'CPM Site ID',
+    lang_label:'預設字幕語言', baseurl_label:'API Base URL',
+    batch_title:'批次設定', sum_format_label:'摘要格式', sum_type_label:'摘要類型', sum_length_label:'摘要長度',
+    trans_lang_label:'翻譯目標語言',
+    btn_save:'💾 儲存', btn_test:'🔗 測試連線', conn_ok:'✅ 連線成功', conn_fail:'❌ 失敗',
+    sub_title:'📄 字幕管理', sub_search:'🔍 用影片名稱搜尋...',
+    btn_zip:'📥 ZIP 下載',
+    col_sub_list:'字幕清單',
+    cpm_title:'📝 CPM 管理', tab_quiz:'🧠 Quiz', tab_program:'📚 Program',
+    quiz_name_label:'Quiz 名稱', quiz_id_label:'既有 Quiz ID',
+    quiz_id_hint:'（填入後追加題目，空白建立新 Quiz）',
+    quiz_q_label:'每部影片出題數', quiz_total_label:'預計總題數',
+    quiz_select_label:'選擇影片', btn_load:'🔄 載入',
+    quiz_sel_all:'全選', quiz_sel_none:'取消', quiz_run:'🚀 生成 Quiz',
+    prog_title:'Excel 匯入建立 Program',
+    prog_desc:'下載範本 → 填入資料 → 上傳自動建立',
+    btn_template:'⬇ 下載範本', btn_upload_csv:'⬆ 上傳 CSV',
+    prog_preview:'預覽', btn_import:'🚀 開始匯入', btn_clear:'✕ 清除',
+    thumb_title:'🖼️ Thumbnail 批次上傳',
+    thumb_desc:'拖入圖片 → 比對 Program 名稱 → 16:9 裁切 → 上傳',
+    btn_load_prog:'🔄 載入 Program 清單',
+    thumb_drop:'點擊或拖曳圖片（可多選）',
+    thumb_run:'🚀 批次上傳', log_title:'執行 Log',
+    sum_format_p:'段落', sum_format_b:'條列',
+    sum_type_g:'一般', sum_type_e:'教育',
+    sum_len_s:'短 (10)', sum_len_m:'普通 (20)',
+    // log messages
+    log_batch_start:(n)=>`▶ 批次開始：${n} 筆`,
+    log_sub_ok:'  ✅ 字幕生成 觸發',
+    log_sub_skip:'  ⏭ 字幕跳過（無字幕）',
+    log_trans_ok:(lang)=>`  ✅ 翻譯 觸發 (→${lang})`,
+    log_trans_skip:'  ⏭ 翻譯跳過（無字幕）',
+    log_sum_ok:(n)=>`  ✅ 摘要 觸發 (${n} 筆)`,
+    log_sum_skip:'  ⏭ 摘要跳過（無字幕）',
+    log_tag_ok:'  ✅ 標記 觸發',
+    log_tag_skip:(s)=>`  ⚠️ 標記跳過（status=${s}）`,
+    log_tag_none:'  ⏭ 標記跳過（無字幕）',
+    log_batch_done:(ok,fail)=>`🏁 完成：成功 ${ok} / 失敗 ${fail}`,
+    log_csv_start:(n)=>`▶ CSV 改名開始：${n} 筆`,
+    log_csv_done:(ok,fail)=>`🏁 完成：成功 ${ok} / 失敗 ${fail}`,
+    log_del_start:(n)=>`🗑 刪除開始：${n} 筆`,
+    log_del_done:(ok,fail)=>`🏁 完成：刪除 ${ok} / 失敗 ${fail}`,
+    confirm_delete:(n)=>`確定刪除 ${n} 筆嗎？此操作無法復原。`,
+    sum_fill:'補足',
+  },
+  ja: {
+    nav_settings:'設定', nav_vods:'動画管理', nav_subtitles:'字幕管理', nav_cpm:'CPM 管理',
+    subtitle:'BlendVision 管理ツール',
+    filter_all:'全件', filter_incomplete:'⚠️ 未完了',
+    filter_loading:(done,total)=>`読み込み中（${done}/${total}）...`,
+    filter_result:n=>`未完了 ${n} 件`,
+    batch_selected:n=>`${n}件選択中`,
+    batch_subtitle:'字幕生成', batch_translate:'字幕翻訳', batch_summary:'要約生成', batch_tag:'タグ生成',
+    batch_run:'🚀 実行', btn_delete:'🗑 削除', btn_deselect:'✕ 解除',
+    btn_refresh:'🔄 更新', btn_csv_dl:'⬇ CSV', btn_csv_import:'⬆ CSV改名',
+    col_name:'動画名', col_sub:'字幕', col_sum:'要約', col_tag:'タグ', col_action:'操作',
+    loading:'読み込み中...', no_vod:'「更新」を押して読み込んでください', no_vod_found:'動画がありません',
+    settings_title:'⚙️ 設定', api_title:'API 認証情報',
+    token_label:'BV API Token', org_label:'Org ID', site_label:'CPM Site ID',
+    lang_label:'デフォルト字幕言語', baseurl_label:'API Base URL',
+    batch_title:'バッチ設定', sum_format_label:'要約フォーマット', sum_type_label:'要約タイプ', sum_length_label:'要約長さ',
+    trans_lang_label:'翻訳先言語',
+    btn_save:'💾 保存', btn_test:'🔗 接続テスト', conn_ok:'✅ 接続成功', conn_fail:'❌ 失敗',
+    sub_title:'📄 字幕管理', sub_search:'🔍 動画名で検索...',
+    btn_zip:'📥 ZIP ダウンロード',
+    col_sub_list:'字幕一覧',
+    cpm_title:'📝 CPM 管理', tab_quiz:'🧠 Quiz', tab_program:'📚 Program',
+    quiz_name_label:'Quiz 名', quiz_id_label:'既存 Quiz ID',
+    quiz_id_hint:'（入力すると追加、空白で新規作成）',
+    quiz_q_label:'動画ごとの問題数', quiz_total_label:'合計問題数（予定）',
+    quiz_select_label:'動画を選択', btn_load:'🔄 読み込み',
+    quiz_sel_all:'全選択', quiz_sel_none:'解除', quiz_run:'🚀 Quiz 生成',
+    prog_title:'Excel インポートで Program を作成',
+    prog_desc:'テンプレートをダウンロード → 入力 → アップロードで自動作成',
+    btn_template:'⬇ テンプレートDL', btn_upload_csv:'⬆ CSV アップロード',
+    prog_preview:'プレビュー', btn_import:'🚀 インポート開始', btn_clear:'✕ クリア',
+    thumb_title:'🖼️ Thumbnail 一括アップロード',
+    thumb_desc:'画像をドラッグ → Program名でマッチング → 16:9トリミング → アップロード',
+    btn_load_prog:'🔄 Program一覧読み込み',
+    thumb_drop:'クリックまたはドラッグ（複数可）',
+    thumb_run:'🚀 一括アップロード', log_title:'実行ログ',
+    sum_format_p:'段落', sum_format_b:'箇条書き',
+    sum_type_g:'一般', sum_type_e:'教育',
+    sum_len_s:'短い (10)', sum_len_m:'普通 (20)',
+    log_batch_start:(n)=>`▶ バッチ開始：${n}件`,
+    log_sub_ok:'  ✅ 字幕生成 トリガー',
+    log_sub_skip:'  ⏭ 字幕スキップ（字幕なし）',
+    log_trans_ok:(lang)=>`  ✅ 翻訳 トリガー (→${lang})`,
+    log_trans_skip:'  ⏭ 翻訳スキップ（字幕なし）',
+    log_sum_ok:(n)=>`  ✅ 要約 トリガー (${n}件)`,
+    log_sum_skip:'  ⏭ 要約スキップ（字幕なし）',
+    log_tag_ok:'  ✅ タグ トリガー',
+    log_tag_skip:(s)=>`  ⚠️ タグスキップ（status=${s}）`,
+    log_tag_none:'  ⏭ タグスキップ（字幕なし）',
+    log_batch_done:(ok,fail)=>`🏁 完了：成功${ok} / 失敗${fail}`,
+    log_csv_start:(n)=>`▶ CSV改名開始：${n}件`,
+    log_csv_done:(ok,fail)=>`🏁 完了：成功${ok} / 失敗${fail}`,
+    log_del_start:(n)=>`🗑 削除開始：${n}件`,
+    log_del_done:(ok,fail)=>`🏁 完了：削除${ok} / 失敗${fail}`,
+    confirm_delete:(n)=>`${n}件を削除しますか？この操作は取り消せません。`,
+    sum_fill:'補足',
+  }
+};
+let currentLang = localStorage.getItem('bv_ui_lang') || 'zh';
+function t(key, ...args){
+  const v = I18N[currentLang]?.[key] || I18N['zh']?.[key] || key;
+  return typeof v === 'function' ? v(...args) : v;
+}
+function setLang(lang){
+  currentLang = lang;
+  localStorage.setItem('bv_ui_lang', lang);
+  applyLang();
+}
+function applyLang(){
+  document.querySelectorAll('[data-i18n]').forEach(el=>{
+    const key = el.getAttribute('data-i18n');
+    el.textContent = t(key);
+  });
+  document.getElementById('nav-subtitle').textContent = t('subtitle');
+  // 語言按鈕樣式
+  document.getElementById('lang-zh').className = currentLang==='zh' ? 'btn btn-xs btn-primary' : 'btn btn-xs btn-secondary';
+  document.getElementById('lang-ja').className = currentLang==='ja' ? 'btn btn-xs btn-primary' : 'btn btn-xs btn-secondary';
+  // filter 按鈕
+  document.getElementById('f-all').textContent = t('filter_all');
+  document.getElementById('f-incomplete').textContent = t('filter_incomplete');
+}
+
 // ════ CONFIG ════════════════════════════════════════════
 const BASE = () => cfg('base_url') || 'https://api.one.blendvision.com';
 const HDR = () => ({ 'Content-Type':'application/json', 'Authorization':`Bearer ${cfg('token')}`, 'x-bv-org-id':cfg('org_id') });
@@ -528,7 +674,7 @@ async function loadVodDetail(vodId){
       if(row){
         row.querySelector('.td-sub').innerHTML=subBadge(succeededSubs);
         row.querySelector('.td-sum').innerHTML=sumStatusBadge(sumStatus,sumResults,vodId,succeededSubs);
-        row.querySelector('.td-tag').innerHTML=statusBadge(tagStatus);
+        row.querySelector('.td-tag').innerHTML=tagStatusBadge(tagStatus,vodId,succeededSubs);
       }
     }
     if(vodFilter==='incomplete') applyVodFilter();
@@ -539,12 +685,29 @@ function sumStatusBadge(sumStatus,sumResults,vodId,succeededSubs){
   if(sumStatus==='SUCCEEDED') return '<span class="badge badge-green">✅ 完了</span>';
   if(sumStatus==='PROCESSING') return '<span class="badge badge-yellow">⏳ 処理中</span>';
   if(!succeededSubs?.length) return '<span class="badge badge-gray">—</span>';
-  // 欠けている字幕のIDを集めて補足ボタン
   const missingIds=(sumResults||[]).filter(r=>r.status!=='SUCCEEDED'&&r.status!=='PROCESSING').map(r=>r.subtitle_id).join(',');
   const missingLabels=(sumResults||[]).filter(r=>r.status!=='SUCCEEDED'&&r.status!=='PROCESSING').map(r=>r.display||'').join(', ');
-  const label=sumStatus==='PARTIAL'?`補足 (${missingLabels})`:'要約生成';
+  const label=sumStatus==='PARTIAL'?`${t('sum_fill')} (${missingLabels})`:t('sum_fill');
   if(missingIds) return `<button class="btn btn-secondary btn-xs" onclick="fillSummaries('${vodId}','${missingIds}')">${label}</button>`;
   return '<span class="badge badge-gray">—</span>';
+}
+
+function tagStatusBadge(tagStatus,vodId,succeededSubs){
+  if(tagStatus==='SUCCEEDED') return '<span class="badge badge-green">✅ 完了</span>';
+  if(tagStatus==='PROCESSING') return '<span class="badge badge-yellow">⏳ 処理中</span>';
+  if(!succeededSubs?.length) return '<span class="badge badge-gray">—</span>';
+  return `<button class="btn btn-secondary btn-xs" onclick="runSingleTag('${vodId}')">${t('batch_tag')}</button>`;
+}
+
+async function runSingleTag(vodId){
+  try{
+    const subResp=await bvGet(`/bv/cms/v1/vods/${vodId}/subtitles`);
+    const src=(subResp.subtitles||[]).find(s=>s.status==='SUBTITLE_STATUS_SUCCEED');
+    if(!src?.id){ toast(t('log_tag_none'),'error'); return; }
+    await bvPost('/bv/cms/v1/auto-tagging',{source:{id:vodId,type:'AUTO_TAGGING_SOURCE_TYPE_VOD'},setting:{content_types:['AUTO_TAGGING_CONTENT_TYPE_TAGS'],subtitle_id:src.id,auto_tagging_by:'AUTO_TAGGING_BY_SUBTITLE'}});
+    toast(t('log_tag_ok'),'success');
+    setTimeout(()=>loadVodDetail(vodId),1500);
+  }catch(e){ toast('❌ '+e.message,'error'); }
 }
 
 async function fillSummaries(vodId,subtitleIds){
@@ -564,7 +727,7 @@ async function fillSummaries(vodId,subtitleIds){
 
 function renderVodTable(){
   const tbody=document.getElementById('vod-tbody');
-  if(!vodsData.length){ tbody.innerHTML='<tr><td colspan="6" style="text-align:center;color:var(--muted);padding:24px;">動画がありません</td></tr>'; return; }
+  if(!vodsData.length){ tbody.innerHTML=`<tr><td colspan="6" style="text-align:center;color:var(--muted);padding:24px;">${t('no_vod_found')}</td></tr>`; return; }
   tbody.innerHTML=vodsData.map(vod=>{
     const id=vod.id||'';
     const name=esc(vod.name||id);
@@ -578,7 +741,7 @@ function renderVodTable(){
       <td class="td-sum"><span class="badge badge-gray">…</span></td>
       <td class="td-tag"><span class="badge badge-gray">…</span></td>
       <td style="white-space:nowrap;">
-        <button class="btn btn-secondary btn-xs" onclick="loadVodDetail('${id}')">🔄</button>
+        <button class="btn btn-secondary btn-xs" onclick="loadVodDetail('${id}')" title="更新">🔄</button>
         <button class="btn btn-secondary btn-xs" onclick="openSubUpload('${id}','${name.replace(/'/g,"\\'")}')" title="字幕UP">📄+</button>
       </td>
     </tr>`;
@@ -621,11 +784,17 @@ function renderPagination(info){
     <button class="btn btn-secondary btn-xs" ${vodPage>=totalPages?'disabled':''} onclick="vodPage=${vodPage+1};loadVods()">次 »</button>`;
 }
 
-function onVodCheck(cb){ cb.checked?selectedVodIds.add(cb.value):selectedVodIds.delete(cb.value); }
-function selectAllVods(){ document.querySelectorAll('.vod-cb').forEach(c=>{if(c.closest('tr').style.display!=='none'){c.checked=true;selectedVodIds.add(c.value);}}); }
-function selectNoneVods(){ document.querySelectorAll('.vod-cb').forEach(c=>{c.checked=false;selectedVodIds.delete(c.value);}); }
+function onVodCheck(cb){ cb.checked?selectedVodIds.add(cb.value):selectedVodIds.delete(cb.value); updateBatchBar(); }
+function selectAllVods(){ document.querySelectorAll('.vod-cb').forEach(c=>{if(c.closest('tr').style.display!=='none'){c.checked=true;selectedVodIds.add(c.value);}}); updateBatchBar(); }
+function selectNoneVods(){ document.querySelectorAll('.vod-cb').forEach(c=>{c.checked=false;selectedVodIds.delete(c.value);}); updateBatchBar(); }
 function toggleAllVods(cb){ cb.checked?selectAllVods():selectNoneVods(); }
-function toggleBatchOptions(){ const o=document.getElementById('batch-options'); o.style.display=o.style.display==='none'?'block':'none'; }
+function updateBatchBar(){
+  const n=selectedVodIds.size;
+  const bar=document.getElementById('batch-options');
+  const label=document.getElementById('batch-selected-label');
+  if(bar) bar.style.display=n>0?'block':'none';
+  if(label) label.textContent=t('batch_selected',n);
+}
 
 // ── インライン改名 ──
 function startRename(vodId){
@@ -678,7 +847,7 @@ async function importRenameCsv(event){
   if(!items.length){ toast('データがありません','error'); return; }
 
   const log=makeLog('batch-log','batch-log-card');
-  log(`▶ CSV改名開始: ${items.length}件`);
+  log(t('log_csv_start',items.length));
   let ok=0,fail=0;
   for(const item of items){
     try{
@@ -692,23 +861,23 @@ async function importRenameCsv(event){
       ok++; log(`  ✅ ${item.name}`,'done');
     }catch(e){ fail++; log(`  ❌ ${item.id}: ${e.message}`,'error'); }
   }
-  log(`🏁 完了: 成功${ok} / 失敗${fail}`,ok>0?'done':'error');
-  toast(`CSV改名完了: ${ok}件成功`,'success');
+  log(t('log_csv_done',ok,fail),ok>0?'done':'error');
+  toast(t('log_csv_done',ok,fail),'success');
 }
 
 // ── バッチ削除 ──
 async function deleteSelectedVods(){
   const ids=[...selectedVodIds];
   if(!ids.length){ toast('動画を選択してください','error'); return; }
-  if(!confirm(`${ids.length}件を削除しますか？この操作は取り消せません。`)) return;
+  if(!confirm(t('confirm_delete',ids.length))) return;
   const log=makeLog('batch-log','batch-log-card');
-  log(`🗑 削除開始: ${ids.length}件`);
+  log(t('log_del_start',ids.length));
   let ok=0,fail=0;
   for(const id of ids){
     try{ await bvDel(`/bv/cms/v1/vods/${id}`); ok++; log(`  ✅ ${id.substring(0,16)}...`,'done'); }
     catch(e){ fail++; log(`  ❌ ${e.message}`,'error'); }
   }
-  log(`🏁 完了: 削除${ok} / 失敗${fail}`,ok>0?'done':'error');
+  log(t('log_del_done',ok,fail),ok>0?'done':'error');
   selectedVodIds.clear(); loadVods();
 }
 
@@ -723,7 +892,7 @@ async function confirmBatch(){
   if(!doSub&&!doTrans&&!doSum&&!doTag){ toast('実行内容を選択してください','error'); return; }
   document.getElementById('batch-options').style.display='none';
   const log=makeLog('batch-log','batch-log-card');
-  log(`▶ バッチ開始: ${ids.length}件`);
+  log(t('log_batch_start',ids.length));
   let ok=0,fail=0;
   for(let i=0;i<ids.length;i++){
     const vodId=ids[i];
@@ -735,8 +904,8 @@ async function confirmBatch(){
           const lang=cfg('lang')||'ja-JP';
           const disp=lang==='ja-JP'?'日本語':lang==='zh-TW'?'繁體中文':lang==='en-US'?'English':lang;
           await bvPut(`/bv/cms/v1/vods/${vodId}/subtitles`,{stt_subtitles:[{track_no:'1',lang_code:lang,display:disp}],ai_translate_subtitles:[]});
-          log('  ✅ 字幕生成 トリガー','done');
-        }catch(e){ log(`  ❌ 字幕: ${e.message}`,'error'); }
+          log(t('log_sub_ok'),'done');
+        }catch(e){ log(`  ❌ ${e.message}`,'error'); }
       }
       if(doTrans){
         try{
@@ -747,9 +916,9 @@ async function confirmBatch(){
             const tDispMap={'en-US':'English','zh-TW':'繁體中文','zh-CN':'简体中文','ko-KR':'한국어','ja-JP':'日本語'};
             const tDisp=tDispMap[tLang]||tLang;
             await bvPost(`/bv/cms/v1/vods/${vodId}/subtitles/${src.id}:translate`,{settings:[{source_lang_code:src.lang_code,target_lang_code:tLang,display:tDisp}]});
-            log(`  ✅ 翻訳 トリガー (→${tLang})`,'done');
-          } else log('  ⏭ 翻訳スキップ（字幕なし）');
-        }catch(e){ log(`  ❌ 翻訳: ${e.message}`,'error'); }
+            log(t('log_trans_ok',tLang),'done');
+          } else log(t('log_trans_skip'));
+        }catch(e){ log(`  ❌ ${e.message}`,'error'); }
       }
       if(doSum){
         try{
@@ -760,9 +929,9 @@ async function confirmBatch(){
             await bvPost('/bv/cms/v2alpha1/summaries:generate',{source_id:vodId,source_type:'SUMMARY_SOURCE_TYPE_VOD',setting:{content_type:sumType(),format:sumFmt(),length:sumLen()},vod:{subtitle_id:sub.id}});
             cnt++;
           }
-          if(cnt) log(`  ✅ 要約 トリガー (${cnt}件)`,'done');
-          else log('  ⏭ 要約スキップ（字幕なし）');
-        }catch(e){ log(`  ❌ 要約: ${e.message}`,'error'); }
+          if(cnt) log(t('log_sum_ok',cnt),'done');
+          else log(t('log_sum_skip'));
+        }catch(e){ log(`  ❌ ${e.message}`,'error'); }
       }
       if(doTag){
         try{
@@ -771,17 +940,17 @@ async function confirmBatch(){
           const src=allSubs.find(s=>s.status==='SUBTITLE_STATUS_SUCCEED');
           if(src&&src.id){
             await bvPost('/bv/cms/v1/auto-tagging',{source:{id:vodId,type:'AUTO_TAGGING_SOURCE_TYPE_VOD'},setting:{content_types:['AUTO_TAGGING_CONTENT_TYPE_TAGS'],subtitle_id:src.id,auto_tagging_by:'AUTO_TAGGING_BY_SUBTITLE'}});
-            log('  ✅ タグ トリガー','done');
+            log(t('log_tag_ok'),'done');
           } else if(allSubs.length){
-            log(`  ⚠️ タグスキップ（status=${allSubs[0]?.status} id=${allSubs[0]?.id?.substring(0,8)}）`);
-          } else log('  ⏭ タグスキップ（字幕なし）');
-        }catch(e){ log(`  ❌ タグ: ${e.message}`,'error'); }
+            log(t('log_tag_skip',allSubs[0]?.status));
+          } else log(t('log_tag_none'));
+        }catch(e){ log(`  ❌ ${e.message}`,'error'); }
       }
       ok++;
     }catch(e){ fail++; log(`  ❌ ${e.message}`,'error'); }
   }
-  log(`🏁 完了: 成功${ok} / 失敗${fail}`,ok>0?'done':'error');
-  toast(`バッチ完了: ${ok}件成功`,ok>0?'success':'error');
+  log(t('log_batch_done',ok,fail),ok>0?'done':'error');
+  toast(t('log_batch_done',ok,fail),ok>0?'success':'error');
 }
 
 // ════ 字幕管理 ═══════════════════════════════════════════
@@ -1204,6 +1373,7 @@ async function runThumbUpload(){
 
 // ════ INIT ═══════════════════════════════════════════════
 loadSettings();
+applyLang();
 </script>
 </body>
 </html>
