@@ -937,7 +937,9 @@ async function confirmBatch(){
         try{
           const subResp=await bvGet(`/bv/cms/v1/vods/${vodId}/subtitles`);
           const allSubs=subResp.subtitles||[];
+          log(`  🔍 字幕数=${allSubs.length} keys=${allSubs[0]?Object.keys(allSubs[0]).join(','):'-'}`);
           const src=allSubs.find(s=>s.status==='SUBTITLE_STATUS_SUCCEED');
+          log(`  🔍 src=${src?`id=${JSON.stringify(src.id)} status=${src.status}`:'null'}`);
           if(src&&src.id){
             await bvPost('/bv/cms/v1/auto-tagging',{source:{id:vodId,type:'AUTO_TAGGING_SOURCE_TYPE_VOD'},setting:{content_types:['AUTO_TAGGING_CONTENT_TYPE_TAGS'],subtitle_id:src.id,auto_tagging_by:'AUTO_TAGGING_BY_SUBTITLE'}});
             log(t('log_tag_ok'),'done');
