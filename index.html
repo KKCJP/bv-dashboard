@@ -202,9 +202,52 @@ tr:last-child td{border-bottom:none;}
       <input type="text" id="sub-search" placeholder="🔍 動画名で検索..." style="width:240px;" oninput="filterSubVods()">
       <div class="toolbar-right">
         <button class="btn btn-secondary btn-sm" onclick="loadSubVods()">🔄 更新</button>
-        <button class="btn btn-secondary btn-sm" onclick="downloadSubtitlesZip()">📥 ZIP ダウンロード</button>
+        <button class="btn btn-secondary btn-sm" onclick="openBatchSubUpload()">📄 批量上傳</button>
+        <button class="btn btn-secondary btn-sm" onclick="downloadSubtitlesZip()">📥 ZIP 下載</button>
       </div>
     </div>
+
+    <!-- 批量比對上傳區 -->
+    <div id="batch-sub-zone" style="display:none;background:var(--surface2);border-radius:8px;padding:16px;margin-bottom:12px;">
+      <div style="font-weight:600;font-size:12px;margin-bottom:12px;display:flex;align-items:center;">📄 批量字幕上傳（自動比對影片名稱）
+        <button class="btn btn-secondary btn-xs" style="margin-left:auto;" onclick="closeBatchSubUpload()">✕</button>
+      </div>
+      <div class="form-grid" style="margin-bottom:12px;">
+        <div class="form-group">
+          <label>語言</label>
+          <select id="batch-sub-lang">
+            <option value="ja-JP">日本語 (ja-JP)</option>
+            <option value="en-US">English (en-US)</option>
+            <option value="zh-TW">繁體中文 (zh-TW)</option>
+            <option value="zh-CN">简体中文 (zh-CN)</option>
+            <option value="ko-KR">한국어 (ko-KR)</option>
+          </select>
+        </div>
+        <div class="form-group">
+          <label>表示名</label>
+          <input type="text" id="batch-sub-display" placeholder="例：日本語">
+        </div>
+      </div>
+      <div class="upload-zone" id="batch-sub-dropzone"
+        onclick="document.getElementById('batch-sub-input').click()"
+        ondragover="event.preventDefault();this.classList.add('drag-over')"
+        ondragleave="this.classList.remove('drag-over')"
+        ondrop="handleBatchSubDrop(event)">
+        <input type="file" id="batch-sub-input" accept=".srt,.vtt" multiple style="display:none" onchange="handleBatchSubSelect(event)">
+        📄 クリックまたはドラッグ（複数 .srt / .vtt）<br>
+        <span style="font-size:11px;color:var(--muted);">ファイル名と動画名を比較して自動マッチング</span>
+      </div>
+      <div id="batch-sub-list" style="display:none;margin-top:12px;">
+        <table><thead><tr><th>字幕ファイル</th><th>比對影片</th><th>狀態</th></tr></thead>
+        <tbody id="batch-sub-tbody"></tbody></table>
+        <div class="btn-row" style="margin-top:10px;">
+          <button class="btn btn-primary" onclick="runBatchSubUpload()">🚀 一括アップロード</button>
+          <button class="btn btn-secondary" onclick="clearBatchSubList()">✕ クリア</button>
+        </div>
+      </div>
+      <div id="batch-sub-log" class="log-box" style="display:none;margin-top:12px;"></div>
+    </div>
+
     <div id="sub-dl-progress" style="display:none;margin-bottom:12px;">
       <div class="progress-bar-wrap"><div class="progress-bar" id="sub-dl-bar" style="width:0%"></div></div>
       <div id="sub-dl-msg" style="font-size:11px;color:var(--muted);margin-top:4px;"></div>
@@ -532,7 +575,7 @@ function showPage(name){
   document.querySelectorAll('.nav-item').forEach(n=>{ if(n.getAttribute('onclick')?.includes(`'${name}'`)) n.classList.add('active'); });
   if(name==='vods') loadVods();
   if(name==='subtitles') loadSubVods();
-  if(name==='cpm') loadQuizVods();
+  if(name==='cpm') { /* loadQuizVods は手動ボタンで */ }
 }
 
 // ════ TOAST ══════════════════════════════════════════════
@@ -608,17 +651,21 @@ async function loadVods(){
   document.getElementById('vod-tbody').innerHTML='<tr><td colspan="6" style="text-align:center;color:var(--muted);padding:24px;">読み込み中...</td></tr>';
   try{
     if(vodFilter==='incomplete'){
+      document.getElementById('filter-status').textContent='全件取得中...';
       vodsData=await fetchAllVods();
-      renderVodTable();
-      document.getElementById('filter-status').textContent=`全件読み込み中 (0/${vodsData.length})...`;
+      // 最初は全件非表示でローディング表示
+      document.getElementById('vod-tbody').innerHTML=`<tr><td colspan="6" style="text-align:center;color:var(--muted);padding:24px;">状態確認中 (0/${vodsData.length})...</td></tr>`;
+      document.getElementById('filter-status').textContent=`状態確認中 (0/${vodsData.length})...`;
       for(let i=0;i<vodsData.length;i+=5){
         const batch=vodsData.slice(i,i+5);
         await Promise.all(batch.map(v=>loadVodDetail(v.id).catch(()=>{})));
-        document.getElementById('filter-status').textContent=`読み込み中 (${Math.min(i+5,vodsData.length)}/${vodsData.length})...`;
-        applyVodFilter();
+        const done=Math.min(i+5,vodsData.length);
+        document.getElementById('filter-status').textContent=`状態確認中 (${done}/${vodsData.length})...`;
+        // 未完了のみ描画（随時更新）
+        renderIncompleteTable();
       }
-      const vis=document.querySelectorAll('#vod-tbody tr[id]:not([style*="none"])').length;
-      document.getElementById('filter-status').textContent=`未完了 ${vis} 件`;
+      const vis=document.querySelectorAll('#vod-tbody tr[id]').length;
+      document.getElementById('filter-status').textContent=t('filter_result',vis);
     } else {
       const d=await bvGet(`/bv/cms/v1/vods?current_page=${vodPage}&page_size=${VOD_PS}`);
       vodsData=d.vods||d.data||[];
@@ -748,6 +795,39 @@ function renderVodTable(){
     </tr>`;
   }).join('');
 }
+
+function renderIncompleteTable(){
+  // 未完了のみ抽出して描画
+  const incompleteVods=vodsData.filter(v=>{
+    if(!v._detail) return false;
+    const{subStatus,sumStatus,tagStatus}=v._detail;
+    const ok=s=>s==='SUCCEEDED';
+    return !ok(subStatus)||!ok(sumStatus)||!ok(tagStatus);
+  });
+  const tbody=document.getElementById('vod-tbody');
+  if(!incompleteVods.length){
+    tbody.innerHTML='<tr><td colspan="6" style="text-align:center;color:var(--muted);padding:24px;">未完了の動画がありません ✅</td></tr>';
+    return;
+  }
+  tbody.innerHTML=incompleteVods.map(vod=>{
+    const id=vod.id||'';
+    const name=esc(vod.name||id);
+    const d=vod._detail;
+    const checked=selectedVodIds.has(id)?'checked':'';
+    return `<tr id="vrow-${id}">
+      <td><input type="checkbox" class="vod-cb" value="${id}" ${checked} onchange="onVodCheck(this)"></td>
+      <td style="max-width:260px;"><span class="vod-name" id="vname-${id}" style="cursor:pointer;overflow:hidden;text-overflow:ellipsis;display:block;white-space:nowrap;" title="${name}" ondblclick="startRename('${id}')">${name}</span></td>
+      <td class="td-sub">${subBadge(d?.succeededSubs||[])}</td>
+      <td class="td-sum">${sumStatusBadge(d?.sumStatus,d?.sumResults,id,d?.succeededSubs)}</td>
+      <td class="td-tag">${tagStatusBadge(d?.tagStatus,id,d?.succeededSubs)}</td>
+      <td style="white-space:nowrap;">
+        <button class="btn btn-secondary btn-xs" onclick="loadVodDetail('${id}')">🔄</button>
+        <button class="btn btn-secondary btn-xs" onclick="openSubUpload('${id}','${name.replace(/'/g,"\\'")}')" title="字幕UP">📄+</button>
+      </td>
+    </tr>`;
+  }).join('');
+}
+
 
 function applyVodFilter(){
   const rows=document.querySelectorAll('#vod-tbody tr[id]');
@@ -940,9 +1020,11 @@ async function confirmBatch(){
           const allSubs=subResp.subtitles||[];
           log(`  🔍 字幕数=${allSubs.length} keys=${allSubs[0]?Object.keys(allSubs[0]).join(','):'-'}`);
           const src=allSubs.find(s=>s.status==='SUBTITLE_STATUS_SUCCEED');
-          log(`  🔍 src=${src?`id=${JSON.stringify(src.id)} status=${src.status}`:'null'}`);
+          log(`  🔍 src=${src?`id=${src.id} status=${src.status}`:'null'}`);
           if(src&&src.id){
-            await bvPost('/bv/cms/v1/auto-tagging',{source:{id:vodId,type:'AUTO_TAGGING_SOURCE_TYPE_VOD'},setting:{content_types:['AUTO_TAGGING_CONTENT_TYPE_TAGS'],subtitle_id:src.id,auto_tagging_by:'AUTO_TAGGING_BY_SUBTITLE'}});
+            const tagBody={source:{id:vodId,type:'AUTO_TAGGING_SOURCE_TYPE_VOD'},setting:{content_types:['AUTO_TAGGING_CONTENT_TYPE_TAGS'],subtitle_id:src.id,auto_tagging_by:'AUTO_TAGGING_BY_SUBTITLE'}};
+            log(`  🔍 body=${JSON.stringify(tagBody).substring(0,120)}`);
+            await bvPost('/bv/cms/v1/auto-tagging',tagBody);
             log(t('log_tag_ok'),'done');
           } else if(allSubs.length){
             log(t('log_tag_skip',allSubs[0]?.status));
@@ -1052,6 +1134,123 @@ async function downloadSubtitlesZip(){
 }
 
 // ── 字幕アップロード ──
+// ── 批量字幕比對上傳 ──
+let batchSubFiles=[];
+
+function openBatchSubUpload(){
+  if(!subVodsData.length){ toast('先按「更新」載入影片清單','error'); return; }
+  document.getElementById('batch-sub-zone').style.display='block';
+}
+function closeBatchSubUpload(){
+  document.getElementById('batch-sub-zone').style.display='none';
+  clearBatchSubList();
+}
+function handleBatchSubSelect(e){ addBatchSubFiles([...e.target.files]); e.target.value=''; }
+function handleBatchSubDrop(e){
+  e.preventDefault();
+  document.getElementById('batch-sub-dropzone').classList.remove('drag-over');
+  addBatchSubFiles([...e.dataTransfer.files]);
+}
+
+function matchVodByFilename(filename){
+  const base=filename.replace(/\.[^/.]+$/,'').toLowerCase().trim();
+  // 完全一致 → 前方一致 → 部分一致
+  return subVodsData.find(v=>(v.name||'').toLowerCase().trim()===base)
+    || subVodsData.find(v=>(v.name||'').toLowerCase().startsWith(base))
+    || subVodsData.find(v=>base.startsWith((v.name||'').toLowerCase().trim().substring(0,10)))
+    || subVodsData.find(v=>(v.name||'').toLowerCase().includes(base.substring(0,Math.min(base.length,15))))
+    || null;
+}
+
+function addBatchSubFiles(files){
+  for(const file of files){
+    const matched=matchVodByFilename(file.name);
+    batchSubFiles.push({file, vodId:matched?.id||'', vodName:matched?.name||'', matched:!!matched});
+  }
+  renderBatchSubList();
+}
+
+function renderBatchSubList(){
+  if(!batchSubFiles.length){ document.getElementById('batch-sub-list').style.display='none'; return; }
+  document.getElementById('batch-sub-list').style.display='block';
+  document.getElementById('batch-sub-tbody').innerHTML=batchSubFiles.map((item,i)=>`<tr>
+    <td style="font-size:11px;">${esc(item.file.name)}</td>
+    <td><select style="font-size:11px;width:200px;" onchange="batchSubFiles[${i}].vodId=this.value;batchSubFiles[${i}].vodName=this.options[this.selectedIndex].text;">
+      <option value="">— 未マッチ</option>
+      ${subVodsData.map(v=>`<option value="${v.id}" ${v.id===item.vodId?'selected':''}>${esc(v.name||v.id)}</option>`).join('')}
+    </select>${item.matched?' <span class="badge badge-green" style="font-size:10px;">自動</span>':''}</td>
+    <td id="bsub-status-${i}"><span class="badge badge-gray">待機中</span></td>
+  </tr>`).join('');
+}
+
+function clearBatchSubList(){
+  batchSubFiles=[];
+  document.getElementById('batch-sub-list').style.display='none';
+  document.getElementById('batch-sub-log').style.display='none';
+  document.getElementById('batch-sub-input').value='';
+}
+
+async function runBatchSubUpload(){
+  const valid=batchSubFiles.filter(item=>item.vodId);
+  if(!valid.length){ toast('比對到影片的字幕才能上傳','error'); return; }
+  const lang=document.getElementById('batch-sub-lang').value;
+  const display=document.getElementById('batch-sub-display').value||lang;
+  const logEl=document.getElementById('batch-sub-log');
+  logEl.style.display='block'; logEl.innerHTML='';
+
+  const log=(msg,type='')=>{
+    const div=document.createElement('div');
+    div.className='log-line'+(type?' log-'+type:'');
+    div.textContent=new Date().toLocaleTimeString()+' '+msg;
+    logEl.appendChild(div); logEl.scrollTop=logEl.scrollHeight;
+  };
+
+  log(`▶ 批量上傳開始：${valid.length} 個字幕`);
+  let ok=0,fail=0;
+
+  for(let i=0;i<valid.length;i++){
+    const item=valid[i];
+    const idx=batchSubFiles.indexOf(item);
+    const statusEl=document.getElementById(`bsub-status-${idx}`);
+    if(statusEl) statusEl.innerHTML='<span class="badge badge-yellow">⏳ 上傳中</span>';
+    log(`[${i+1}/${valid.length}] ${esc(item.file.name)} → ${esc(item.vodName.substring(0,25))}`);
+
+    try{
+      // Step1: 初始化
+      const initResp=await bvPost('/bv/cms/v1/library/files:upload',{file:{type:'FILE_TYPE_SUBTITLE',source:'FILE_SOURCE_UNSPECIFIED',name:item.file.name,size:item.file.size,attrs:{'content-type':'application/x-subrip'}}});
+      const fileId=(initResp.file||{}).id||'';
+      const uploadData=initResp.upload_data||{};
+      const parts=uploadData.parts||[];
+
+      // Step2: S3 上傳
+      const uploadedParts=[];
+      for(let p=0;p<parts.length;p++){
+        const part=parts[p];
+        const start=part.offset||0; const size=part.size||item.file.size;
+        const r=await fetch(part.presigned_url||part.url,{method:'PUT',body:item.file.slice(start,start+size)});
+        uploadedParts.push({part_number:part.part_number||(p+1),etag:r.headers.get('etag')||''});
+      }
+
+      // Step3: Complete
+      await bvPost(`/bv/cms/v1/library/files/${fileId}:complete-upload`,{complete_data:{id:uploadData.id,parts:uploadedParts}});
+
+      // Step4: VOD に紐付け
+      await bvPost(`/bv/cms/v1/vods/${item.vodId}/subtitles:batch-create`,{subtitles:[{code:lang,id:fileId,name:item.file.name,display}]});
+
+      ok++;
+      if(statusEl) statusEl.innerHTML='<span class="badge badge-green">✅ 完了</span>';
+      log(`  ✅ 完了`,'done');
+      refreshSubList(item.vodId);
+    }catch(e){
+      fail++;
+      if(statusEl) statusEl.innerHTML='<span class="badge badge-red">❌ 失敗</span>';
+      log(`  ❌ ${e.message}`,'error');
+    }
+  }
+  log(`🏁 完了：成功 ${ok} / 失敗 ${fail}`,ok>0?'done':'error');
+  toast(`批量上傳完成：${ok} 件`,ok>0?'success':'error');
+}
+
 function openSubUpload(vodId,vodName){
   subVodId=vodId; subVodFile=null;
   document.getElementById('sub-upload-vod-name').textContent=vodName;
