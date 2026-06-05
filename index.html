@@ -155,8 +155,8 @@ tr:last-child td{border-bottom:none;}
     <div id="batch-options" style="display:none;background:var(--surface2);border-radius:6px;padding:10px 14px;margin-bottom:12px;font-size:12px;">
       <div style="display:flex;gap:12px;flex-wrap:wrap;align-items:center;">
         <span id="batch-selected-label" style="color:var(--accent2);font-weight:600;white-space:nowrap;"></span>
-        <label style="display:flex;align-items:center;gap:6px;cursor:pointer;white-space:nowrap;"><input type="checkbox" id="b-subtitle"> 字幕生成</label>
-        <label style="display:flex;align-items:center;gap:6px;cursor:pointer;white-space:nowrap;"><input type="checkbox" id="b-translate"> 字幕翻訳</label>
+        <label style="display:flex;align-items:center;gap:6px;cursor:pointer;white-space:nowrap;"><input type="checkbox" id="b-subtitle"> <span id="b-subtitle-label">字幕生成</span></label>
+        <label style="display:flex;align-items:center;gap:6px;cursor:pointer;white-space:nowrap;"><input type="checkbox" id="b-translate"> <span id="b-translate-label">字幕翻訳</span></label>
         <select id="b-trans-lang" style="width:auto;padding:4px 8px;font-size:11px;">
           <option value="en-US">→ English</option>
           <option value="zh-TW">→ 繁體中文</option>
@@ -164,8 +164,8 @@ tr:last-child td{border-bottom:none;}
           <option value="ko-KR">→ 한국어</option>
           <option value="ja-JP">→ 日本語</option>
         </select>
-        <label style="display:flex;align-items:center;gap:6px;cursor:pointer;white-space:nowrap;"><input type="checkbox" id="b-summary" checked> 要約生成</label>
-        <label style="display:flex;align-items:center;gap:6px;cursor:pointer;white-space:nowrap;"><input type="checkbox" id="b-tag" checked> タグ生成</label>
+        <label style="display:flex;align-items:center;gap:6px;cursor:pointer;white-space:nowrap;"><input type="checkbox" id="b-summary" checked> <span id="b-summary-label">要約生成</span></label>
+        <label style="display:flex;align-items:center;gap:6px;cursor:pointer;white-space:nowrap;"><input type="checkbox" id="b-tag" checked> <span id="b-tag-label">タグ生成</span></label>
         <button class="btn btn-primary btn-sm" onclick="confirmBatch()">🚀 実行</button>
         <button class="btn btn-danger btn-sm" onclick="deleteSelectedVods()">🗑 削除</button>
         <button class="btn btn-secondary btn-sm" onclick="selectNoneVods()">✕ 解除</button>
@@ -176,11 +176,11 @@ tr:last-child td{border-bottom:none;}
         <thead>
           <tr>
             <th width="28"><input type="checkbox" id="vod-check-all" onchange="toggleAllVods(this)"></th>
-            <th>動画名</th>
-            <th>字幕</th>
-            <th>要約</th>
-            <th>タグ</th>
-            <th width="90">操作</th>
+            <th id="th-name">動画名</th>
+            <th id="th-sub">字幕</th>
+            <th id="th-sum">要約</th>
+            <th id="th-tag">タグ</th>
+            <th id="th-action" width="90">操作</th>
           </tr>
         </thead>
         <tbody id="vod-tbody"><tr><td colspan="6" style="text-align:center;color:var(--muted);padding:32px;">「更新」を押して読み込んでください</td></tr></tbody>
@@ -496,19 +496,41 @@ function setLang(lang){
   currentLang = lang;
   localStorage.setItem('bv_ui_lang', lang);
   applyLang();
+  // 現在表示中のページのテーブルを再描画
+  const activePage = document.querySelector('.page.active')?.id;
+  if(activePage==='page-vods') {
+    renderVodTable();
+    renderPagination(vodLastPagination||{});
+  }
+  if(activePage==='page-subtitles') renderSubTable(subVodsData);
 }
+
 function applyLang(){
   document.querySelectorAll('[data-i18n]').forEach(el=>{
     const key = el.getAttribute('data-i18n');
     el.textContent = t(key);
   });
   document.getElementById('nav-subtitle').textContent = t('subtitle');
-  // 語言按鈕樣式
+  // 言語ボタンスタイル
   document.getElementById('lang-zh').className = currentLang==='zh' ? 'btn btn-xs btn-primary' : 'btn btn-xs btn-secondary';
   document.getElementById('lang-ja').className = currentLang==='ja' ? 'btn btn-xs btn-primary' : 'btn btn-xs btn-secondary';
-  // filter 按鈕
+  // フィルターボタン
   document.getElementById('f-all').textContent = t('filter_all');
   document.getElementById('f-incomplete').textContent = t('filter_incomplete');
+  // テーブルヘッダー
+  const thMap = {
+    'th-name': 'col_name', 'th-sub': 'col_sub', 'th-sum': 'col_sum',
+    'th-tag': 'col_tag', 'th-action': 'col_action'
+  };
+  Object.entries(thMap).forEach(([id,key])=>{
+    const el=document.getElementById(id); if(el) el.textContent=t(key);
+  });
+  // バッチバーのラベル
+  const bLabels = [
+    ['b-subtitle-label','batch_subtitle'],['b-translate-label','batch_translate'],
+    ['b-summary-label','batch_summary'],['b-tag-label','batch_tag'],
+  ];
+  bLabels.forEach(([id,key])=>{ const el=document.getElementById(id); if(el) el.textContent=t(key); });
 }
 
 // ════ CONFIG ════════════════════════════════════════════
@@ -655,7 +677,7 @@ function parseCsvText(text){
 }
 
 // ════ VOD 管理 ═══════════════════════════════════════════
-let vodsData=[], vodFilter='all', vodPage=1;
+let vodsData=[], vodFilter='all', vodPage=1, vodLastPagination={};
 const VOD_PS=20;
 let selectedVodIds=new Set();
 
@@ -700,8 +722,9 @@ async function loadVods(){
     } else {
       const d=await bvGet(`/bv/cms/v1/vods?current_page=${vodPage}&items_per_page=${VOD_PS}`);
       vodsData=d.vods||d.data||[];
+      vodLastPagination=d.pagination||{};
       renderVodTable();
-      renderPagination(d.pagination||{});
+      renderPagination(vodLastPagination);
       vodsData.forEach(v=>loadVodDetail(v.id));
     }
   }catch(e){
