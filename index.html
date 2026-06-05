@@ -125,10 +125,9 @@ tr:last-child td{border-bottom:none;}
     <div class="card-title">バッチ設定</div>
     <div class="form-grid">
       <div class="form-group"><label>要約フォーマット</label><select id="s-sum-format"><option value="paragraph">段落</option><option value="bullet">箇条書き</option></select></div>
-      <div class="form-group"><label>要約タイプ</label><select id="s-sum-type"><option value="general">一般</option><option value="educational">教育</option></select></div>
+      <div class="form-group"><label>要約タイプ</label><select id="s-sum-type"><option value="general">一般 (general)</option><option value="news">ニュース (news)</option><option value="meeting">会議 (meeting)</option><option value="ecommerce">EC商品 (ecommerce)</option></select></div>
       <div class="form-group"><label>要約長さ</label><select id="s-sum-length"><option value="brief">短い (10)</option><option value="average">普通 (20)</option></select></div>
-      <div class="form-group"><label>翻訳先言語</label><select id="s-trans-lang"><option value="en-US">English (en-US)</option><option value="zh-TW">繁體中文 (zh-TW)</option><option value="zh-CN">简体中文 (zh-CN)</option><option value="ko-KR">한국어 (ko-KR)</option></select></div>
-      <div class="form-group"><label>翻訳表示名</label><input type="text" id="s-trans-display" placeholder="例：English"></div>
+
     </div>
     <div class="btn-row" style="margin-top:16px;"><button class="btn btn-primary" onclick="saveSettings()">💾 保存</button></div>
   </div>
@@ -158,13 +157,14 @@ tr:last-child td{border-bottom:none;}
         <span id="batch-selected-label" style="color:var(--accent2);font-weight:600;white-space:nowrap;"></span>
         <label style="display:flex;align-items:center;gap:6px;cursor:pointer;white-space:nowrap;"><input type="checkbox" id="b-subtitle"> <span id="b-subtitle-label">字幕生成</span></label>
         <label style="display:flex;align-items:center;gap:6px;cursor:pointer;white-space:nowrap;"><input type="checkbox" id="b-translate"> <span id="b-translate-label">字幕翻訳</span></label>
-        <select id="b-trans-lang" style="width:auto;padding:4px 8px;font-size:11px;">
+        <select id="b-trans-lang" style="width:auto;padding:4px 8px;font-size:11px;" onchange="updateTransDisplay(this.value)">
           <option value="en-US">→ English</option>
           <option value="zh-TW">→ 繁體中文</option>
           <option value="zh-CN">→ 简体中文</option>
           <option value="ko-KR">→ 한국어</option>
           <option value="ja-JP">→ 日本語</option>
         </select>
+        <input type="text" id="b-trans-display" placeholder="表示名" oninput="this.dataset.userEdited=this.value?'1':''" style="width:80px;padding:4px 8px;font-size:11px;" title="翻訳字幕の表示名">
         <label style="display:flex;align-items:center;gap:6px;cursor:pointer;white-space:nowrap;"><input type="checkbox" id="b-summary" checked> <span id="b-summary-label">要約生成</span></label>
         <label style="display:flex;align-items:center;gap:6px;cursor:pointer;white-space:nowrap;"><input type="checkbox" id="b-tag" checked> <span id="b-tag-label">タグ生成</span></label>
         <button class="btn btn-primary btn-sm" onclick="confirmBatch()">🚀 実行</button>
@@ -409,7 +409,7 @@ const I18N = {
     thumb_drop:'點擊或拖曳圖片（可多選）',
     thumb_run:'🚀 批次上傳', log_title:'執行 Log',
     sum_format_p:'段落', sum_format_b:'條列',
-    sum_type_g:'一般', sum_type_e:'教育',
+    sum_type_g:'一般', sum_type_n:'新聞', sum_type_m:'會議', sum_type_e:'電商',
     sum_len_s:'短 (10)', sum_len_m:'普通 (20)',
     // log messages
     log_batch_start:(n)=>`▶ 批次開始：${n} 筆`,
@@ -467,7 +467,7 @@ const I18N = {
     thumb_drop:'クリックまたはドラッグ（複数可）',
     thumb_run:'🚀 一括アップロード', log_title:'実行ログ',
     sum_format_p:'段落', sum_format_b:'箇条書き',
-    sum_type_g:'一般', sum_type_e:'教育',
+    sum_type_g:'一般', sum_type_n:'ニュース', sum_type_m:'会議', sum_type_e:'EC商品',
     sum_len_s:'短い (10)', sum_len_m:'普通 (20)',
     log_batch_start:(n)=>`▶ バッチ開始：${n}件`,
     log_sub_ok:'  ✅ 字幕生成 トリガー',
@@ -540,8 +540,8 @@ const HDR = () => ({ 'Content-Type':'application/json', 'Authorization':`Bearer 
 function cfg(k){ return localStorage.getItem('bv_'+k)||''; }
 function setCfg(k,v){ localStorage.setItem('bv_'+k,v); }
 
-const SETTINGS_KEYS = ['token','org_id','site_id','lang','base_url','sum_format','sum_type','sum_length','trans_lang','trans_display'];
-const SETTINGS_IDS  = ['s-token','s-org-id','s-site-id','s-lang','s-base-url','s-sum-format','s-sum-type','s-sum-length','s-trans-lang','s-trans-display'];
+const SETTINGS_KEYS = ['token','org_id','site_id','lang','base_url','sum_format','sum_type','sum_length'];
+const SETTINGS_IDS  = ['s-token','s-org-id','s-site-id','s-lang','s-base-url','s-sum-format','s-sum-type','s-sum-length'];
 
 function saveSettings(){
   SETTINGS_KEYS.forEach((k,i)=>{ const el=document.getElementById(SETTINGS_IDS[i]); if(el) setCfg(k,el.value.trim()); });
@@ -588,7 +588,11 @@ const cpmPut=(p,b)=>cpmReq('PUT',p,b);
 function siteId(){ const id=cfg('site_id'); if(!id) throw new Error('設定ページで CPM Site ID を入力してください'); return id; }
 function sumLen(){ return cfg('sum_length')==='average'?20:10; }
 function sumFmt(){ return cfg('sum_format')==='bullet'?'SUMMARY_FORMAT_BULLET':'SUMMARY_FORMAT_PARAGRAPH'; }
-function sumType(){ return cfg('sum_type')==='educational'?'SUMMARY_CONTENT_TYPE_EDUCATIONAL':'SUMMARY_CONTENT_TYPE_GENERAL'; }
+function sumType(){
+  const v=cfg('sum_type')||'general';
+  const map={'general':'SUMMARY_CONTENT_TYPE_GENERAL','news':'SUMMARY_CONTENT_TYPE_NEWS','meeting':'SUMMARY_CONTENT_TYPE_MEETING','ecommerce':'SUMMARY_CONTENT_TYPE_ECOMMERCE'};
+  return map[v]||'SUMMARY_CONTENT_TYPE_GENERAL';
+}
 
 // ════ NAVIGATION ═════════════════════════════════════════
 function showPage(name){
@@ -945,6 +949,12 @@ async function executeVodSearch(){
   }
 }
 
+function updateTransDisplay(lang){
+  const dispMap={'en-US':'English','zh-TW':'繁體中文','zh-CN':'简体中文','ko-KR':'한국어','ja-JP':'日本語'};
+  const el=document.getElementById('b-trans-display');
+  if(el&&!el.dataset.userEdited) el.value=dispMap[lang]||lang;
+}
+
 function setVodFilter(f){
   vodFilter=f;
   vodSearchQuery='';
@@ -1094,9 +1104,9 @@ async function confirmBatch(){
           const subResp=await bvGet(`/bv/cms/v1/vods/${vodId}/subtitles`);
           const src=(subResp.subtitles||[]).find(s=>s.status==='SUBTITLE_STATUS_SUCCEED');
           if(src){
-            const tLang=document.getElementById('b-trans-lang')?.value||cfg('trans_lang')||'en-US';
+            const tLang=document.getElementById('b-trans-lang')?.value||'en-US';
             const tDispMap={'en-US':'English','zh-TW':'繁體中文','zh-CN':'简体中文','ko-KR':'한국어','ja-JP':'日本語'};
-            const tDisp=tDispMap[tLang]||tLang;
+            const tDisp=(document.getElementById('b-trans-display')?.value||'').trim()||tDispMap[tLang]||tLang;
             await bvPost(`/bv/cms/v1/vods/${vodId}/subtitles/${src.id}:translate`,{settings:[{source_lang_code:src.lang_code,target_lang_code:tLang,display:tDisp}]});
             log(t('log_trans_ok',tLang),'done');
           } else log(t('log_trans_skip'));
