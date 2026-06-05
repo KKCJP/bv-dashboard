@@ -752,7 +752,15 @@ async function runSingleTag(vodId){
     const subResp=await bvGet(`/bv/cms/v1/vods/${vodId}/subtitles`);
     const src=(subResp.subtitles||[]).find(s=>s.status==='SUBTITLE_STATUS_SUCCEED');
     if(!src?.id){ toast(t('log_tag_none'),'error'); return; }
-    await bvPost('/bv/cms/v1/auto-tagging',{source:{id:vodId,type:'AUTO_TAGGING_SOURCE_TYPE_VOD'},setting:{content_types:['AUTO_TAGGING_CONTENT_TYPE_TAGS'],subtitle_id:src.id,auto_tagging_by:'AUTO_TAGGING_BY_SUBTITLE'}});
+    await bvPost('/bv/cms/v1/auto-tagging',{
+      source:{id:vodId,type:'AUTO_TAGGING_SOURCE_TYPE_VOD'},
+      subtitle_id:src.id,
+      content_type:'AUTO_TAGGING_CONTENT_TYPE_TAGS',
+      content_topics:[],
+      language:'ja',
+      panel_display:true,
+      seek_bar_display:true,
+    });
     toast(t('log_tag_ok'),'success');
     setTimeout(()=>loadVodDetail(vodId),1500);
   }catch(e){ toast('❌ '+e.message,'error'); }
@@ -1022,8 +1030,16 @@ async function confirmBatch(){
           const src=allSubs.find(s=>s.status==='SUBTITLE_STATUS_SUCCEED');
           log(`  🔍 src=${src?`id=${src.id} status=${src.status}`:'null'}`);
           if(src&&src.id){
-            const tagBody={source:{id:vodId,type:'AUTO_TAGGING_SOURCE_TYPE_VOD'},setting:{content_types:['AUTO_TAGGING_CONTENT_TYPE_TAGS'],subtitle_id:src.id,auto_tagging_by:'AUTO_TAGGING_BY_SUBTITLE'}};
-            log(`  🔍 body=${JSON.stringify(tagBody).substring(0,120)}`);
+            const tagBody={
+              source:{id:vodId,type:'AUTO_TAGGING_SOURCE_TYPE_VOD'},
+              subtitle_id:src.id,
+              content_type:'AUTO_TAGGING_CONTENT_TYPE_TAGS',
+              content_topics:[],
+              language:'ja',
+              panel_display:true,
+              seek_bar_display:true,
+            };
+            log(`  🔍 subtitle_id=${src.id}`);
             await bvPost('/bv/cms/v1/auto-tagging',tagBody);
             log(t('log_tag_ok'),'done');
           } else if(allSubs.length){
