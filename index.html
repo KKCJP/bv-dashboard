@@ -594,10 +594,33 @@ function statusBadge(s){
   if(u.includes('FAIL')||u.includes('ERROR')) return '<span class="badge badge-red">❌ 失敗</span>';
   return '<span class="badge badge-gray">—</span>';
 }
-function subBadge(subs){
+function subBadge(subs, vodId){
   if(!subs?.length) return '<span class="badge badge-gray">—</span>';
-  const labels=[...new Set(subs.map(s=>s.display||s.lang_code||'').filter(Boolean))].join(' / ');
-  return `<span class="badge badge-green" style="max-width:200px;overflow:hidden;text-overflow:ellipsis;" title="${labels}">✅ ${labels}</span>`;
+  // track_no でソート（空は後ろ）
+  const sorted=[...subs].sort((a,b)=>{
+    const ta=parseInt(a.track_no)||999;
+    const tb=parseInt(b.track_no)||999;
+    return ta-tb;
+  });
+  const MAX=2;
+  const visible=sorted.slice(0,MAX);
+  const rest=sorted.slice(MAX);
+  const makeTag=s=>{
+    const name=esc(s.display||s.lang_code||'');
+    return `<span class="badge badge-green" style="margin-right:3px;" title="track_no:${s.track_no||'—'} lang:${s.lang_code||''}">✅ ${name}</span>`;
+  };
+  let html=visible.map(makeTag).join('');
+  if(rest.length){
+    const restNames=rest.map(s=>esc(s.display||s.lang_code||'')).join(', ');
+    const uid=`sub-more-${vodId||Math.random().toString(36).slice(2)}`;
+    html+=`<button class="btn btn-secondary btn-xs" style="margin-left:2px;" onclick="
+      const el=document.getElementById('${uid}');
+      if(el.style.display==='none'){el.style.display='inline';this.textContent='+${rest.length} 折▲';}
+      else{el.style.display='none';this.textContent='+${rest.length} 更多▼';}
+    ">+${rest.length} 更多▼</button>
+    <span id="${uid}" style="display:none;">${rest.map(makeTag).join('')}</span>`;
+  }
+  return `<div style="display:flex;align-items:center;flex-wrap:wrap;gap:2px;">${html}</div>`;
 }
 function esc(s){ return (s||'').replace(/&/g,'&amp;').replace(/</g,'&lt;').replace(/>/g,'&gt;').replace(/"/g,'&quot;'); }
 function fmtSize(b){ return b>1048576?`${(b/1048576).toFixed(1)}MB`:b>1024?`${(b/1024).toFixed(0)}KB`:`${b}B`; }
@@ -709,10 +732,11 @@ async function loadVodDetail(vodId){
     let tagStatus='NONE';
     try{
       const tr=await bvGet(`/bv/cms/v1/auto-tagging?source.id=${vodId}&source.type=AUTO_TAGGING_SOURCE_TYPE_VOD`);
-      const t=tr.auto_tagging||{};
+      const t=tr.auto_tagging||tr||{};
       const ts=(t.status||'').toUpperCase();
+      console.log(`[tag] ${vodId.substring(0,8)} keys=${Object.keys(tr).join(',')} status=${ts} aggregated_tags=${!!(t.aggregated_tags?.length)} clips=${!!(t.clips?.length)}`);
       tagStatus=ts.includes('SUCCEED')?'SUCCEEDED':ts.includes('PROCESS')?'PROCESSING':'NONE';
-      if(tagStatus==='NONE'&&(t.aggregated_tags||t.clips)) tagStatus='SUCCEEDED';
+      if(tagStatus==='NONE'&&(t.aggregated_tags?.length||t.clips?.length)) tagStatus='SUCCEEDED';
     }catch{}
 
     const idx=vodsData.findIndex(v=>v.id===vodId);
@@ -720,7 +744,7 @@ async function loadVodDetail(vodId){
       vodsData[idx]._detail={subs,succeededSubs,subStatus,sumStatus,sumResults,tagStatus};
       const row=document.getElementById('vrow-'+vodId);
       if(row){
-        row.querySelector('.td-sub').innerHTML=subBadge(succeededSubs);
+        row.querySelector('.td-sub').innerHTML=subBadge(succeededSubs,vodId);
         row.querySelector('.td-sum').innerHTML=sumStatusBadge(sumStatus,sumResults,vodId,succeededSubs);
         row.querySelector('.td-tag').innerHTML=tagStatusBadge(tagStatus,vodId,succeededSubs);
       }
@@ -825,7 +849,7 @@ function renderIncompleteTable(){
     return `<tr id="vrow-${id}">
       <td><input type="checkbox" class="vod-cb" value="${id}" ${checked} onchange="onVodCheck(this)"></td>
       <td style="max-width:260px;"><span class="vod-name" id="vname-${id}" style="cursor:pointer;overflow:hidden;text-overflow:ellipsis;display:block;white-space:nowrap;" title="${name}" ondblclick="startRename('${id}')">${name}</span></td>
-      <td class="td-sub">${subBadge(d?.succeededSubs||[])}</td>
+      <td class="td-sub">${subBadge(d?.succeededSubs||[],id)}</td>
       <td class="td-sum">${sumStatusBadge(d?.sumStatus,d?.sumResults,id,d?.succeededSubs)}</td>
       <td class="td-tag">${tagStatusBadge(d?.tagStatus,id,d?.succeededSubs)}</td>
       <td style="white-space:nowrap;">
@@ -1086,10 +1110,13 @@ async function refreshSubList(vodId){
     const r=await bvGet(`/bv/cms/v1/vods/${vodId}/subtitles`);
     const subs=r.subtitles||[];
     if(!subs.length){ el.innerHTML='<span class="badge badge-gray">—</span>'; return; }
-    el.innerHTML=subs.map(s=>{
+    // track_no でソート
+    const sorted=[...subs].sort((a,b)=>(parseInt(a.track_no)||999)-(parseInt(b.track_no)||999));
+    el.innerHTML=sorted.map(s=>{
       const ok=s.status==='SUBTITLE_STATUS_SUCCEED';
-      const lang=s.display||s.lang_code||'';
-      return `<span class="badge ${ok?'badge-green':'badge-yellow'}" style="margin-right:4px;">${ok?'✅':'⏳'} ${lang}</span>`;
+      const name=esc(s.display||s.lang_code||'');
+      const tip=`track_no:${s.track_no||'—'} lang:${s.lang_code||''} status:${s.status||''}`;
+      return `<span class="badge ${ok?'badge-green':'badge-yellow'}" style="margin-right:4px;" title="${tip}">${ok?'✅':'⏳'} ${name}</span>`;
     }).join('');
   }catch{ el.innerHTML='<span class="badge badge-red">error</span>'; }
 }
