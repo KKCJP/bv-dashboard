@@ -144,6 +144,7 @@ tr:last-child td{border-bottom:none;}
         <button class="filter-btn" id="f-incomplete" onclick="setVodFilter('incomplete')">⚠️ 未完了</button>
         <span id="filter-status" style="font-size:11px;color:var(--muted);"></span>
       </div>
+      <input type="text" id="vod-search" placeholder="🔍 動画名を検索..." style="width:200px;margin-left:8px;" oninput="onVodSearch(this.value)">
       <div class="toolbar-right">
         <button class="btn btn-secondary btn-sm" onclick="loadVods()">🔄 更新</button>
         <button class="btn btn-secondary btn-sm" onclick="exportVodCsv()">⬇ CSV</button>
@@ -910,8 +911,45 @@ function applyVodFilter(){
   if(vodFilter==='incomplete') document.getElementById('filter-status').textContent=`未完了 ${vis} 件`;
 }
 
+let vodSearchQuery='';
+let vodSearchTimer=null;
+
+function onVodSearch(val){
+  vodSearchQuery=val.trim().toLowerCase();
+  // 300ms デバウンス
+  clearTimeout(vodSearchTimer);
+  vodSearchTimer=setTimeout(()=>{
+    if(vodSearchQuery){
+      executeVodSearch();
+    } else {
+      // 空の場合は通常モードに戻る
+      vodPage=1;
+      loadVods();
+    }
+  },300);
+}
+
+async function executeVodSearch(){
+  document.getElementById('vod-tbody').innerHTML=`<tr><td colspan="6" style="text-align:center;color:var(--muted);padding:24px;">検索中...</td></tr>`;
+  document.getElementById('vod-pagination').innerHTML='';
+  try{
+    // 全件取得してクライアント側でフィルター
+    const all=await fetchAllVods();
+    const filtered=all.filter(v=>(v.name||'').toLowerCase().includes(vodSearchQuery));
+    vodsData=filtered;
+    document.getElementById('filter-status').textContent=`"${vodSearchQuery}" : ${filtered.length}件`;
+    renderVodTable();
+    filtered.forEach(v=>loadVodDetail(v.id));
+  }catch(e){
+    document.getElementById('vod-tbody').innerHTML=`<tr><td colspan="6" style="text-align:center;color:var(--red);padding:24px;">${e.message}</td></tr>`;
+  }
+}
+
 function setVodFilter(f){
   vodFilter=f;
+  vodSearchQuery='';
+  const searchEl=document.getElementById('vod-search');
+  if(searchEl) searchEl.value='';
   document.getElementById('f-all').classList.toggle('active',f==='all');
   document.getElementById('f-incomplete').classList.toggle('active',f==='incomplete');
   document.getElementById('filter-status').textContent='';
