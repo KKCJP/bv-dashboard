@@ -698,7 +698,7 @@ async function loadVods(){
       const vis=document.querySelectorAll('#vod-tbody tr[id]').length;
       document.getElementById('filter-status').textContent=t('filter_result',vis);
     } else {
-      const d=await bvGet(`/bv/cms/v1/vods?current_page=${vodPage}&page_size=${VOD_PS}`);
+      const d=await bvGet(`/bv/cms/v1/vods?current_page=${vodPage}&items_per_page=${VOD_PS}`);
       vodsData=d.vods||d.data||[];
       renderVodTable();
       renderPagination(d.pagination||{});
