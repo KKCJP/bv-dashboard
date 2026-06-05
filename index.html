@@ -602,23 +602,24 @@ function subBadge(subs, vodId){
     const tb=parseInt(b.track_no)||999;
     return ta-tb;
   });
-  const MAX=2;
+  const MAX=3;
   const visible=sorted.slice(0,MAX);
   const rest=sorted.slice(MAX);
   const makeTag=s=>{
-    const name=esc(s.display||s.lang_code||'');
-    return `<span class="badge badge-green" style="margin-right:3px;" title="track_no:${s.track_no||'—'} lang:${s.lang_code||''}">✅ ${name}</span>`;
+    const ok=s.status==='SUBTITLE_STATUS_SUCCEED';
+    // display を優先、なければ lang_code
+    const name=esc(s.display||s.lang_code||'?');
+    const tip=`display:${s.display||''} lang:${s.lang_code||''} track:${s.track_no||'—'} status:${s.status||''}`;
+    return `<span class="badge ${ok?'badge-green':'badge-yellow'}" style="margin-right:3px;" title="${tip}">${ok?'✅':'⏳'} ${name}</span>`;
   };
   let html=visible.map(makeTag).join('');
   if(rest.length){
-    const restNames=rest.map(s=>esc(s.display||s.lang_code||'')).join(', ');
-    const uid=`sub-more-${vodId||Math.random().toString(36).slice(2)}`;
+    const uid=`sub-more-${(vodId||'').replace(/-/g,'').substring(0,8)||Math.random().toString(36).slice(2)}`;
     html+=`<button class="btn btn-secondary btn-xs" style="margin-left:2px;" onclick="
       const el=document.getElementById('${uid}');
-      if(el.style.display==='none'){el.style.display='inline';this.textContent='+${rest.length} 折▲';}
-      else{el.style.display='none';this.textContent='+${rest.length} 更多▼';}
-    ">+${rest.length} 更多▼</button>
-    <span id="${uid}" style="display:none;">${rest.map(makeTag).join('')}</span>`;
+      if(el.style.display==='none'){el.style.display='inline';this.textContent='+${rest.length} ▲';}
+      else{el.style.display='none';this.textContent='+${rest.length} ▼';}
+    ">+${rest.length} ▼</button><span id="${uid}" style="display:none;">${rest.map(makeTag).join('')}</span>`;
   }
   return `<div style="display:flex;align-items:center;flex-wrap:wrap;gap:2px;">${html}</div>`;
 }
@@ -661,12 +662,19 @@ let selectedVodIds=new Set();
 async function fetchAllVods(){
   let all=[], page=1;
   while(true){
-    const d=await bvGet(`/bv/cms/v1/vods?current_page=${page}&page_size=100`);
+    const d=await bvGet(`/bv/cms/v1/vods?current_page=${page}&items_per_page=50`);
     const vods=d.vods||d.data||[];
+    const pagination=d.pagination||d.page_info||{};
+    const totalItems=parseInt(pagination.total_items||pagination.total||0);
     all.push(...vods);
-    if(vods.length<100) break;
+    console.log(`[fetchVods] page=${page} got=${vods.length} total_items=${totalItems} all_so_far=${all.length}`);
+    // 次ページがあるか判定
+    if(!vods.length) break;
+    if(totalItems && all.length>=totalItems) break;
+    if(vods.length<50) break;
     page++;
   }
+  console.log(`[fetchVods] done total=${all.length}`);
   return all;
 }
 
@@ -744,7 +752,7 @@ async function loadVodDetail(vodId){
       vodsData[idx]._detail={subs,succeededSubs,subStatus,sumStatus,sumResults,tagStatus};
       const row=document.getElementById('vrow-'+vodId);
       if(row){
-        row.querySelector('.td-sub').innerHTML=subBadge(succeededSubs,vodId);
+        row.querySelector('.td-sub').innerHTML=subBadge(subs,vodId);
         row.querySelector('.td-sum').innerHTML=sumStatusBadge(sumStatus,sumResults,vodId,succeededSubs);
         row.querySelector('.td-tag').innerHTML=tagStatusBadge(tagStatus,vodId,succeededSubs);
       }
@@ -849,7 +857,7 @@ function renderIncompleteTable(){
     return `<tr id="vrow-${id}">
       <td><input type="checkbox" class="vod-cb" value="${id}" ${checked} onchange="onVodCheck(this)"></td>
       <td style="max-width:260px;"><span class="vod-name" id="vname-${id}" style="cursor:pointer;overflow:hidden;text-overflow:ellipsis;display:block;white-space:nowrap;" title="${name}" ondblclick="startRename('${id}')">${name}</span></td>
-      <td class="td-sub">${subBadge(d?.succeededSubs||[],id)}</td>
+      <td class="td-sub">${subBadge(d?.subs||[],id)}</td>
       <td class="td-sum">${sumStatusBadge(d?.sumStatus,d?.sumResults,id,d?.succeededSubs)}</td>
       <td class="td-tag">${tagStatusBadge(d?.tagStatus,id,d?.succeededSubs)}</td>
       <td style="white-space:nowrap;">
