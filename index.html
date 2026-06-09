@@ -1545,7 +1545,9 @@ async function exportProgramCsv(){
         const sd=await sr.json();
         const ct=sd.content||sd;
         visibility=ct.visibility||'CONTENT_VISIBILITY_DRAFT';
-        labels=(ct.labels||[]);
+        // labels は [{name:'xxx'}] 形式か ['xxx'] 形式どちらにも対応
+        const rawLabels=ct.labels||[];
+        labels=rawLabels.map(l=>typeof l==='object'?(l.name||l.label||''):String(l)).filter(Boolean);
         partNums=(ct.part_numbers||[]);
       }catch{}
 
@@ -1559,7 +1561,6 @@ async function exportProgramCsv(){
       rows.push(['highlight_1', texts[0]||'']);
       rows.push(['highlight_2', texts[1]||'']);
       rows.push(['highlight_3', texts[2]||'']);
-      // about から HTML を除去してテキスト取得
       const aboutHtml=p.about?.html_content||'';
       const aboutText=aboutHtml.replace(/<[^>]+>/g,'').trim();
       rows.push(['about', aboutText]);
@@ -1575,6 +1576,11 @@ async function exportProgramCsv(){
       rows.push(['','']);
 
       // arrangement → main_category / sub_category / content
+      // content の名前取得：title > name > vod.id の順で優先
+      const getContentName=c=>{
+        const ct=c.content||{};
+        return ct.title||ct.name||ct.vod?.id||ct.form?.id||'';
+      };
       const items=p.arrangement?.items||[];
       for(const section of items){
         if(section.type==='PROGRAM_ARRANGEMENT_ITEM_TYPE_SECTION'){
@@ -1584,22 +1590,22 @@ async function exportProgramCsv(){
               rows.push(['sub_category', item.module?.name||'']);
               for(const content of item.module?.items||[]){
                 if(content.type==='PROGRAM_ARRANGEMENT_ITEM_TYPE_CONTENT'){
-                  rows.push(['content', content.content?.name||'']);
+                  rows.push(['content', getContentName(content)]);
                 }
               }
             } else if(item.type==='PROGRAM_ARRANGEMENT_ITEM_TYPE_CONTENT'){
-              rows.push(['content', item.content?.name||'']);
+              rows.push(['content', getContentName(item)]);
             }
           }
         } else if(section.type==='PROGRAM_ARRANGEMENT_ITEM_TYPE_MODULE'){
           rows.push(['sub_category', section.module?.name||'']);
           for(const item of section.module?.items||[]){
             if(item.type==='PROGRAM_ARRANGEMENT_ITEM_TYPE_CONTENT'){
-              rows.push(['content', item.content?.name||'']);
+              rows.push(['content', getContentName(item)]);
             }
           }
         } else if(section.type==='PROGRAM_ARRANGEMENT_ITEM_TYPE_CONTENT'){
-          rows.push(['content', section.content?.name||'']);
+          rows.push(['content', getContentName(section)]);
         }
       }
     }
@@ -1741,9 +1747,11 @@ async function runProgramImport(){
       const reseq=items=>items.forEach((item,idx)=>{ item.sequence=idx+1; if(item.section?.items) reseq(item.section.items); if(item.module?.items) reseq(item.module.items); });
       reseq(arrangement);
 
+      const isValidUUID=s=>/^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$/i.test(s||'');
       const authorInfo={displayable:true,name:prog.author_name,title:prog.author_title,description:prog.author_desc};
-      if(prog.author_avatar_library_id) authorInfo.avatar_library_id=prog.author_avatar_library_id;
-      const putBody={title:prog.title,highlight:{displayable:true,texts:[...prog.highlight,'','',''].slice(0,3)},about:{displayable:true,html_content:prog.about_html},author_info:authorInfo,label_info:{displayable:true,labels:prog.labels.map(l=>({name:l}))},arrangement:{displayable:true,items:arrangement},clip:{displayable:true,clips:[]},rating:{displayable:false},level_info:{displayable:false,level:'PROGRAM_LEVEL_BEGINNER'},relation:{displayable:true,related_contents:[]},certification:{setting:{enabled:false,template_id:'',issuer_id:'',passing_threshold:0}},background:prog.background_library_id?{type:'PROGRAM_BACKGROUND_TYPE_IMAGE',image:{id:prog.background_library_id}}:{type:'PROGRAM_BACKGROUND_TYPE_DEFAULT'}};
+      if(isValidUUID(prog.author_avatar_library_id)) authorInfo.avatar_library_id=prog.author_avatar_library_id;
+      const bgValid=isValidUUID(prog.background_library_id);
+      const putBody={title:prog.title,highlight:{displayable:true,texts:[...prog.highlight,'','',''].slice(0,3)},about:{displayable:true,html_content:prog.about_html},author_info:authorInfo,label_info:{displayable:true,labels:prog.labels.map(l=>({name:l}))},arrangement:{displayable:true,items:arrangement},clip:{displayable:true,clips:[]},rating:{displayable:false},level_info:{displayable:false,level:'PROGRAM_LEVEL_BEGINNER'},relation:{displayable:true,related_contents:[]},certification:{setting:{enabled:false,template_id:'',issuer_id:'',passing_threshold:0}},background:bgValid?{type:'PROGRAM_BACKGROUND_TYPE_IMAGE',image:{id:prog.background_library_id}}:{type:'PROGRAM_BACKGROUND_TYPE_DEFAULT'}};
 
       if(progId){
         // 既存 → PUT で更新
