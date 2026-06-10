@@ -1516,7 +1516,7 @@ async function exportProgramCsv(){
   const site=siteId();
   toast('Program 匯出中...','info');
   try{
-    // 全件取得
+    // 全件取得（contents リストに visibility, labels, part_numbers が含まれる）
     let allProgs=[], page=1;
     while(true){
       const r=await fetch(`${BASE()}/bv/cpm/v1alpha1/sites/${site}/contents?current_page=${page}&items_per_page=100&filter.content_types=CONTENT_TYPE_PROGRAM`,{headers:HDR()});
@@ -1527,36 +1527,27 @@ async function exportProgramCsv(){
       page++;
     }
     if(!allProgs.length){ toast('Program が見つかりません','error'); return; }
+    console.log('[export] first prog keys=', Object.keys(allProgs[0]).join(','));
+    console.log('[export] first prog=', JSON.stringify(allProgs[0]).substring(0,400));
 
     const rows=[['field','value']];
 
     for(let pi=0;pi<allProgs.length;pi++){
       const prog=allProgs[pi];
-      const progId=prog.content_id||'';
-      // detail 取得
+      const progId=prog.content_id||prog.id||prog.program_id||'';
+      if(!progId){ console.log('[export] no progId, prog keys=', Object.keys(prog).join(',')); continue; }
+
+      // detail 取得（arrangement, author, highlight 等）
       const dr=await fetch(`${BASE()}/bv/cpm/v1alpha1/sites/${site}/programs/${progId}?action=GET_FORM_REQUEST_ACTION_CURRENT&mode=FORM_MODE_EDIT`,{headers:HDR()});
       const dd=await dr.json();
       const p=dd.program||dd;
 
-      // content setting 取得（visibility, labels, part_numbers）
-      let visibility='CONTENT_VISIBILITY_DRAFT', labels=[], partNums=[];
-      try{
-        const sr=await fetch(`${BASE()}/bv/cpm/v1alpha1/sites/${site}/contents/${progId}?content_type=CONTENT_TYPE_PROGRAM`,{headers:HDR()});
-        const sd=await sr.json();
-        const ct=sd.content||sd;
-        console.log(`[export] labels raw=`, JSON.stringify(ct.labels).substring(0,200));
-        console.log(`[export] part_numbers raw=`, JSON.stringify(ct.part_numbers));
-        visibility=ct.visibility||'CONTENT_VISIBILITY_DRAFT';
-        const rawLabels=ct.labels||[];
-        labels=rawLabels.map(l=>typeof l==='object'?(l.name||l.label||''):String(l)).filter(Boolean);
-        partNums=(ct.part_numbers||[]);
-      }catch(e){ console.log('[export] content setting error:', e.message); }
-
-      // arrangement debug
-      const firstContent=p.arrangement?.items?.[0]?.section?.items?.[0]?.module?.items?.[0]
-                      || p.arrangement?.items?.[0]?.section?.items?.[0]
-                      || p.arrangement?.items?.[0];
-      console.log(`[export] first arrangement item=`, JSON.stringify(firstContent).substring(0,300));
+      // visibility, labels, part_numbers は contents リストから取得
+      const visibility=prog.visibility||'CONTENT_VISIBILITY_DRAFT';
+      const rawLabels=prog.labels||[];
+      console.log(`[export] ${progId.substring(0,8)} labels=`, JSON.stringify(rawLabels).substring(0,200));
+      const labels=rawLabels.map(l=>typeof l==='object'?(l.name||l.label||String(l)):String(l)).filter(Boolean);
+      const partNums=prog.part_numbers||[];
 
       // ヘッダー行（区切り）
       if(pi>0) rows.push(['---','']);
