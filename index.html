@@ -105,39 +105,39 @@ tr:last-child td{border-bottom:none;}
 
 <!-- ══ 設定 ══ -->
 <div id="page-settings" class="page active">
-  <div class="page-title">⚙️ 設定</div>
+  <div class="page-title" id="page-title-settings">⚙️ 設定</div>
   <div class="card">
-    <div class="card-title">API 認証情報</div>
+    <div class="card-title" data-i18n="api_title">API 認証情報</div>
     <div class="form-grid">
-      <div class="form-group full"><label>BV API Token</label><input type="password" id="s-token" placeholder="eyJhbGc...（Bearer不要）"></div>
-      <div class="form-group"><label>Org ID</label><input type="text" id="s-org-id" placeholder="xxxxxxxx-xxxx-..."></div>
-      <div class="form-group"><label>CPM Site ID</label><input type="text" id="s-site-id" placeholder="xxxxxxxx-xxxx-..."></div>
-      <div class="form-group"><label>デフォルト字幕言語</label>
+      <div class="form-group full"><label data-i18n="token_label">BV API Token</label><input type="password" id="s-token" placeholder="eyJhbGc...（Bearer不要）"></div>
+      <div class="form-group"><label data-i18n="org_label">Org ID</label><input type="text" id="s-org-id" placeholder="xxxxxxxx-xxxx-..."></div>
+      <div class="form-group"><label data-i18n="site_label">CPM Site ID</label><input type="text" id="s-site-id" placeholder="xxxxxxxx-xxxx-..."></div>
+      <div class="form-group"><label data-i18n="lang_label">デフォルト字幕言語</label>
         <select id="s-lang"><option value="ja-JP">日本語 (ja-JP)</option><option value="zh-TW">繁體中文 (zh-TW)</option><option value="en-US">English (en-US)</option><option value="ko-KR">한국어 (ko-KR)</option></select>
       </div>
-      <div class="form-group"><label>API Base URL</label><input type="text" id="s-base-url" value="https://api.one.blendvision.com"></div>
+      <div class="form-group"><label data-i18n="baseurl_label">API Base URL</label><input type="text" id="s-base-url" value="https://api.one.blendvision.com"></div>
     </div>
     <div class="btn-row" style="margin-top:16px;">
-      <button class="btn btn-primary" onclick="saveSettings()">💾 保存</button>
-      <button class="btn btn-secondary" onclick="testConnection()">🔗 接続テスト</button>
+      <button class="btn btn-primary" onclick="saveSettings()"><span data-i18n="btn_save">💾 保存</span></button>
+      <button class="btn btn-secondary" onclick="testConnection()"><span data-i18n="btn_test">🔗 接続テスト</span></button>
       <span id="conn-status" style="font-size:12px;color:var(--muted);"></span>
     </div>
   </div>
   <div class="card">
-    <div class="card-title">バッチ設定</div>
+    <div class="card-title" data-i18n="batch_title">バッチ設定</div>
     <div class="form-grid">
-      <div class="form-group"><label>要約フォーマット</label><select id="s-sum-format"><option value="paragraph">段落</option><option value="bullet">箇条書き</option></select></div>
-      <div class="form-group"><label>要約タイプ</label><select id="s-sum-type"><option value="general">一般 (general)</option><option value="news">ニュース (news)</option><option value="meeting">会議 (meeting)</option><option value="ecommerce">EC商品 (ecommerce)</option></select></div>
-      <div class="form-group"><label>要約長さ</label><select id="s-sum-length"><option value="brief">短い (10)</option><option value="average">普通 (20)</option></select></div>
+      <div class="form-group"><label data-i18n="sum_format_label">要約フォーマット</label><select id="s-sum-format"><option value="paragraph">段落</option><option value="bullet">箇条書き</option></select></div>
+      <div class="form-group"><label data-i18n="sum_type_label">要約タイプ</label><select id="s-sum-type"><option value="general">一般 (general)</option><option value="news">ニュース (news)</option><option value="meeting">会議 (meeting)</option><option value="ecommerce">EC商品 (ecommerce)</option></select></div>
+      <div class="form-group"><label data-i18n="sum_length_label">要約長さ</label><select id="s-sum-length"><option value="brief">短い (10)</option><option value="average">普通 (20)</option></select></div>
 
     </div>
-    <div class="btn-row" style="margin-top:16px;"><button class="btn btn-primary" onclick="saveSettings()">💾 保存</button></div>
+    <div class="btn-row" style="margin-top:16px;"><button class="btn btn-primary" onclick="saveSettings()"><span data-i18n="btn_save">💾 保存</span></button></div>
   </div>
 </div>
 
 <!-- ══ 動画管理 ══ -->
 <div id="page-vods" class="page">
-  <div class="page-title">🎬 動画管理</div>
+  <div class="page-title" id="page-title-vods">🎬 動画管理</div>
   <div class="card">
     <div class="toolbar">
       <div class="filter-bar" style="margin:0;">
@@ -199,7 +199,7 @@ tr:last-child td{border-bottom:none;}
 
 <!-- ══ 字幕管理 ══ -->
 <div id="page-subtitles" class="page">
-  <div class="page-title">📄 字幕管理</div>
+  <div class="page-title" id="page-title-subtitles">📄 字幕管理</div>
   <div class="card">
     <div class="toolbar">
       <input type="text" id="sub-search" placeholder="🔍 動画名で検索..." style="width:240px;" oninput="filterSubVods()">
@@ -266,7 +266,7 @@ tr:last-child td{border-bottom:none;}
 
 <!-- ══ CPM 管理 ══ -->
 <div id="page-cpm" class="page">
-  <div class="page-title">📝 CPM 管理</div>
+  <div class="page-title" id="page-title-cpm">📝 CPM 管理</div>
   <div class="tabs">
     <button class="tab-btn active" id="tab-quiz" onclick="switchTab('quiz')">🧠 Quiz</button>
     <button class="tab-btn" id="tab-program" onclick="switchTab('program')">📚 Program</button>
@@ -386,7 +386,7 @@ const I18N = {
     btn_refresh:'🔄 更新', btn_csv_dl:'⬇ CSV', btn_csv_import:'⬆ CSV 改名',
     col_name:'影片名稱', col_sub:'字幕', col_sum:'摘要', col_tag:'標記', col_action:'操作',
     loading:'載入中...', no_vod:'按「更新」載入影片', no_vod_found:'沒有影片',
-    settings_title:'⚙️ 設定', api_title:'API 認證資訊',
+    settings_title:'⚙️ 設定', nav_vods_title:'🎬 影片管理', nav_subtitles_title:'📄 字幕管理', nav_cpm_title:'📝 CPM 管理', api_title:'API 認證資訊',
     token_label:'BV API Token', org_label:'Org ID', site_label:'CPM Site ID',
     lang_label:'預設字幕語言', baseurl_label:'API Base URL',
     batch_title:'批次設定', sum_format_label:'摘要格式', sum_type_label:'摘要類型', sum_length_label:'摘要長度',
@@ -444,7 +444,7 @@ const I18N = {
     btn_refresh:'🔄 更新', btn_csv_dl:'⬇ CSV', btn_csv_import:'⬆ CSV改名',
     col_name:'動画名', col_sub:'字幕', col_sum:'要約', col_tag:'タグ', col_action:'操作',
     loading:'読み込み中...', no_vod:'「更新」を押して読み込んでください', no_vod_found:'動画がありません',
-    settings_title:'⚙️ 設定', api_title:'API 認証情報',
+    settings_title:'⚙️ 設定', nav_vods_title:'🎬 動画管理', nav_subtitles_title:'📄 字幕管理', nav_cpm_title:'📝 CPM 管理', api_title:'API 認証情報',
     token_label:'BV API Token', org_label:'Org ID', site_label:'CPM Site ID',
     lang_label:'デフォルト字幕言語', baseurl_label:'API Base URL',
     batch_title:'バッチ設定', sum_format_label:'要約フォーマット', sum_type_label:'要約タイプ', sum_length_label:'要約長さ',
@@ -501,7 +501,7 @@ function setLang(lang){
   applyLang();
   // 現在表示中のページのテーブルを再描画
   const activePage = document.querySelector('.page.active')?.id;
-  if(activePage==='page-vods') {
+  if(activePage==='page-vods'&&vodsData.length) {
     renderVodTable();
     renderPagination(vodLastPagination||{});
   }
@@ -511,29 +511,24 @@ function setLang(lang){
 function applyLang(){
   document.querySelectorAll('[data-i18n]').forEach(el=>{
     const key = el.getAttribute('data-i18n');
-    el.textContent = t(key);
+    const val = t(key);
+    if(val !== key) el.textContent = val; // キーがそのまま返った場合は更新しない
   });
-  document.getElementById('nav-subtitle').textContent = t('subtitle');
+  const set=(id,key)=>{ const el=document.getElementById(id); if(el) el.textContent=t(key); };
+  set('nav-subtitle','subtitle');
   // 言語ボタンスタイル
-  document.getElementById('lang-zh').className = currentLang==='zh' ? 'btn btn-xs btn-primary' : 'btn btn-xs btn-secondary';
-  document.getElementById('lang-ja').className = currentLang==='ja' ? 'btn btn-xs btn-primary' : 'btn btn-xs btn-secondary';
+  const zh=document.getElementById('lang-zh'); if(zh) zh.className=currentLang==='zh'?'btn btn-xs btn-primary':'btn btn-xs btn-secondary';
+  const ja=document.getElementById('lang-ja'); if(ja) ja.className=currentLang==='ja'?'btn btn-xs btn-primary':'btn btn-xs btn-secondary';
   // フィルターボタン
-  document.getElementById('f-all').textContent = t('filter_all');
-  document.getElementById('f-incomplete').textContent = t('filter_incomplete');
+  set('f-all','filter_all');
+  set('f-incomplete','filter_incomplete');
   // テーブルヘッダー
-  const thMap = {
-    'th-name': 'col_name', 'th-sub': 'col_sub', 'th-sum': 'col_sum',
-    'th-tag': 'col_tag', 'th-action': 'col_action'
-  };
-  Object.entries(thMap).forEach(([id,key])=>{
-    const el=document.getElementById(id); if(el) el.textContent=t(key);
-  });
+  set('th-name','col_name'); set('th-sub','col_sub'); set('th-sum','col_sum'); set('th-tag','col_tag'); set('th-action','col_action');
   // バッチバーのラベル
-  const bLabels = [
-    ['b-subtitle-label','batch_subtitle'],['b-translate-label','batch_translate'],
-    ['b-summary-label','batch_summary'],['b-tag-label','batch_tag'],
-  ];
-  bLabels.forEach(([id,key])=>{ const el=document.getElementById(id); if(el) el.textContent=t(key); });
+  set('b-subtitle-label','batch_subtitle'); set('b-translate-label','batch_translate');
+  set('b-summary-label','batch_summary'); set('b-tag-label','batch_tag');
+  // ページタイトル
+  set('page-title-vods','nav_vods'); set('page-title-subtitles','nav_subtitles'); set('page-title-cpm','nav_cpm');
 }
 
 // ════ CONFIG ════════════════════════════════════════════
@@ -1545,12 +1540,11 @@ async function exportProgramCsv(){
   const dots=['⬇ 匯出中.','⬇ 匯出中..','⬇ 匯出中...'];
   const timer=setInterval(()=>{ if(btn) btn.textContent=dots[dotCount++%3]; },500);
   if(btn){ btn.disabled=true; btn.textContent='⬇ 匯出中...'; }
-
   const resetBtn=()=>{ clearInterval(timer); if(btn){ btn.disabled=false; btn.textContent='⬇ 既存Program CSV匯出'; } };
 
   try{
     const site=siteId();
-    // 全件取得（contents リストに visibility, labels, part_numbers が含まれる）
+    // 全件取得
     let allProgs=[], page=1;
     while(true){
       const r=await fetch(`${BASE()}/bv/cpm/v1alpha1/sites/${site}/contents?current_page=${page}&items_per_page=100&filter.content_types=CONTENT_TYPE_PROGRAM`,{headers:HDR()});
@@ -1560,95 +1554,101 @@ async function exportProgramCsv(){
       if(items.length<100) break;
       page++;
     }
-    if(!allProgs.length){ toast('Program が見つかりません','error'); return; }
-    console.log('[export] first prog keys=', Object.keys(allProgs[0]).join(','));
-    console.log('[export] first prog=', JSON.stringify(allProgs[0]).substring(0,400));
+    if(!allProgs.length){ toast('Program が見つかりません','error'); resetBtn(); return; }
 
-    const rows=[['field','value']];
+    // ── programs.csv（横向き） ──
+    // 固定フィールドの行ラベル
+    const FIELDS=['program_id','program_title','topic_labels','highlight_1','highlight_2','highlight_3','about','author_name','author_title','author_desc','author_avatar_library_id','background_library_id','part_numbers','visibility'];
+    // header 行：field | Program 1 | Program 2 | ...
+    const progHeader=['field',...allProgs.map((_,i)=>`Program ${i+1}`)];
+    // 各フィールドの行
+    const progRows=FIELDS.map(f=>[f]);
+
+    // ── arrangements.csv（縦向き） ──
+    const arrHeader=['program_id','program_title','type','name','content_id'];
+    const arrRows=[];
 
     for(let pi=0;pi<allProgs.length;pi++){
       const prog=allProgs[pi];
-      const progId=prog.content_id||prog.id||prog.program_id||'';
-      if(!progId){ console.log('[export] no progId, prog keys=', Object.keys(prog).join(',')); continue; }
+      const progId=prog.content_id||'';
+      if(!progId) continue;
 
-      // detail 取得（arrangement, author, highlight 等）
+      // detail 取得
       const dr=await fetch(`${BASE()}/bv/cpm/v1alpha1/sites/${site}/programs/${progId}?action=GET_FORM_REQUEST_ACTION_CURRENT&mode=FORM_MODE_EDIT`,{headers:HDR()});
       const dd=await dr.json();
       const p=dd.program||dd;
 
-      // visibility, labels, part_numbers は contents リストから取得
       const visibility=prog.visibility||'CONTENT_VISIBILITY_DRAFT';
+      // labels は文字列配列
       const rawLabels=prog.labels||[];
-      console.log(`[export] ${progId.substring(0,8)} labels=`, JSON.stringify(rawLabels).substring(0,200));
       const labels=rawLabels.map(l=>typeof l==='object'?(l.name||l.label||String(l)):String(l)).filter(Boolean);
-      const partNums=prog.part_numbers||[];
-
-      // ヘッダー行（区切り）
-      if(pi>0) rows.push(['---','']);
-      rows.push(['# ===== Program '+(pi+1)+' =====','']);
-      rows.push(['program_id', progId]);
-      rows.push(['program_title', p.title||'']);
-      rows.push(['topic_labels', labels.join(',')]);
+      const partNums=(prog.part_numbers||[]).join(',');
       const texts=p.highlight?.texts||['','',''];
-      rows.push(['highlight_1', texts[0]||'']);
-      rows.push(['highlight_2', texts[1]||'']);
-      rows.push(['highlight_3', texts[2]||'']);
-      const aboutHtml=p.about?.html_content||'';
-      rows.push(['about', aboutHtml]);
       const author=p.author_info||{};
-      rows.push(['author_name', author.name||'']);
-      rows.push(['author_title', author.title||'']);
-      rows.push(['author_desc', author.description||'']);
-      rows.push(['author_avatar_library_id', author.avatar_library_id||'']);
       const bg=p.background||{};
-      rows.push(['background_library_id', bg.image?.id||'']);
-      rows.push(['part_numbers', partNums.join(',')]);
-      rows.push(['visibility', visibility]);
-      rows.push(['','']);
+      const aboutHtml=p.about?.html_content||'';
 
-      // arrangement → main_category / sub_category / content
-      // content の名前取得：title > name > vod.id の順で優先
-      const getContentName=c=>{
-        const ct=c.content||{};
-        // デバッグ：最初の1件だけ構造を出力
-        if(!getContentName._logged){ console.log('[export] content obj=', JSON.stringify(c).substring(0,400)); getContentName._logged=true; }
-        return ct.title||ct.name||ct.vod?.id||ct.form?.id||ct.article?.id||'';
+      // programs.csv の各フィールド値を列に追加
+      const vals={
+        program_id: progId,
+        program_title: p.title||'',
+        topic_labels: labels.join(','),
+        highlight_1: texts[0]||'',
+        highlight_2: texts[1]||'',
+        highlight_3: texts[2]||'',
+        about: aboutHtml,
+        author_name: author.name||'',
+        author_title: author.title||'',
+        author_desc: author.description||'',
+        author_avatar_library_id: author.avatar_library_id||'',
+        background_library_id: bg.image?.id||'',
+        part_numbers: partNums,
+        visibility: visibility,
       };
+      FIELDS.forEach((f,fi)=>{ progRows[fi].push(vals[f]||''); });
+
+      // arrangements.csv：arrangement を縦に展開
+      const progTitle=p.title||progId;
       const items=p.arrangement?.items||[];
+      console.log(`[export] prog ${pi+1} arrangement items=`, items.length, items[0]?JSON.stringify(items[0]).substring(0,200):'');
+      const addContent=(c)=>{
+        const ct=c.content||{};
+        // content の名前：title > name > vod.id
+        const cName=ct.title||ct.name||ct.vod?.id||ct.form?.id||'';
+        const cId=ct.vod?.id||ct.form?.id||'';
+        if(cName||cId) arrRows.push([progId,progTitle,'content',cName,cId]);
+      };
       for(const section of items){
         if(section.type==='PROGRAM_ARRANGEMENT_ITEM_TYPE_SECTION'){
-          rows.push(['main_category', section.section?.name||'']);
+          arrRows.push([progId,progTitle,'main_category',section.section?.name||'','']);
           for(const item of section.section?.items||[]){
             if(item.type==='PROGRAM_ARRANGEMENT_ITEM_TYPE_MODULE'){
-              rows.push(['sub_category', item.module?.name||'']);
-              for(const content of item.module?.items||[]){
-                if(content.type==='PROGRAM_ARRANGEMENT_ITEM_TYPE_CONTENT'){
-                  rows.push(['content', getContentName(content)]);
-                }
-              }
-            } else if(item.type==='PROGRAM_ARRANGEMENT_ITEM_TYPE_CONTENT'){
-              rows.push(['content', getContentName(item)]);
-            }
+              arrRows.push([progId,progTitle,'sub_category',item.module?.name||'','']);
+              for(const c of item.module?.items||[]) if(c.type==='PROGRAM_ARRANGEMENT_ITEM_TYPE_CONTENT') addContent(c);
+            } else if(item.type==='PROGRAM_ARRANGEMENT_ITEM_TYPE_CONTENT') addContent(item);
           }
         } else if(section.type==='PROGRAM_ARRANGEMENT_ITEM_TYPE_MODULE'){
-          rows.push(['sub_category', section.module?.name||'']);
-          for(const item of section.module?.items||[]){
-            if(item.type==='PROGRAM_ARRANGEMENT_ITEM_TYPE_CONTENT'){
-              rows.push(['content', getContentName(item)]);
-            }
-          }
-        } else if(section.type==='PROGRAM_ARRANGEMENT_ITEM_TYPE_CONTENT'){
-          rows.push(['content', getContentName(section)]);
-        }
+          arrRows.push([progId,progTitle,'sub_category',section.module?.name||'','']);
+          for(const item of section.module?.items||[]) if(item.type==='PROGRAM_ARRANGEMENT_ITEM_TYPE_CONTENT') addContent(item);
+        } else if(section.type==='PROGRAM_ARRANGEMENT_ITEM_TYPE_CONTENT') addContent(section);
       }
     }
 
-    const csv=rows.map(r=>r.map(c=>`"${(c||'').replace(/"/g,'""')}"`).join(',')).join('\n');
-    const a=document.createElement('a');
-    a.href='data:text/csv;charset=utf-8,\uFEFF'+encodeURIComponent(csv);
-    a.download='programs_export.csv'; a.click();
+    // CSV 生成してダウンロード
+    const toCsv=(header,rows)=>[header,...rows].map(r=>r.map(c=>`"${(c||'').replace(/"/g,'""')}"`).join(',')).join('\n');
+
+    const dl=(csv,filename)=>{
+      const a=document.createElement('a');
+      a.href='data:text/csv;charset=utf-8,\uFEFF'+encodeURIComponent(csv);
+      a.download=filename; a.click();
+    };
+
+    dl(toCsv(progHeader,[...progRows]),'programs.csv');
+    await new Promise(r=>setTimeout(r,300));
+    dl(toCsv(arrHeader,arrRows),'arrangements.csv');
+
     resetBtn();
-    toast(`✅ ${allProgs.length} 件匯出完成`,'success');
+    toast(`✅ ${allProgs.length} 件匯出完成（2 CSV）`,'success');
   }catch(e){ resetBtn(); toast('匯出失敗: '+e.message,'error'); }
 }
 
@@ -1664,38 +1664,91 @@ function handleProgramCSV(event){
   const reader=new FileReader();
   reader.onload=e=>{
     try{
-      const lines=e.target.result.split(/\r?\n/);
-      const programs=[]; let cur=null;
-      for(const rawLine of lines){
-        const line=rawLine.trim(); if(!line||line.startsWith('#')) continue;
-        const cols=parseCSVLine(line);
-        const field=(cols[0]||'').trim().toLowerCase();
-        const value=(cols[1]||'').trim();
-        if(field==='---'){ continue; }
-        if(field==='program_id'){ if(cur) cur.program_id=value; continue; }
-        if(field==='program_title'){ cur={program_id:'',title:value,highlight:['','',''],about_html:'',author_name:'',author_title:'',author_desc:'',author_avatar_library_id:'',background_library_id:'',labels:[],part_numbers:[],visibility:'CONTENT_VISIBILITY_DRAFT',contents:[]}; programs.push(cur); continue; }
-        if(!cur) continue;
-        switch(field){
-          case 'topic_labels': case 'labels': cur.labels=value?value.split(',').map(s=>s.trim()).filter(Boolean):[]; break;
-          case 'highlight_1': cur.highlight[0]=value; break;
-          case 'highlight_2': cur.highlight[1]=value; break;
-          case 'highlight_3': cur.highlight[2]=value; break;
-          case 'about': cur.about_html=value||''; break;
-          case 'author_name': cur.author_name=value; break;
-          case 'author_title': cur.author_title=value; break;
-          case 'author_desc': cur.author_desc=value; break;
-          case 'author_avatar_library_id': cur.author_avatar_library_id=value; break;
-          case 'background_library_id': cur.background_library_id=value; break;
-          case 'part_numbers': cur.part_numbers=value?value.split(',').map(s=>s.trim()).filter(Boolean):[]; break;
-          case 'visibility': cur.visibility=value||'CONTENT_VISIBILITY_DRAFT'; break;
-          case 'main_category': cur.contents.push({type:'section',name:value}); break;
-          case 'sub_category': cur.contents.push({type:'module',name:value}); break;
-          case 'content': cur.contents.push({type:'content',content_title:value}); break;
+      const lines=e.target.result.split(/\r?\n/).map(l=>l.trim()).filter(l=>l&&!l.startsWith('#'));
+      if(!lines.length){ toast('データがありません','error'); return; }
+
+      // 横向き判定：1行目が field,Program 1,Program 2... の形式
+      const firstRow=parseCSVLine(lines[0]);
+      const isHorizontal=firstRow[0].toLowerCase()==='field' && firstRow.length>2;
+
+      let programs=[];
+
+      if(isHorizontal){
+        // ── 横向き programs.csv ──
+        // 各行: field | val1 | val2 | ...
+        const numProgs=firstRow.length-1;
+        programs=Array.from({length:numProgs},()=>({
+          program_id:'', title:'', _fields:{} // _fields に有値フィールドだけ入れる
+        }));
+
+        for(const rawLine of lines.slice(1)){
+          const cols=parseCSVLine(rawLine);
+          const field=(cols[0]||'').trim().toLowerCase();
+          if(!field) continue;
+          for(let pi=0;pi<numProgs;pi++){
+            const val=(cols[pi+1]||'').trim();
+            if(!val) continue; // 空白はスキップ（patch モード）
+            const p=programs[pi];
+            switch(field){
+              case 'program_id': p.program_id=val; break;
+              case 'program_title': p.title=val; p._fields.title=val; break;
+              case 'topic_labels': p._fields.labels=val.split(',').map(s=>s.trim()).filter(Boolean); break;
+              case 'highlight_1': if(!p._fields.highlight) p._fields.highlight=['','','']; p._fields.highlight[0]=val; break;
+              case 'highlight_2': if(!p._fields.highlight) p._fields.highlight=['','','']; p._fields.highlight[1]=val; break;
+              case 'highlight_3': if(!p._fields.highlight) p._fields.highlight=['','','']; p._fields.highlight[2]=val; break;
+              case 'about': p._fields.about_html=val; break;
+              case 'author_name': p._fields.author_name=val; break;
+              case 'author_title': p._fields.author_title=val; break;
+              case 'author_desc': p._fields.author_desc=val; break;
+              case 'author_avatar_library_id': p._fields.author_avatar_library_id=val; break;
+              case 'background_library_id': p._fields.background_library_id=val; break;
+              case 'part_numbers': p._fields.part_numbers=val.split(',').map(s=>s.trim()).filter(Boolean); break;
+              case 'visibility': p._fields.visibility=val; break;
+            }
+          }
         }
+        // program_id か title がある Program だけ
+        programs=programs.filter(p=>p.program_id||p.title);
+
+      } else {
+        // ── 縦向き（従来形式）──
+        let cur=null;
+        for(const rawLine of lines){
+          const cols=parseCSVLine(rawLine);
+          const field=(cols[0]||'').trim().toLowerCase();
+          const value=(cols[1]||'').trim();
+          if(field==='---') continue;
+          if(field==='program_id'){ if(cur) cur.program_id=value; continue; }
+          if(field==='program_title'){
+            cur={program_id:'',title:value,_fields:{title:value},contents:[]};
+            programs.push(cur); continue;
+          }
+          if(!cur) continue;
+          if(value==='') continue; // 空白はスキップ
+          switch(field){
+            case 'topic_labels': case 'labels': cur._fields.labels=value.split(',').map(s=>s.trim()).filter(Boolean); break;
+            case 'highlight_1': if(!cur._fields.highlight) cur._fields.highlight=['','','']; cur._fields.highlight[0]=value; break;
+            case 'highlight_2': if(!cur._fields.highlight) cur._fields.highlight=['','','']; cur._fields.highlight[1]=value; break;
+            case 'highlight_3': if(!cur._fields.highlight) cur._fields.highlight=['','','']; cur._fields.highlight[2]=value; break;
+            case 'about': cur._fields.about_html=value; break;
+            case 'author_name': cur._fields.author_name=value; break;
+            case 'author_title': cur._fields.author_title=value; break;
+            case 'author_desc': cur._fields.author_desc=value; break;
+            case 'author_avatar_library_id': cur._fields.author_avatar_library_id=value; break;
+            case 'background_library_id': cur._fields.background_library_id=value; break;
+            case 'part_numbers': cur._fields.part_numbers=value.split(',').map(s=>s.trim()).filter(Boolean); break;
+            case 'visibility': cur._fields.visibility=value; break;
+            case 'main_category': cur.contents.push({type:'section',name:value}); break;
+            case 'sub_category': cur.contents.push({type:'module',name:value}); break;
+            case 'content': cur.contents.push({type:'content',content_title:value}); break;
+          }
+        }
+        programs=programs.filter(p=>p.title||p.program_id);
       }
-      programImportData=programs.filter(p=>p.title);
+
+      programImportData=programs;
       renderProgramPreview();
-      toast(`${programImportData.length}件読み込みました`,'success');
+      toast(`${programs.length}件読み込みました（${isHorizontal?'横向き':'縦向き'}CSV）`,'success');
     }catch(err){ toast('解析失敗: '+err.message,'error'); }
   };
   reader.readAsText(file,'UTF-8');
@@ -1703,11 +1756,18 @@ function handleProgramCSV(event){
 
 function renderProgramPreview(){
   document.getElementById('prog-preview').style.display='block';
-  document.getElementById('prog-preview-list').innerHTML=programImportData.map(p=>`
-    <div style="border:1px solid var(--border);border-radius:6px;padding:10px 14px;margin-bottom:8px;font-size:12px;">
-      <div style="font-weight:600;margin-bottom:4px;">📚 ${esc(p.title)}</div>
-      <div style="color:var(--muted);">ラベル: ${p.labels.join(',')||'なし'} ｜ 著者: ${esc(p.author_name)||'なし'} ｜ コンテンツ: ${p.contents.filter(c=>c.type==='content').length}件</div>
-    </div>`).join('');
+  document.getElementById('prog-preview-list').innerHTML=programImportData.map(p=>{
+    const f=p._fields||{};
+    const labels=(f.labels||p.labels||[]).join(',');
+    const authorName=f.author_name||p.author_name||'';
+    const contentCount=(p.contents||[]).filter(c=>c.type==='content').length;
+    const updatingFields=Object.keys(f).filter(k=>k!=='title').join(', ')||'タイトルのみ';
+    return `<div style="border:1px solid var(--border);border-radius:6px;padding:10px 14px;margin-bottom:8px;font-size:12px;">
+      <div style="font-weight:600;margin-bottom:4px;">📚 ${esc(p.title||p.program_id||'?')}</div>
+      <div style="color:var(--muted);">更新フィールド: ${esc(updatingFields)}${contentCount?' ｜ コンテンツ: '+contentCount+'件':''}</div>
+      ${p.program_id?`<div style="color:var(--muted);font-size:10px;font-family:monospace;">ID: ${p.program_id.substring(0,16)}...</div>`:'<div style="color:var(--yellow);font-size:11px;">⚠️ program_id なし → 新規作成</div>'}
+    </div>`;
+  }).join('');
 }
 function clearProgramPreview(){ programImportData=[]; document.getElementById('prog-preview').style.display='none'; }
 
@@ -1802,23 +1862,85 @@ async function runProgramImport(){
       if(finalArrangement.length===0) log(`  ℹ️ arrangement 空のため基本情報のみ更新`);
 
       const isValidUUID=s=>/^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$/i.test(s||'');
-      const authorInfo={displayable:true,name:prog.author_name,title:prog.author_title,description:prog.author_desc};
-      if(isValidUUID(prog.author_avatar_library_id)) authorInfo.avatar_library_id=prog.author_avatar_library_id;
-      const bgValid=isValidUUID(prog.background_library_id);
-      const putBody={title:prog.title,highlight:{displayable:true,texts:[...prog.highlight,'','',''].slice(0,3)},about:{displayable:true,html_content:prog.about_html},author_info:authorInfo,label_info:{displayable:true,labels:prog.labels.map(l=>({name:l}))},arrangement:{displayable:true,items:finalArrangement},clip:{displayable:true,clips:[]},rating:{displayable:false},level_info:{displayable:false,level:'PROGRAM_LEVEL_BEGINNER'},relation:{displayable:true,related_contents:[]},certification:{setting:{enabled:false,template_id:'',issuer_id:'',passing_threshold:0}},background:bgValid?{type:'PROGRAM_BACKGROUND_TYPE_IMAGE',image:{id:prog.background_library_id}}:{type:'PROGRAM_BACKGROUND_TYPE_DEFAULT'}};
+      const f=prog._fields||{};
+      const hasContents=(prog.contents||[]).length>0;
 
       if(progId){
-        console.log(`[import] PUT body=`, JSON.stringify({program:putBody}).substring(0,800));
-        // 既存 → PUT で更新
+        // ── 既存 → GET して merge（patch モード） ──
         log(`  ♻️ 既存 Program を更新（ID: ${progId.substring(0,16)}...）`);
-        console.log(`[import] PUT progId=${progId.substring(0,8)} arrangement items=`, arrangement.length, JSON.stringify(arrangement).substring(0,400));
+
+        // 現在の Program 情報を取得
+        const existDr=await fetch(`${BASE()}/bv/cpm/v1alpha1/sites/${site}/programs/${progId}?action=GET_FORM_REQUEST_ACTION_CURRENT&mode=FORM_MODE_EDIT`,{headers:HDR()});
+        const existDd=await existDr.json();
+        const ep=existDd.program||existDd;
+
+        // 既存値をベースに、CSV で指定された値だけ上書き
+        const mergedHighlight=[...ep.highlight?.texts||['','','']];
+        if(f.highlight?.[0]) mergedHighlight[0]=f.highlight[0];
+        if(f.highlight?.[1]) mergedHighlight[1]=f.highlight[1];
+        if(f.highlight?.[2]) mergedHighlight[2]=f.highlight[2];
+
+        const mergedAuthor={...(ep.author_info||{}),displayable:true};
+        if(f.author_name!==undefined) mergedAuthor.name=f.author_name;
+        if(f.author_title!==undefined) mergedAuthor.author_title=f.author_title;
+        if(f.author_desc!==undefined) mergedAuthor.description=f.author_desc;
+        if(f.author_avatar_library_id!==undefined && isValidUUID(f.author_avatar_library_id)) mergedAuthor.avatar_library_id=f.author_avatar_library_id;
+
+        const mergedBg=f.background_library_id!==undefined
+          ? (isValidUUID(f.background_library_id)?{type:'PROGRAM_BACKGROUND_TYPE_IMAGE',image:{id:f.background_library_id}}:{type:'PROGRAM_BACKGROUND_TYPE_DEFAULT'})
+          : (ep.background||{type:'PROGRAM_BACKGROUND_TYPE_DEFAULT'});
+
+        const putBody={
+          title: f.title||ep.title||'',
+          highlight:{displayable:true,texts:mergedHighlight},
+          about:{displayable:true,html_content:f.about_html!==undefined?f.about_html:(ep.about?.html_content||'')},
+          author_info:mergedAuthor,
+          label_info:{displayable:true,labels:(f.labels!==undefined?f.labels:(ep.label_info?.labels||[]).map(l=>typeof l==='object'?(l.name||l):l)).map(l=>({name:l}))},
+          arrangement:{displayable:true,items:hasContents?finalArrangement:(ep.arrangement?.items||[])},
+          clip:{displayable:true,clips:ep.clip?.clips||[]},
+          rating:{displayable:false},
+          level_info:ep.level_info||{displayable:false,level:'PROGRAM_LEVEL_BEGINNER'},
+          relation:{displayable:true,related_contents:ep.relation?.related_contents||[]},
+          certification:ep.certification||{setting:{enabled:false,template_id:'',issuer_id:'',passing_threshold:0}},
+          background:mergedBg,
+        };
+
         for(let attempt=0;attempt<3;attempt++){
           try{ await cpmPut(`/bv/cpm/v1alpha1/sites/${site}/programs/${progId}`,{program:putBody}); break; }
           catch(e){ if(attempt<2) await new Promise(r=>setTimeout(r,2000)); else throw e; }
         }
+
+        // contents/setting も有値フィールドのみ更新
+        const existContent=existingProgs.find(p=>p.content_id===progId)||{};
+        await cpmPut(`/bv/cpm/v1alpha1/sites/${site}/contents/setting`,{content:{
+          content_id:progId,content_type:'CONTENT_TYPE_PROGRAM',
+          visibility:f.visibility||existContent.visibility||'CONTENT_VISIBILITY_DRAFT',
+          labels:f.labels!==undefined?f.labels:(existContent.labels||[]),
+          part_numbers:f.part_numbers!==undefined?f.part_numbers:(existContent.part_numbers||[]),
+          schedule:{start_time:null,end_time:null},
+          license_setting:{license:'CONTENT_LICENSE_LICENSE_ONLY',custom_url_resource:''},
+          note:'',form_type:null
+        }});
+
       } else {
-        // 新規 → POST → PUT
-        const createResp=await cpmPost(`/bv/cpm/v1alpha1/sites/${site}/programs`,{program:{title:prog.title,label_info:{displayable:true,labels:[]},rating:{displayable:false},highlight:{displayable:true,texts:['','','']},about:{displayable:true,html_content:''},arrangement:{displayable:true,items:[]},author_info:{name:'',title:'',description:'',displayable:true},background:{type:'PROGRAM_BACKGROUND_TYPE_DEFAULT'},clip:{displayable:true,clips:[]},level_info:{displayable:false,level:'PROGRAM_LEVEL_BEGINNER'},relation:{displayable:true,related_contents:[]}}});
+        // ── 新規 → POST → PUT（全フィールド送る） ──
+        const authorInfo={displayable:true,name:f.author_name||'',title:f.author_title||'',description:f.author_desc||''};
+        if(isValidUUID(f.author_avatar_library_id)) authorInfo.avatar_library_id=f.author_avatar_library_id;
+        const bgValid=isValidUUID(f.background_library_id);
+        const putBody={
+          title:f.title||prog.title||'',
+          highlight:{displayable:true,texts:[...(f.highlight||['','','']).concat(['','','']).slice(0,3)]},
+          about:{displayable:true,html_content:f.about_html||''},
+          author_info:authorInfo,
+          label_info:{displayable:true,labels:(f.labels||[]).map(l=>({name:l}))},
+          arrangement:{displayable:true,items:finalArrangement},
+          clip:{displayable:true,clips:[]},rating:{displayable:false},
+          level_info:{displayable:false,level:'PROGRAM_LEVEL_BEGINNER'},
+          relation:{displayable:true,related_contents:[]},
+          certification:{setting:{enabled:false,template_id:'',issuer_id:'',passing_threshold:0}},
+          background:bgValid?{type:'PROGRAM_BACKGROUND_TYPE_IMAGE',image:{id:f.background_library_id}}:{type:'PROGRAM_BACKGROUND_TYPE_DEFAULT'},
+        };
+        const createResp=await cpmPost(`/bv/cpm/v1alpha1/sites/${site}/programs`,{program:{title:putBody.title,label_info:{displayable:true,labels:[]},rating:{displayable:false},highlight:{displayable:true,texts:['','','']},about:{displayable:true,html_content:''},arrangement:{displayable:true,items:[]},author_info:{name:'',title:'',description:'',displayable:true},background:{type:'PROGRAM_BACKGROUND_TYPE_DEFAULT'},clip:{displayable:true,clips:[]},level_info:{displayable:false,level:'PROGRAM_LEVEL_BEGINNER'},relation:{displayable:true,related_contents:[]}}});
         progId=(createResp.program||createResp).id||'';
         if(!progId) throw new Error('program_id が取得できません');
         await new Promise(r=>setTimeout(r,1000));
@@ -1826,9 +1948,8 @@ async function runProgramImport(){
           try{ await cpmPut(`/bv/cpm/v1alpha1/sites/${site}/programs/${progId}`,{program:putBody}); break; }
           catch(e){ if(attempt<2) await new Promise(r=>setTimeout(r,2000)); else throw e; }
         }
+        await cpmPut(`/bv/cpm/v1alpha1/sites/${site}/contents/setting`,{content:{content_id:progId,content_type:'CONTENT_TYPE_PROGRAM',visibility:f.visibility||'CONTENT_VISIBILITY_DRAFT',labels:f.labels||[],part_numbers:f.part_numbers||[],schedule:{start_time:null,end_time:null},license_setting:{license:'CONTENT_LICENSE_LICENSE_ONLY',custom_url_resource:''},note:'',form_type:null}});
       }
-
-      await cpmPut(`/bv/cpm/v1alpha1/sites/${site}/contents/setting`,{content:{content_id:progId,content_type:'CONTENT_TYPE_PROGRAM',visibility:prog.visibility,labels:prog.labels,part_numbers:prog.part_numbers,schedule:{start_time:null,end_time:null},license_setting:{license:'CONTENT_LICENSE_LICENSE_ONLY',custom_url_resource:''},note:'',form_type:null}});
       log(`  ✅ 完了（ID: ${progId.substring(0,16)}...）`,'done');
     }catch(e){ log(`  ❌ ${e.message}`,'error'); }
   }
