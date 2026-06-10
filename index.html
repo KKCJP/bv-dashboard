@@ -1577,7 +1577,9 @@ async function exportProgramCsv(){
       // content の名前取得：title > name > vod.id の順で優先
       const getContentName=c=>{
         const ct=c.content||{};
-        return ct.title||ct.name||ct.vod?.id||ct.form?.id||'';
+        // デバッグ：最初の1件だけ構造を出力
+        if(!getContentName._logged){ console.log('[export] content obj=', JSON.stringify(c).substring(0,400)); getContentName._logged=true; }
+        return ct.title||ct.name||ct.vod?.id||ct.form?.id||ct.article?.id||'';
       };
       const items=p.arrangement?.items||[];
       for(const section of items){
@@ -1744,21 +1746,26 @@ async function runProgramImport(){
       }
       const reseq=items=>items.forEach((item,idx)=>{ item.sequence=idx+1; if(item.section?.items) reseq(item.section.items); if(item.module?.items) reseq(item.module.items); });
 
-      // 空の section/module を除外
+      // 空の section/module を除外（BV は空の items を受け付けない）
       const cleanArrangement=(items)=>items.filter(item=>{
         if(item.type==='PROGRAM_ARRANGEMENT_ITEM_TYPE_SECTION'){
           item.section.items=cleanArrangement(item.section.items);
-          return true; // section は空でも残す（コンテンツ未登録の場合）
+          return item.section.items.length>0; // 空の section も除外
         }
         if(item.type==='PROGRAM_ARRANGEMENT_ITEM_TYPE_MODULE'){
           item.module.items=cleanArrangement(item.module.items);
-          return item.module.items.length>0; // 空の module は除外
+          return item.module.items.length>0; // 空の module も除外
         }
         return true;
       });
       const finalArrangement=cleanArrangement(arrangement);
       reseq(finalArrangement);
-      log(`  📋 arrangement: ${finalArrangement.length}件（content ${finalArrangement.flatMap(s=>s.section?.items||s.module?.items||[s]).filter(i=>i.type==='PROGRAM_ARRANGEMENT_ITEM_TYPE_CONTENT').length}本）`);
+      const contentCount=finalArrangement.flatMap(s=>
+        s.section?.items?.flatMap(i=>i.module?.items||[i])||s.module?.items||[s]
+      ).filter(i=>i.type==='PROGRAM_ARRANGEMENT_ITEM_TYPE_CONTENT').length;
+      log(`  📋 arrangement: ${finalArrangement.length}件（content ${contentCount}本）${contentCount===0?' ⚠️ content なし、大/小カテゴリのみ':''}`);
+      // arrangement が全部空でも PUT を試みる（基本情報だけ更新）
+      if(finalArrangement.length===0) log(`  ℹ️ arrangement 空のため基本情報のみ更新`);
 
       const isValidUUID=s=>/^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$/i.test(s||'');
       const authorInfo={displayable:true,name:prog.author_name,title:prog.author_title,description:prog.author_desc};
@@ -1767,6 +1774,7 @@ async function runProgramImport(){
       const putBody={title:prog.title,highlight:{displayable:true,texts:[...prog.highlight,'','',''].slice(0,3)},about:{displayable:true,html_content:prog.about_html},author_info:authorInfo,label_info:{displayable:true,labels:prog.labels.map(l=>({name:l}))},arrangement:{displayable:true,items:finalArrangement},clip:{displayable:true,clips:[]},rating:{displayable:false},level_info:{displayable:false,level:'PROGRAM_LEVEL_BEGINNER'},relation:{displayable:true,related_contents:[]},certification:{setting:{enabled:false,template_id:'',issuer_id:'',passing_threshold:0}},background:bgValid?{type:'PROGRAM_BACKGROUND_TYPE_IMAGE',image:{id:prog.background_library_id}}:{type:'PROGRAM_BACKGROUND_TYPE_DEFAULT'}};
 
       if(progId){
+        console.log(`[import] PUT body=`, JSON.stringify({program:putBody}).substring(0,800));
         // 既存 → PUT で更新
         log(`  ♻️ 既存 Program を更新（ID: ${progId.substring(0,16)}...）`);
         console.log(`[import] PUT progId=${progId.substring(0,8)} arrangement items=`, arrangement.length, JSON.stringify(arrangement).substring(0,400));
