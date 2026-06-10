@@ -1754,6 +1754,7 @@ async function runProgramImport(){
       if(progId){
         // 既存 → PUT で更新
         log(`  ♻️ 既存 Program を更新（ID: ${progId.substring(0,16)}...）`);
+        console.log(`[import] PUT progId=${progId.substring(0,8)} arrangement items=`, arrangement.length, JSON.stringify(arrangement).substring(0,400));
         for(let attempt=0;attempt<3;attempt++){
           try{ await cpmPut(`/bv/cpm/v1alpha1/sites/${site}/programs/${progId}`,{program:putBody}); break; }
           catch(e){ if(attempt<2) await new Promise(r=>setTimeout(r,2000)); else throw e; }
