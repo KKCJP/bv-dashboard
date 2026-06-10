@@ -1560,8 +1560,7 @@ async function exportProgramCsv(){
       rows.push(['highlight_2', texts[1]||'']);
       rows.push(['highlight_3', texts[2]||'']);
       const aboutHtml=p.about?.html_content||'';
-      const aboutText=aboutHtml.replace(/<[^>]+>/g,'').trim();
-      rows.push(['about', aboutText]);
+      rows.push(['about', aboutHtml]);
       const author=p.author_info||{};
       rows.push(['author_name', author.name||'']);
       rows.push(['author_title', author.title||'']);
@@ -1646,7 +1645,7 @@ function handleProgramCSV(event){
           case 'highlight_1': cur.highlight[0]=value; break;
           case 'highlight_2': cur.highlight[1]=value; break;
           case 'highlight_3': cur.highlight[2]=value; break;
-          case 'about': cur.about_html=value?`<p style="margin:8px 0;overflow-wrap:anywhere;white-space:pre-wrap">${value}</p>`:''; break;
+          case 'about': cur.about_html=value||''; break;
           case 'author_name': cur.author_name=value; break;
           case 'author_title': cur.author_title=value; break;
           case 'author_desc': cur.author_desc=value; break;
