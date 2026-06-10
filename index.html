@@ -312,7 +312,7 @@ tr:last-child td{border-bottom:none;}
         <div style="font-weight:600;font-size:12px;margin-bottom:10px;">プレビュー</div>
         <div id="prog-preview-list"></div>
         <div class="btn-row" style="margin-top:12px;">
-          <button class="btn btn-primary" onclick="runProgramImport()">🚀 インポート開始</button>
+          <button class="btn btn-primary" id="prog-import-btn" onclick="runProgramImport()">🚀 インポート開始</button>
           <button class="btn btn-secondary" onclick="clearProgramPreview()">✕ クリア</button>
         </div>
       </div>
@@ -1801,9 +1801,14 @@ function clearProgramPreview(){ programImportData=[]; document.getElementById('p
 
 async function runProgramImport(){
   if(!programImportData.length){ toast('データがありません','error'); return; }
+  const importBtn=document.getElementById('prog-import-btn');
+  if(importBtn?.disabled) return; // 二重実行防止
+  if(importBtn){ importBtn.disabled=true; importBtn.textContent='⏳ 実行中...'; }
   const site=siteId();
   const log=makeLog('prog-log','prog-log-card');
   log(t('log_batch_start',programImportData.length));
+
+  try{
 
   // 既存 Program 一覧を取得（タイトルで照合）
   let existingProgs=[];
@@ -1983,6 +1988,9 @@ async function runProgramImport(){
   }
   log('🏁 インポート完了','done');
   toast('Programインポート完了','success');
+  }finally{
+    if(importBtn){ importBtn.disabled=false; importBtn.textContent='🚀 インポート開始'; }
+  }
 }
 
 // ════ Thumbnail ══════════════════════════════════════════
