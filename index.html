@@ -1544,12 +1544,19 @@ async function exportProgramCsv(){
         const sr=await fetch(`${BASE()}/bv/cpm/v1alpha1/sites/${site}/contents/${progId}?content_type=CONTENT_TYPE_PROGRAM`,{headers:HDR()});
         const sd=await sr.json();
         const ct=sd.content||sd;
+        console.log(`[export] labels raw=`, JSON.stringify(ct.labels).substring(0,200));
+        console.log(`[export] part_numbers raw=`, JSON.stringify(ct.part_numbers));
         visibility=ct.visibility||'CONTENT_VISIBILITY_DRAFT';
-        // labels は [{name:'xxx'}] 形式か ['xxx'] 形式どちらにも対応
         const rawLabels=ct.labels||[];
         labels=rawLabels.map(l=>typeof l==='object'?(l.name||l.label||''):String(l)).filter(Boolean);
         partNums=(ct.part_numbers||[]);
-      }catch{}
+      }catch(e){ console.log('[export] content setting error:', e.message); }
+
+      // arrangement debug
+      const firstContent=p.arrangement?.items?.[0]?.section?.items?.[0]?.module?.items?.[0]
+                      || p.arrangement?.items?.[0]?.section?.items?.[0]
+                      || p.arrangement?.items?.[0];
+      console.log(`[export] first arrangement item=`, JSON.stringify(firstContent).substring(0,300));
 
       // ヘッダー行（区切り）
       if(pi>0) rows.push(['---','']);
