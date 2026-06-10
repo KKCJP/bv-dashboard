@@ -828,13 +828,16 @@ async function runSingleTag(vodId){
 
 async function fillSummaries(vodId,subtitleIds){
   const sids=subtitleIds.split(',').filter(Boolean);
-  for(const sid of sids){
+  for(let i=0;i<sids.length;i++){
+    const sid=sids[i];
     try{
       await bvPost('/bv/cms/v2alpha1/summaries:generate',{
         source_id:vodId,source_type:'SUMMARY_SOURCE_TYPE_VOD',
         setting:{content_type:sumType(),format:sumFmt(),length:sumLen()},
         vod:{subtitle_id:sid}
       });
+      // 複数の場合、少し待機してから次を送る
+      if(sids.length>1&&i<sids.length-1) await new Promise(r=>setTimeout(r,500));
     }catch(e){ toast('要約失敗: '+e.message,'error'); }
   }
   toast('要約トリガー完了','success');
@@ -1116,12 +1119,34 @@ async function confirmBatch(){
         try{
           const subResp=await bvGet(`/bv/cms/v1/vods/${vodId}/subtitles`);
           const subs=(subResp.subtitles||[]).filter(s=>s.status==='SUBTITLE_STATUS_SUCCEED');
-          let cnt=0;
+          let cnt=0, skipped=0;
           for(const sub of subs){
-            await bvPost('/bv/cms/v2alpha1/summaries:generate',{source_id:vodId,source_type:'SUMMARY_SOURCE_TYPE_VOD',setting:{content_type:sumType(),format:sumFmt(),length:sumLen()},vod:{subtitle_id:sub.id}});
+            // 既存の摘要状態を確認
+            let alreadyDone=false;
+            try{
+              const fetchResp=await bvPost('/bv/cms/v2alpha1/summaries:fetch',{
+                source_id:vodId,source_type:'SUMMARY_SOURCE_TYPE_VOD',
+                vod:{subtitle_id:sub.id}
+              });
+              const sumObj=fetchResp.summary||{};
+              const gj=sumObj.generate_job||{};
+              const st=(gj.status||sumObj.status||'').toUpperCase();
+              alreadyDone=st.includes('READY')||st.includes('SUCCEED')||sumObj.literal_content||sumObj.structural_content;
+            }catch{}
+            if(alreadyDone){
+              skipped++;
+              continue;
+            }
+            await bvPost('/bv/cms/v2alpha1/summaries:generate',{
+              source_id:vodId,source_type:'SUMMARY_SOURCE_TYPE_VOD',
+              setting:{content_type:sumType(),format:sumFmt(),length:sumLen()},
+              vod:{subtitle_id:sub.id}
+            });
             cnt++;
+            // 複数言語の場合、少し待機してから次を送る
+            if(subs.length>1) await new Promise(r=>setTimeout(r,500));
           }
-          if(cnt) log(t('log_sum_ok',cnt),'done');
+          if(cnt||skipped) log(`${t('log_sum_ok',cnt)}${skipped?' ('+skipped+'件既存スキップ)':''}`, 'done');
           else log(t('log_sum_skip'));
         }catch(e){ log(`  ❌ ${e.message}`,'error'); }
       }
