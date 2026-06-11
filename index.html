@@ -1694,6 +1694,39 @@ function handleProgramCSV(event){
       const firstRow=parseCSVLine(lines[0]);
       const secondRow=lines[1]?parseCSVLine(lines[1]):[];
       // 2行目が program_id で始まる → 横向き
+      // 縦向き or arrangements.csv（5列: program_id,program_title,type,name,content_id）
+      // arrangements.csv 判定：1行目が program_id,program_title,type,name,content_id
+      const isArrangements=(firstRow[0]||'').toLowerCase()==='program_id' &&
+        (firstRow[2]||'').toLowerCase()==='type' &&
+        (firstRow[3]||'').toLowerCase()==='name';
+
+      if(isArrangements){
+        // ── arrangements.csv ──
+        const progMap=new Map();
+        for(const rawLine of lines.slice(1)){
+          const cols=parseCSVLine(rawLine);
+          const progId=(cols[0]||'').trim();
+          const progTitle=(cols[1]||'').trim();
+          const type=(cols[2]||'').trim().toLowerCase();
+          const name=(cols[3]||'').trim();
+          const contentId=(cols[4]||'').trim();
+          if(!progId||!type) continue;
+
+          if(!progMap.has(progId)){
+            progMap.set(progId,{program_id:progId,title:progTitle,contents:[],_fields:{}});
+          }
+          const p=progMap.get(progId);
+          if(type==='main_category') p.contents.push({type:'section',name});
+          else if(type==='sub_category') p.contents.push({type:'module',name});
+          else if(type==='content') p.contents.push({type:'content',content_title:name,content_id:contentId});
+        }
+        programs=[...progMap.values()];
+        programImportData=programs;
+        renderProgramPreview();
+        toast(`${programs.length}件読み込みました（arrangements CSV）`,'success');
+        return;
+      }
+
       const isHorizontal=(firstRow[0]||'').toLowerCase()==='field' &&
         secondRow.length>=2 && (secondRow[0]||'').toLowerCase()==='program_id';
       console.log('[csv] lines=', lines.length, 'firstRow=', firstRow.slice(0,3), 'isHorizontal=', isHorizontal);
@@ -1807,6 +1840,7 @@ async function runProgramImport(){
   const site=siteId();
   const log=makeLog('prog-log','prog-log-card');
   log(t('log_batch_start',programImportData.length));
+  const missingPrograms=[]; // content が見つからなかった Program を記録
 
   try{
 
@@ -1850,26 +1884,53 @@ async function runProgramImport(){
       // arrangement 構築
       const arrangement=[];
       let curSection=null,curModule=null;
+      const missingContents=[]; // 見つからなかった content を記録
+
       for(const c of prog.contents){
-        if(c.type==='section'){ curSection={type:'PROGRAM_ARRANGEMENT_ITEM_TYPE_SECTION',sequence:0,section:{name:c.name,items:[]}}; curModule=null; arrangement.push(curSection); }
-        else if(c.type==='module'){ curModule={type:'PROGRAM_ARRANGEMENT_ITEM_TYPE_MODULE',sequence:0,module:{name:c.name,items:[]}}; (curSection?curSection.section.items:arrangement).push(curModule); }
-        else if(c.type==='content'&&c.content_title){
-          const searchName=c.content_title.replace(/\.(mp4|mov|mkv|avi)$/i,'');
-          let contentId='';
-          try{
-            const cands=[searchName,searchName.match(/^(\d+_\d+)/)?.[1]].filter(Boolean);
-            for(const q of cands){
-              const r=await fetch(`${BASE()}/bv/cpm/v1alpha1/sites/${site}/contents?current_page=1&items_per_page=5&filter.title=${encodeURIComponent(q)}&filter.content_types=CONTENT_TYPE_VOD&filter.content_types=CONTENT_TYPE_FORM`,{headers:HDR()});
-              const d=await r.json(); const hits=d.contents||[];
-              if(hits.length){ contentId=(hits.find(h=>h.title===searchName)||hits[0]).content_id||''; break; }
-            }
-          }catch{}
-          if(!contentId){ log(`  ⚠️ 「${c.content_title}」が見つかりません`); continue; }
-          const item={type:'PROGRAM_ARRANGEMENT_ITEM_TYPE_CONTENT',sequence:0,content:{type:'CONTENT_TYPE_VOD',name:searchName,vod:{id:contentId}}};
+        if(c.type==='section'){
+          curSection={type:'PROGRAM_ARRANGEMENT_ITEM_TYPE_SECTION',sequence:0,section:{name:c.name,items:[]}};
+          curModule=null;
+          arrangement.push(curSection);
+        } else if(c.type==='module'){
+          curModule={type:'PROGRAM_ARRANGEMENT_ITEM_TYPE_MODULE',sequence:0,module:{name:c.name,items:[]}};
+          (curSection?curSection.section.items:arrangement).push(curModule);
+        } else if(c.type==='content'&&(c.content_title||c.content_id)){
+          const searchName=(c.content_title||'').replace(/\.(mp4|mov|mkv|avi)$/i,'');
+          let contentId=c.content_id||''; // content_id が直接指定されていれば優先
+
+          if(!contentId && searchName){
+            // name で検索
+            try{
+              const cands=[searchName,searchName.match(/^(\d+_\d+)/)?.[1]].filter(Boolean);
+              for(const q of cands){
+                const r=await fetch(`${BASE()}/bv/cpm/v1alpha1/sites/${site}/contents?current_page=1&items_per_page=5&filter.title=${encodeURIComponent(q)}&filter.content_types=CONTENT_TYPE_VOD&filter.content_types=CONTENT_TYPE_FORM`,{headers:HDR()});
+                const d=await r.json(); const hits=d.contents||[];
+                if(hits.length){
+                  const exact=hits.find(h=>h.title===searchName);
+                  contentId=(exact||hits[0]).content_id||'';
+                  break;
+                }
+              }
+            }catch{}
+          }
+
+          if(!contentId){
+            // 見つからなかった → sub 標題は残して content だけスキップ
+            log(`  ⚠️ content 未找到：「${c.content_title||c.content_id}」`);
+            missingContents.push(c.content_title||c.content_id||'');
+            continue;
+          }
+
+          const displayName=searchName||contentId;
+          const item={type:'PROGRAM_ARRANGEMENT_ITEM_TYPE_CONTENT',sequence:0,content:{type:'CONTENT_TYPE_VOD',name:displayName,vod:{id:contentId}}};
           if(curModule) curModule.module.items.push(item);
           else if(curSection) curSection.section.items.push(item);
           else arrangement.push(item);
         }
+      }
+
+      if(missingContents.length){
+        missingPrograms.push({title:prog.title||progId, missing:missingContents});
       }
       const reseq=items=>items.forEach((item,idx)=>{ item.sequence=idx+1; if(item.section?.items) reseq(item.section.items); if(item.module?.items) reseq(item.module.items); });
 
@@ -1987,6 +2048,16 @@ async function runProgramImport(){
     }catch(e){ log(`  ❌ ${e.message}`,'error'); }
   }
   log('🏁 インポート完了','done');
+
+  // content が見つからなかった Program のサマリー
+  if(missingPrograms.length){
+    log(`⚠️ content 未找到的 Program（${missingPrograms.length} 件）：`,'error');
+    missingPrograms.forEach(p=>{
+      log(`  📚 「${p.title}」→ 未找到：${p.missing.join('、')}`,'error');
+    });
+    log('→ 請人工確認以上 Program 的 arrangement','error');
+  }
+
   toast('Programインポート完了','success');
   }finally{
     if(importBtn){ importBtn.disabled=false; importBtn.textContent='🚀 インポート開始'; }
