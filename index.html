@@ -1696,6 +1696,7 @@ function handleProgramCSV(event){
       // 2行目が program_id で始まる → 横向き
       // 縦向き or arrangements.csv（5列: program_id,program_title,type,name,content_id）
       // arrangements.csv 判定：1行目が program_id,program_title,type,name,content_id
+      let programs=[];
       const isArrangements=(firstRow[0]||'').toLowerCase()==='program_id' &&
         (firstRow[2]||'').toLowerCase()==='type' &&
         (firstRow[3]||'').toLowerCase()==='name';
@@ -1731,7 +1732,6 @@ function handleProgramCSV(event){
         secondRow.length>=2 && (secondRow[0]||'').toLowerCase()==='program_id';
       console.log('[csv] lines=', lines.length, 'firstRow=', firstRow.slice(0,3), 'isHorizontal=', isHorizontal);
 
-      let programs=[];
 
       if(isHorizontal){
         // ── 横向き programs.csv ──
