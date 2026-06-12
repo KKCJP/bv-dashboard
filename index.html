@@ -167,7 +167,16 @@ tr:last-child td{border-bottom:none;}
           <option value="ja-JP">→ 日本語</option>
         </select>
         <input type="text" id="b-trans-display" placeholder="表示名" oninput="this.dataset.userEdited=this.value?'1':''" style="width:80px;padding:4px 8px;font-size:11px;" title="翻訳字幕の表示名">
-        <label style="display:flex;align-items:center;gap:6px;cursor:pointer;white-space:nowrap;"><input type="checkbox" id="b-summary" checked> <span id="b-summary-label">要約生成</span></label>
+        <label style="display:flex;align-items:center;gap:6px;cursor:pointer;white-space:nowrap;"><input type="checkbox" id="b-summary" checked> <span id="b-summary-label">摘要生成</span></label>
+        <label style="display:flex;align-items:center;gap:6px;cursor:pointer;white-space:nowrap;font-size:11px;color:var(--muted);"><input type="checkbox" id="b-force-summary" onchange="document.getElementById('b-force-lang-wrap').style.display=this.checked?'flex':'none'"> 強制重産</label>
+        <div id="b-force-lang-wrap" style="display:none;align-items:center;gap:4px;flex-wrap:wrap;">
+          <span style="font-size:11px;color:var(--muted);">語言：</span>
+          <label style="font-size:11px;display:flex;align-items:center;gap:3px;cursor:pointer;"><input type="checkbox" class="force-lang-cb" value="ja-JP" checked> 日本語</label>
+          <label style="font-size:11px;display:flex;align-items:center;gap:3px;cursor:pointer;"><input type="checkbox" class="force-lang-cb" value="zh-TW"> 繁中</label>
+          <label style="font-size:11px;display:flex;align-items:center;gap:3px;cursor:pointer;"><input type="checkbox" class="force-lang-cb" value="en-US"> English</label>
+          <label style="font-size:11px;display:flex;align-items:center;gap:3px;cursor:pointer;"><input type="checkbox" class="force-lang-cb" value="zh-CN"> 简中</label>
+          <label style="font-size:11px;display:flex;align-items:center;gap:3px;cursor:pointer;"><input type="checkbox" class="force-lang-cb" value="ko-KR"> 한국어</label>
+        </div>
         <label style="display:flex;align-items:center;gap:6px;cursor:pointer;white-space:nowrap;"><input type="checkbox" id="b-tag" checked> <span id="b-tag-label">タグ生成</span></label>
         <button class="btn btn-primary btn-sm" onclick="confirmBatch()">🚀 実行</button>
         <button class="btn btn-danger btn-sm" onclick="deleteSelectedVods()">🗑 削除</button>
@@ -802,14 +811,27 @@ async function loadVodDetail(vodId){
 }
 
 function sumStatusBadge(sumStatus,sumResults,vodId,succeededSubs){
-  if(sumStatus==='SUCCEEDED') return '<span class="badge badge-green">✅ 完了</span>';
-  if(sumStatus==='PROCESSING') return '<span class="badge badge-yellow">⏳ 処理中</span>';
   if(!succeededSubs?.length) return '<span class="badge badge-gray">—</span>';
+  if(!sumResults?.length){
+    if(sumStatus==='PROCESSING') return '<span class="badge badge-yellow">⏳ 処理中</span>';
+    return '<span class="badge badge-gray">—</span>';
+  }
+
+  // 各言語のバッジを表示
+  const badges=sumResults.map(r=>{
+    const name=esc(r.display||'');
+    const tip=`status: ${r.status}`;
+    if(r.status==='SUCCEEDED') return `<span class="badge badge-green" style="margin-right:3px;" title="${tip}">✅ ${name}</span>`;
+    if(r.status==='PROCESSING') return `<span class="badge badge-yellow" style="margin-right:3px;" title="${tip}">⏳ ${name}</span>`;
+    return ''; // NOT_STARTED は補足ボタンで対応
+  }).filter(Boolean).join('');
+
+  // 未完了のものがあれば補足ボタンも追加
   const missingIds=(sumResults||[]).filter(r=>r.status!=='SUCCEEDED'&&r.status!=='PROCESSING').map(r=>r.subtitle_id).join(',');
   const missingLabels=(sumResults||[]).filter(r=>r.status!=='SUCCEEDED'&&r.status!=='PROCESSING').map(r=>r.display||'').join(', ');
-  const label=sumStatus==='PARTIAL'?`${t('sum_fill')} (${missingLabels})`:t('sum_fill');
-  if(missingIds) return `<button class="btn btn-secondary btn-xs" onclick="fillSummaries('${vodId}','${missingIds}')">${label}</button>`;
-  return '<span class="badge badge-gray">—</span>';
+  const fillBtn=missingIds?`<button class="btn btn-secondary btn-xs" style="margin-left:2px;" onclick="fillSummaries('${vodId}','${missingIds}')">${t('sum_fill')}${missingLabels?' ('+missingLabels+')':''}</button>`:'';
+
+  return `<div style="display:flex;align-items:center;flex-wrap:wrap;gap:2px;">${badges}${fillBtn}</div>`;
 }
 
 function tagStatusBadge(tagStatus,vodId,succeededSubs){
@@ -836,6 +858,53 @@ async function runSingleTag(vodId){
     toast(t('log_tag_ok'),'success');
     setTimeout(()=>loadVodDetail(vodId),1500);
   }catch(e){ toast('❌ '+e.message,'error'); }
+}
+
+async function forceSummary(vodId){
+  try{
+    const subResp=await bvGet(`/bv/cms/v1/vods/${vodId}/subtitles`);
+    const subs=(subResp.subtitles||[]).filter(s=>s.status==='SUBTITLE_STATUS_SUCCEED');
+    if(!subs.length){ toast('完了済み字幕がありません','error'); return; }
+    const old=document.getElementById('force-sum-dialog'); if(old) old.remove();
+    const dialog=document.createElement('div');
+    dialog.id='force-sum-dialog';
+    dialog.style.cssText='position:fixed;inset:0;background:rgba(0,0,0,.7);z-index:600;display:flex;align-items:center;justify-content:center;';
+    dialog.innerHTML=`<div style="background:var(--surface);border:1px solid var(--border);border-radius:12px;padding:24px;width:360px;">
+      <div style="font-size:14px;font-weight:600;margin-bottom:14px;">📝 摘要重産 - 語言選擇</div>
+      <div style="font-size:12px;color:var(--muted);margin-bottom:12px;">選擇要重産的語言（可多選）</div>
+      <div style="border:1px solid var(--border);border-radius:6px;margin-bottom:14px;max-height:200px;overflow-y:auto;">
+        ${subs.map(s=>`<label style="display:flex;align-items:center;gap:8px;padding:8px 12px;border-bottom:1px solid var(--border);cursor:pointer;font-size:12px;">
+          <input type="checkbox" value="${s.id}" checked>
+          <span>${esc(s.display||s.lang_code||'')}</span>
+        </label>`).join('')}
+      </div>
+      <div style="display:flex;gap:8px;">
+        <button class="btn btn-primary" onclick="execForceSummary('${vodId}')">🚀 重産</button>
+        <button class="btn btn-secondary" onclick="document.getElementById('force-sum-dialog').remove()">キャンセル</button>
+      </div>
+    </div>`;
+    document.body.appendChild(dialog);
+    dialog.addEventListener('click',e=>{ if(e.target===dialog) dialog.remove(); });
+  }catch(e){ toast('失敗: '+e.message,'error'); }
+}
+
+async function execForceSummary(vodId){
+  const dialog=document.getElementById('force-sum-dialog');
+  const checked=[...dialog.querySelectorAll('input[type=checkbox]:checked')].map(c=>c.value);
+  if(!checked.length){ toast('語言を選択してください','error'); return; }
+  dialog.remove();
+  try{
+    for(let i=0;i<checked.length;i++){
+      await bvPost('/bv/cms/v2alpha1/summaries:generate',{
+        source_id:vodId,source_type:'SUMMARY_SOURCE_TYPE_VOD',
+        setting:{content_type:sumType(),format:sumFmt(),length:sumLen()},
+        vod:{subtitle_id:checked[i]}
+      });
+      if(checked.length>1&&i<checked.length-1) await new Promise(r=>setTimeout(r,500));
+    }
+    toast(`✅ 摘要重産觸發（${checked.length}件）`,'success');
+    setTimeout(()=>loadVodDetail(vodId),1500);
+  }catch(e){ toast('失敗: '+e.message,'error'); }
 }
 
 async function fillSummaries(vodId,subtitleIds){
@@ -874,6 +943,7 @@ function renderVodTable(){
       <td style="white-space:nowrap;">
         <button class="btn btn-secondary btn-xs" onclick="loadVodDetail('${id}')" title="更新">🔄</button>
         <button class="btn btn-secondary btn-xs" onclick="openSubUpload('${id}','${name.replace(/'/g,"\\'")}')" title="字幕UP">📄+</button>
+        <button class="btn btn-secondary btn-xs" onclick="forceSummary('${id}')" title="摘要強制重産">📝↺</button>
       </td>
     </tr>`;
   }).join('');
@@ -1129,36 +1199,39 @@ async function confirmBatch(){
       }
       if(doSum){
         try{
+          const forceSum=document.getElementById('b-force-summary')?.checked||false;
+          const forceLangs=forceSum?[...document.querySelectorAll('.force-lang-cb:checked')].map(c=>c.value):[];
           const subResp=await bvGet(`/bv/cms/v1/vods/${vodId}/subtitles`);
           const subs=(subResp.subtitles||[]).filter(s=>s.status==='SUBTITLE_STATUS_SUCCEED');
           let cnt=0, skipped=0;
           for(const sub of subs){
-            // 既存の摘要状態を確認
-            let alreadyDone=false;
-            try{
-              const fetchResp=await bvPost('/bv/cms/v2alpha1/summaries:fetch',{
-                source_id:vodId,source_type:'SUMMARY_SOURCE_TYPE_VOD',
-                vod:{subtitle_id:sub.id}
-              });
-              const sumObj=fetchResp.summary||{};
-              const gj=sumObj.generate_job||{};
-              const st=(gj.status||sumObj.status||'').toUpperCase();
-              alreadyDone=st.includes('READY')||st.includes('SUCCEED')||sumObj.literal_content||sumObj.structural_content;
-            }catch{}
-            if(alreadyDone){
-              skipped++;
-              continue;
+            // 強制モードの場合は選択された言語のみ対象
+            if(forceSum && forceLangs.length && !forceLangs.includes(sub.lang_code)){
+              skipped++; continue;
             }
+            let alreadyDone=false;
+            if(!forceSum){
+              try{
+                const fetchResp=await bvPost('/bv/cms/v2alpha1/summaries:fetch',{
+                  source_id:vodId,source_type:'SUMMARY_SOURCE_TYPE_VOD',
+                  vod:{subtitle_id:sub.id}
+                });
+                const sumObj=fetchResp.summary||{};
+                const gj=sumObj.generate_job||{};
+                const st=(gj.status||sumObj.status||'').toUpperCase();
+                alreadyDone=st.includes('READY')||st.includes('SUCCEED')||sumObj.literal_content||sumObj.structural_content;
+              }catch{}
+            }
+            if(alreadyDone){ skipped++; continue; }
             await bvPost('/bv/cms/v2alpha1/summaries:generate',{
               source_id:vodId,source_type:'SUMMARY_SOURCE_TYPE_VOD',
               setting:{content_type:sumType(),format:sumFmt(),length:sumLen()},
               vod:{subtitle_id:sub.id}
             });
             cnt++;
-            // 複数言語の場合、少し待機してから次を送る
             if(subs.length>1) await new Promise(r=>setTimeout(r,500));
           }
-          if(cnt||skipped) log(`${t('log_sum_ok',cnt)}${skipped?' ('+skipped+'件既存スキップ)':''}`, 'done');
+          if(cnt||skipped) log(`${t('log_sum_ok',cnt)}${skipped?' ('+skipped+'件スキップ)':''}${forceSum?' [強制: '+forceLangs.join(',')+']':''}`, 'done');
           else log(t('log_sum_skip'));
         }catch(e){ log(`  ❌ ${e.message}`,'error'); }
       }
