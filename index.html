@@ -279,6 +279,7 @@ tr:last-child td{border-bottom:none;}
   <div class="tabs">
     <button class="tab-btn active" id="tab-quiz" onclick="switchTab('quiz')">🧠 Quiz</button>
     <button class="tab-btn" id="tab-program" onclick="switchTab('program')">📚 Program</button>
+    <button class="tab-btn" id="tab-outline" onclick="switchTab('outline')">🗂️ Outline</button>
   </div>
   <div id="cpm-tab-quiz">
     <div class="card">
@@ -322,7 +323,33 @@ tr:last-child td{border-bottom:none;}
       <div class="log-box" id="quiz-log"></div>
     </div>
   </div>
-  <div id="cpm-tab-program" style="display:none;">
+  <div id="cpm-tab-outline" style="display:none;">
+    <div class="card">
+      <div class="card-title">🗂️ Outline 管理</div>
+      <p style="color:var(--muted);font-size:12px;margin-bottom:16px;">
+        大分類 → 中分類 → Space → Program の階層構造を CSV で匯出/匯入
+      </p>
+      <div class="btn-row" style="margin-bottom:16px;">
+        <button class="btn btn-secondary" id="export-outline-btn" onclick="exportOutlineCsv()">⬇ Outline CSV 匯出</button>
+        <button class="btn btn-secondary" onclick="document.getElementById('outline-csv-input').click()">⬆ CSV 匯入</button>
+        <input type="file" id="outline-csv-input" accept=".csv" style="display:none" onchange="handleOutlineCsv(event)">
+      </div>
+      <div id="outline-import-preview" style="display:none;">
+        <div style="font-weight:600;font-size:12px;margin-bottom:8px;">プレビュー</div>
+        <div id="outline-preview-list"></div>
+        <div class="btn-row" style="margin-top:10px;">
+          <button class="btn btn-primary" id="outline-import-btn" onclick="runOutlineImport()">🚀 匯入</button>
+          <button class="btn btn-secondary" onclick="clearOutlineImport()">✕ クリア</button>
+        </div>
+      </div>
+    </div>
+    <div class="card" id="outline-log-card" style="display:none;">
+      <div class="card-title">📋 実行ログ
+        <button class="btn btn-secondary btn-xs" style="margin-left:auto;" onclick="document.getElementById('outline-log-card').style.display='none'">✕</button>
+      </div>
+      <div class="log-box" id="outline-log"></div>
+    </div>
+  </div>
     <div class="card">
       <div class="card-title">📚 Program CSV インポート</div>
       <p style="color:var(--muted);font-size:12px;margin-bottom:16px;">テンプレートをダウンロード → 入力 → アップロードで自動作成</p>
@@ -1531,6 +1558,188 @@ async function uploadSubtitle(){
   }catch(e){ msg.textContent='❌ '+e.message; toast('失敗: '+e.message,'error'); }
 }
 
+// ════ Outline 管理 ═══════════════════════════════════════
+let outlineData=null, outlineImportData=null;
+
+async function exportOutlineCsv(){
+  const btn=document.getElementById('export-outline-btn');
+  let dot=0;
+  const timer=setInterval(()=>{ if(btn) btn.textContent=['⬇ 匯出中.','⬇ 匯出中..','⬇ 匯出中...'][dot++%3]; },500);
+  const reset=()=>{ clearInterval(timer); if(btn){btn.disabled=false;btn.textContent='⬇ Outline CSV 匯出';} };
+  if(btn) btn.disabled=true;
+
+  try{
+    const site=siteId();
+    // outline 取得
+    const r=await fetch(`${BASE()}/bv/cpm/marketplace/v1alpha1/sites/${site}/outlines:query-for-licensing`,{headers:HDR()});
+    const d=await r.json();
+    const outline=d.outline||d;
+    const outlineId=outline.id||'';
+    const categories=outline.categories||[];
+
+    const header=['outline_id','cat_id','cat_name','sub_cat_id','sub_cat_name','space_id','space_name','space_cat_id','content_id','content_name','content_type'];
+    const rows=[header];
+
+    const processCategory=(cat,parentId='',parentName='')=>{
+      for(const sub of cat.sub_categories||[]){
+        if(sub.type==='CATEGORY_TYPE_SPACE'){
+          // space（最下層カテゴリ）
+          for(const content of sub.contents||[]){
+            rows.push([outlineId, cat.id, cat.name, parentId||'', parentName||'', sub.id, sub.name, sub.space_id||'', content.id, content.name, content.type]);
+          }
+          if(!(sub.contents||[]).length){
+            // content なしの space も記録
+            rows.push([outlineId, cat.id, cat.name, parentId||'', parentName||'', sub.id, sub.name, sub.space_id||'', '', '', '']);
+          }
+        } else {
+          // 中分類（CATEGORY_TYPE_NONE）→ 再帰
+          processCategory(sub,cat.id,cat.name);
+        }
+      }
+    };
+
+    for(const cat of categories){
+      processCategory(cat);
+    }
+
+    const csv=rows.map(r=>r.map(c=>`"${(c||'').toString().replace(/"/g,'""')}"`).join(',')).join('\n');
+    const a=document.createElement('a');
+    a.href='data:text/csv;charset=utf-8,\uFEFF'+encodeURIComponent(csv);
+    a.download='outline_export.csv'; a.click();
+    reset();
+    toast(`✅ ${rows.length-1} 行匯出完成`,'success');
+  }catch(e){ reset(); toast('匯出失敗: '+e.message,'error'); }
+}
+
+function handleOutlineCsv(event){
+  const file=event.target.files?.[0]; event.target.value=''; if(!file) return;
+  const reader=new FileReader();
+  reader.onload=e=>{
+    try{
+      const lines=e.target.result.split(/\r?\n/).filter(l=>l.trim());
+      if(!lines.length){ toast('データがありません','error'); return; }
+      const header=parseCSVLine(lines[0]).map(h=>h.trim().toLowerCase());
+      const getCol=(row,key)=>{ const i=header.indexOf(key); return i>=0?(row[i]||'').trim():''; };
+
+      const rows=[];
+      for(const line of lines.slice(1)){
+        const row=parseCSVLine(line);
+        if(!row.length||row.every(c=>!c.trim())) continue;
+        rows.push({
+          outline_id: getCol(row,'outline_id'),
+          cat_id: getCol(row,'cat_id'),
+          cat_name: getCol(row,'cat_name'),
+          sub_cat_id: getCol(row,'sub_cat_id'),
+          sub_cat_name: getCol(row,'sub_cat_name'),
+          space_id: getCol(row,'space_id'),
+          space_name: getCol(row,'space_name'),
+          space_cat_id: getCol(row,'space_cat_id'),
+          content_id: getCol(row,'content_id'),
+          content_name: getCol(row,'content_name'),
+          content_type: getCol(row,'content_type')||'CONTENT_TYPE_PROGRAM',
+        });
+      }
+
+      outlineImportData=rows;
+      renderOutlinePreview(rows);
+      toast(`${rows.length}行読み込みました`,'success');
+    }catch(err){ toast('解析失敗: '+err.message,'error'); }
+  };
+  reader.readAsText(file,'UTF-8');
+}
+
+function renderOutlinePreview(rows){
+  document.getElementById('outline-import-preview').style.display='block';
+  // outline_id 別・cat 別に集計
+  const outlineId=rows[0]?.outline_id||'';
+  const cats=new Set(rows.map(r=>r.cat_name).filter(Boolean));
+  const spaces=new Set(rows.map(r=>r.space_name).filter(Boolean));
+  const contents=rows.filter(r=>r.content_id).length;
+  document.getElementById('outline-preview-list').innerHTML=`
+    <div style="border:1px solid var(--border);border-radius:6px;padding:12px;font-size:12px;">
+      <div style="margin-bottom:6px;"><span style="color:var(--muted);">Outline ID：</span>${esc(outlineId.substring(0,24))}...</div>
+      <div style="margin-bottom:6px;"><span style="color:var(--muted);">大分類：</span>${cats.size}件（${[...cats].join('、')}）</div>
+      <div style="margin-bottom:6px;"><span style="color:var(--muted);">Space：</span>${spaces.size}件</div>
+      <div><span style="color:var(--muted);">Content：</span>${contents}件</div>
+    </div>`;
+}
+
+function clearOutlineImport(){
+  outlineImportData=null;
+  document.getElementById('outline-import-preview').style.display='none';
+}
+
+async function runOutlineImport(){
+  if(!outlineImportData?.length){ toast('データがありません','error'); return; }
+  const site=siteId();
+  const btn=document.getElementById('outline-import-btn');
+  if(btn){btn.disabled=true;btn.textContent='⏳ 実行中...';}
+  const log=makeLog('outline-log','outline-log-card');
+  log(`▶ Outline 匯入開始：${outlineImportData.length}行`);
+
+  try{
+    const outlineId=outlineImportData[0]?.outline_id||'';
+    if(!outlineId) throw new Error('outline_id が見つかりません');
+
+    // CSV からネスト構造を再構築
+    // 大分類（cat）→ 中分類（sub_cat）→ Space → contents
+    const catMap=new Map();
+    for(const row of outlineImportData){
+      if(!row.cat_id) continue;
+      if(!catMap.has(row.cat_id)){
+        catMap.set(row.cat_id,{id:row.cat_id,name:row.cat_name,type:'CATEGORY_TYPE_NONE',sub_categories:[],contents:[]});
+      }
+      const cat=catMap.get(row.cat_id);
+
+      if(row.space_id){
+        let space=cat.sub_categories.find(s=>s.id===row.space_id);
+        if(!space){
+          // sub_cat_id がある場合は中分類の下に入れる
+          if(row.sub_cat_id){
+            let subCat=cat.sub_categories.find(s=>s.id===row.sub_cat_id);
+            if(!subCat){
+              subCat={id:row.sub_cat_id,name:row.sub_cat_name,type:'CATEGORY_TYPE_NONE',sub_categories:[],contents:[]};
+              cat.sub_categories.push(subCat);
+            }
+            space={id:row.space_id,name:row.space_name,type:'CATEGORY_TYPE_SPACE',sub_categories:[],contents:[],space_id:row.space_cat_id||''};
+            subCat.sub_categories.push(space);
+          } else {
+            space={id:row.space_id,name:row.space_name,type:'CATEGORY_TYPE_SPACE',sub_categories:[],contents:[],space_id:row.space_cat_id||''};
+            cat.sub_categories.push(space);
+          }
+        }
+        if(row.content_id){
+          if(!space.contents.find(c=>c.id===row.content_id)){
+            space.contents.push({id:row.content_id,name:row.content_name,type:row.content_type||'CONTENT_TYPE_PROGRAM'});
+          }
+        }
+      }
+    }
+
+    const categories=[...catMap.values()];
+    log(`  📊 大分類 ${categories.length}件、Space ${[...catMap.values()].flatMap(c=>c.sub_categories).filter(s=>s.type==='CATEGORY_TYPE_SPACE').length}件`);
+
+    // PUT で outline 更新
+    const putBody={outline:{id:outlineId,categories}};
+    log(`  🚀 Outline PUT 実行中...`);
+    const r=await fetch(`${BASE()}/bv/cpm/marketplace/v1alpha1/sites/${site}/outlines/${outlineId}`,{
+      method:'PUT',headers:HDR(),body:JSON.stringify(putBody)
+    });
+    if(!r.ok){
+      const err=await r.text();
+      throw new Error(`${r.status}: ${err.substring(0,200)}`);
+    }
+    log(`  ✅ Outline 更新完了`,'done');
+    log('🏁 完了','done');
+    toast('Outline 匯入完了','success');
+  }catch(e){
+    log(`  ❌ ${e.message}`,'error');
+    toast('失敗: '+e.message,'error');
+  }finally{
+    if(btn){btn.disabled=false;btn.textContent='🚀 匯入';}
+  }
+}
+
 // ════ CPM Quiz 匯出/匯入 ═════════════════════════════
 let quizImportData=[];
 
@@ -1560,16 +1769,19 @@ async function exportQuizCsv(){
       const title=form.title||'';
       const desc=form.description||form.note||'';
       try{
-        const qr=await fetch(`${BASE()}/bv/cpm/v1alpha1/sites/${site}/forms/${formId}?action=GET_FORM_REQUEST_ACTION_CURRENT`,{headers:HDR()});
+        const qr=await fetch(`${BASE()}/bv/cpm/v1alpha1/sites/${site}/forms/${formId}?action=GET_FORM_REQUEST_ACTION_CURRENT&mode=FORM_MODE_VIEW`,{headers:HDR()});
         const qd=await qr.json();
-        const questions=qd.form?.questions||qd.questions||[];
+        const vf=qd.versioned_forms?.[0]||qd.form||qd;
+        const questions=vf.questions||[];
+        const title=vf.title||formId;
+        const desc=vf.description||'';
         console.log(`[quiz] ${formId.substring(0,8)} questions=`,questions.length, questions[0]?JSON.stringify(questions[0]).substring(0,200):'');
         if(!questions.length){ rows.push([formId,title,desc,'','','','','','','']); continue; }
         questions.forEach((q,qi)=>{
-          const qText=q.question||q.title||q.description||'';
-          const choices=q.choices||q.options||[];
-          const opts=Array.from({length:4},(_,i)=>choices[i]?.description||choices[i]?.text||choices[i]?.title||'');
-          const answerIdx=choices.findIndex(c=>c.is_correct||c.correct);
+          const qText=q.title||q.question||q.description||'';
+          const choices=[...(q.options||q.choices||[])].sort((a,b)=>(a.sequence||0)-(b.sequence||0));
+          const opts=Array.from({length:4},(_,i)=>choices[i]?.text||choices[i]?.description||choices[i]?.title||'');
+          const answerIdx=choices.findIndex(c=>c.is_answer||c.is_correct||c.correct);
           const answer=answerIdx>=0?answerIdx+1:'';
           rows.push([formId,title,desc,qi+1,qText,...opts,answer]);
         });
@@ -1658,18 +1870,23 @@ async function runQuizImport(){
           log(`  ♻️ 更新（ID: ${formId.substring(0,16)}...）`);
           // 既存題目を削除
           try{
-            const existR=await fetch(`${BASE()}/bv/cpm/v1alpha1/sites/${site}/forms/${formId}?action=GET_FORM_REQUEST_ACTION_CURRENT`,{headers:HDR()});
+            const existR=await fetch(`${BASE()}/bv/cpm/v1alpha1/sites/${site}/forms/${formId}?action=GET_FORM_REQUEST_ACTION_CURRENT&mode=FORM_MODE_VIEW`,{headers:HDR()});
             const existD=await existR.json();
-            const existQs=existD.form?.questions||existD.questions||[];
+            const existVf=existD.versioned_forms?.[0]||existD.form||existD;
+            const existQs=existVf.questions||[];
             const delIds=existQs.map(q=>q.id).filter(Boolean);
-            if(delIds.length) await cpmReq('DELETE',`/bv/cpm/v1alpha1/sites/${site}/forms/${formId}/questions`,{question_ids:delIds});
+            if(delIds.length){
+              try{ await cpmReq('DELETE',`/bv/cpm/v1alpha1/sites/${site}/forms/${formId}/questions`,{question_ids:delIds}); }catch(e){ log(`  ⚠️ 削除API失敗: ${e.message}`); }
+            }
           }catch(e){ log(`  ⚠️ 既存題目削除スキップ: ${e.message}`); }
         }
         if(quiz.questions.length){
           const questionsBody=quiz.questions.map((q,qi)=>({
-            sequence:qi+1, question:q.question,
-            question_type:'QUESTION_TYPE_SINGLE_CHOICE',
-            choices:q.options.map((opt,oi)=>({description:opt,is_correct:oi===q.answer-1,sequence:oi+1})),
+            sequence:qi+1,
+            title:q.question,
+            type:'QUESTION_TYPE_SINGLE_CHOICE',
+            required:true,
+            options:q.options.map((opt,oi)=>({text:opt,is_answer:oi===q.answer-1,sequence:oi+1})),
           }));
           await cpmPut(`/bv/cpm/v1alpha1/sites/${site}/forms/${formId}`,{form:{title:quiz.title,description:quiz.description||'',questions:questionsBody}});
           log(`  ✅ ${quiz.questions.length}問 追加完了`,'done');
@@ -1772,6 +1989,7 @@ function switchTab(tab){
   document.getElementById('tab-'+tab).classList.add('active');
   document.getElementById('cpm-tab-quiz').style.display=tab==='quiz'?'block':'none';
   document.getElementById('cpm-tab-program').style.display=tab==='program'?'block':'none';
+  document.getElementById('cpm-tab-outline').style.display=tab==='outline'?'block':'none';
 }
 
 async function exportProgramCsv(){
