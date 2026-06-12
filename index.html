@@ -1626,7 +1626,7 @@ async function loadQuizVods(){
 function renderQuizVodList(){
   const el=document.getElementById('quiz-vod-list');
   if(!quizVodsFiltered.length){ el.innerHTML='<div style="padding:16px;text-align:center;color:var(--muted);">動画がありません</div>'; return; }
-  el.innerHTML=quizVodsFiltered.map(v=>`<label><input type="checkbox" class="quiz-cb" value="${v.id}" data-name="${esc(v.name||'')}" onchange="updateQuizCount()"> <span title="${esc(v.name||v.id)}">${esc(v.name||v.id)}</span></label>`).join('');
+  el.innerHTML=quizVodsFiltered.map(v=>`<label style="display:flex;align-items:center;gap:8px;padding:7px 12px;border-bottom:1px solid var(--border);cursor:pointer;font-size:12px;overflow:hidden;"><input type="checkbox" class="quiz-cb" style="flex-shrink:0;" value="${v.id}" data-name="${esc(v.name||'')}" onchange="updateQuizCount()"> <span style="overflow:hidden;text-overflow:ellipsis;white-space:nowrap;flex:1;" title="${esc(v.name||v.id)}">${esc(v.name||v.id)}</span></label>`).join('');
   updateQuizCount();
 }
 
