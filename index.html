@@ -274,6 +274,11 @@ tr:last-child td{border-bottom:none;}
   <div id="cpm-tab-quiz">
     <div class="card">
       <div class="card-title">🧠 Quiz 一括生成</div>
+      <div class="btn-row" style="margin-bottom:16px;">
+        <button class="btn btn-secondary btn-sm" id="export-quiz-btn" onclick="exportQuizCsv()">⬇ 既存 Quiz CSV 匯出</button>
+        <button class="btn btn-secondary btn-sm" onclick="document.getElementById('quiz-csv-input').click()">⬆ CSV 匯入/新建</button>
+        <input type="file" id="quiz-csv-input" accept=".csv" style="display:none" onchange="handleQuizCsv(event)">
+      </div>
       <div class="form-grid" style="margin-bottom:16px;">
         <div class="form-group full"><label>Quiz 名</label><input type="text" id="quiz-title" placeholder="例：経営戦略コース Quiz"></div>
         <div class="form-group full"><label>既存 Quiz ID <span style="font-weight:400;color:var(--muted);font-size:10px;">（入力すると追加、空白で新規作成）</span></label><input type="text" id="quiz-existing-id" placeholder="空白 → 新規作成" style="font-family:monospace;font-size:11px;"></div>
@@ -291,6 +296,16 @@ tr:last-child td{border-bottom:none;}
       <div style="margin-top:12px;display:flex;gap:8px;align-items:center;">
         <button class="btn btn-primary" onclick="runQuizBatch()">🚀 Quiz 生成</button>
         <span id="quiz-selected-count" style="font-size:11px;color:var(--muted);"></span>
+      </div>
+    </div>
+    <div class="card" id="quiz-import-card" style="display:none;">
+      <div class="card-title">📋 Quiz CSV プレビュー
+        <button class="btn btn-secondary btn-xs" style="margin-left:auto;" onclick="clearQuizImport()">✕</button>
+      </div>
+      <div id="quiz-import-preview"></div>
+      <div class="btn-row" style="margin-top:12px;">
+        <button class="btn btn-primary" id="quiz-import-btn" onclick="runQuizImport()">🚀 匯入/新建</button>
+        <button class="btn btn-secondary" onclick="clearQuizImport()">✕ クリア</button>
       </div>
     </div>
     <div class="card" id="quiz-log-card" style="display:none;">
@@ -1441,6 +1456,157 @@ async function uploadSubtitle(){
     toast('字幕をアップロードしました','success');
     setTimeout(()=>{ document.getElementById('sub-upload-modal').style.display='none'; refreshSubList(subVodId); loadVodDetail(subVodId); },1200);
   }catch(e){ msg.textContent='❌ '+e.message; toast('失敗: '+e.message,'error'); }
+}
+
+// ════ CPM Quiz 匯出/匯入 ═════════════════════════════
+let quizImportData=[];
+
+async function exportQuizCsv(){
+  const btn=document.getElementById('export-quiz-btn');
+  let dot=0;
+  const timer=setInterval(()=>{ if(btn) btn.textContent=['⬇ 匯出中.','⬇ 匯出中..','⬇ 匯出中...'][dot++%3]; },500);
+  const reset=()=>{ clearInterval(timer); if(btn){btn.disabled=false;btn.textContent='⬇ 既存 Quiz CSV 匯出';} };
+  if(btn){btn.disabled=true;}
+  try{
+    const site=siteId();
+    let allForms=[], page=1;
+    while(true){
+      const r=await fetch(`${BASE()}/bv/cpm/v1alpha1/sites/${site}/forms?current_page=${page}&items_per_page=50&filter.form_types=FORM_TYPE_QUIZ`,{headers:HDR()});
+      const d=await r.json();
+      const items=d.forms||[];
+      allForms.push(...items);
+      if(items.length<50) break;
+      page++;
+    }
+    if(!allForms.length){ toast('Quiz が見つかりません','error'); reset(); return; }
+
+    const header=['quiz_id','quiz_title','quiz_desc','question_no','question','option_1','option_2','option_3','option_4','answer'];
+    const rows=[header];
+    for(const form of allForms){
+      const formId=form.id||form.form_id||'';
+      const title=form.title||'';
+      const desc=form.description||'';
+      try{
+        const qr=await fetch(`${BASE()}/bv/cpm/v1alpha1/sites/${site}/forms/${formId}?action=GET_FORM_REQUEST_ACTION_CURRENT`,{headers:HDR()});
+        const qd=await qr.json();
+        const questions=qd.form?.questions||qd.questions||[];
+        if(!questions.length){ rows.push([formId,title,desc,'','','','','','','']); continue; }
+        questions.forEach((q,qi)=>{
+          const qText=q.question||q.title||q.description||'';
+          const choices=q.choices||q.options||[];
+          const opts=Array.from({length:4},(_,i)=>choices[i]?.description||choices[i]?.text||choices[i]?.title||'');
+          const answerIdx=choices.findIndex(c=>c.is_correct||c.correct);
+          const answer=answerIdx>=0?answerIdx+1:'';
+          rows.push([formId,title,desc,qi+1,qText,...opts,answer]);
+        });
+      }catch(e){ rows.push([formId,title,desc,'','','','','','','']); }
+    }
+    const csv=rows.map(r=>r.map(c=>`"${(c||'').toString().replace(/"/g,'""')}"`).join(',')).join('\n');
+    const a=document.createElement('a');
+    a.href='data:text/csv;charset=utf-8,\uFEFF'+encodeURIComponent(csv);
+    a.download='quiz_export.csv'; a.click();
+    reset();
+    toast(`✅ ${allForms.length} 件匯出完成`,'success');
+  }catch(e){ reset(); toast('匯出失敗: '+e.message,'error'); }
+}
+
+function handleQuizCsv(event){
+  const file=event.target.files?.[0]; event.target.value=''; if(!file) return;
+  const reader=new FileReader();
+  reader.onload=e=>{
+    try{
+      const lines=e.target.result.split(/\r?\n/).filter(l=>l.trim());
+      if(!lines.length){ toast('データがありません','error'); return; }
+      const header=parseCSVLine(lines[0]).map(h=>h.trim().toLowerCase());
+      const getCol=(row,key)=>{ const i=header.indexOf(key); return i>=0?(row[i]||'').trim():''; };
+      const quizMap=new Map();
+      for(const line of lines.slice(1)){
+        const row=parseCSVLine(line);
+        if(!row.length||row.every(c=>!c.trim())) continue;
+        const quizId=getCol(row,'quiz_id');
+        const quizTitle=getCol(row,'quiz_title');
+        const quizDesc=getCol(row,'quiz_desc');
+        const qText=getCol(row,'question');
+        const key=quizId||quizTitle;
+        if(!key) continue;
+        if(!quizMap.has(key)) quizMap.set(key,{quiz_id:quizId,title:quizTitle,description:quizDesc,questions:[]});
+        if(qText){
+          const opts=[getCol(row,'option_1'),getCol(row,'option_2'),getCol(row,'option_3'),getCol(row,'option_4')].filter(Boolean);
+          const answerNo=parseInt(getCol(row,'answer'))||1;
+          quizMap.get(key).questions.push({question:qText,options:opts,answer:answerNo});
+        }
+      }
+      quizImportData=[...quizMap.values()].filter(q=>q.title||q.quiz_id);
+      renderQuizImportPreview();
+      toast(`${quizImportData.length}件読み込みました`,'success');
+    }catch(err){ toast('解析失敗: '+err.message,'error'); }
+  };
+  reader.readAsText(file,'UTF-8');
+}
+
+function renderQuizImportPreview(){
+  const card=document.getElementById('quiz-import-card');
+  const el=document.getElementById('quiz-import-preview');
+  if(card) card.style.display='block';
+  if(!el) return;
+  el.innerHTML=quizImportData.map(q=>`
+    <div style="border:1px solid var(--border);border-radius:6px;padding:10px 14px;margin-bottom:8px;font-size:12px;">
+      <div style="font-weight:600;margin-bottom:4px;">🧠 ${esc(q.title||q.quiz_id)}</div>
+      <div style="color:var(--muted);">${q.questions.length}問${q.quiz_id?' ｜ 更新（ID: '+q.quiz_id.substring(0,16)+'...)':' ｜ 新規作成'}</div>
+    </div>`).join('');
+}
+
+function clearQuizImport(){
+  quizImportData=[];
+  const card=document.getElementById('quiz-import-card');
+  if(card) card.style.display='none';
+}
+
+async function runQuizImport(){
+  if(!quizImportData.length){ toast('データがありません','error'); return; }
+  const site=siteId();
+  const btn=document.getElementById('quiz-import-btn');
+  if(btn){btn.disabled=true;btn.textContent='⏳ 実行中...';}
+  const log=makeLog('quiz-log','quiz-log-card');
+  log(`▶ Quiz 匯入開始：${quizImportData.length}件`);
+  try{
+    for(let i=0;i<quizImportData.length;i++){
+      const quiz=quizImportData[i];
+      log(`[${i+1}/${quizImportData.length}] 🧠 「${quiz.title}」（${quiz.questions.length}問）`);
+      try{
+        let formId=quiz.quiz_id||'';
+        if(!formId){
+          const cr=await cpmPost(`/bv/cpm/v1alpha1/sites/${site}/forms`,{form:{title:quiz.title,type:'FORM_TYPE_QUIZ',description:quiz.description||'',questions:[]}});
+          formId=(cr.form||cr).id||'';
+          if(!formId) throw new Error('form_id が取得できません');
+          log(`  ✅ 新規作成（ID: ${formId.substring(0,16)}...）`,'done');
+        } else {
+          log(`  ♻️ 更新（ID: ${formId.substring(0,16)}...）`);
+          // 既存題目を削除
+          try{
+            const existR=await fetch(`${BASE()}/bv/cpm/v1alpha1/sites/${site}/forms/${formId}?action=GET_FORM_REQUEST_ACTION_CURRENT`,{headers:HDR()});
+            const existD=await existR.json();
+            const existQs=existD.form?.questions||existD.questions||[];
+            const delIds=existQs.map(q=>q.id).filter(Boolean);
+            if(delIds.length) await cpmReq('DELETE',`/bv/cpm/v1alpha1/sites/${site}/forms/${formId}/questions`,{question_ids:delIds});
+          }catch(e){ log(`  ⚠️ 既存題目削除スキップ: ${e.message}`); }
+        }
+        if(quiz.questions.length){
+          const questionsBody=quiz.questions.map((q,qi)=>({
+            sequence:qi+1, question:q.question,
+            question_type:'QUESTION_TYPE_SINGLE_CHOICE',
+            choices:q.options.map((opt,oi)=>({description:opt,is_correct:oi===q.answer-1,sequence:oi+1})),
+          }));
+          await cpmPut(`/bv/cpm/v1alpha1/sites/${site}/forms/${formId}`,{form:{title:quiz.title,description:quiz.description||'',questions:questionsBody}});
+          log(`  ✅ ${quiz.questions.length}問 追加完了`,'done');
+        }
+      }catch(e){ log(`  ❌ ${e.message}`,'error'); }
+    }
+    log('🏁 完了','done');
+    toast('Quiz 匯入完了','success');
+  }finally{
+    if(btn){btn.disabled=false;btn.textContent='🚀 匯入/新建';}
+  }
 }
 
 // ════ CPM Quiz ══════════════════════════════════════════
