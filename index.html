@@ -1471,9 +1471,9 @@ async function exportQuizCsv(){
     const site=siteId();
     let allForms=[], page=1;
     while(true){
-      const r=await fetch(`${BASE()}/bv/cpm/v1alpha1/sites/${site}/forms?current_page=${page}&items_per_page=50&filter.form_types=FORM_TYPE_QUIZ`,{headers:HDR()});
+      const r=await fetch(`${BASE()}/bv/cpm/v1alpha1/sites/${site}/contents?current_page=${page}&items_per_page=50&filter.content_types=CONTENT_TYPE_FORM`,{headers:HDR()});
       const d=await r.json();
-      const items=d.forms||[];
+      const items=d.contents||[];
       allForms.push(...items);
       if(items.length<50) break;
       page++;
@@ -1483,13 +1483,14 @@ async function exportQuizCsv(){
     const header=['quiz_id','quiz_title','quiz_desc','question_no','question','option_1','option_2','option_3','option_4','answer'];
     const rows=[header];
     for(const form of allForms){
-      const formId=form.id||form.form_id||'';
+      const formId=form.content_id||form.id||'';
       const title=form.title||'';
-      const desc=form.description||'';
+      const desc=form.description||form.note||'';
       try{
         const qr=await fetch(`${BASE()}/bv/cpm/v1alpha1/sites/${site}/forms/${formId}?action=GET_FORM_REQUEST_ACTION_CURRENT`,{headers:HDR()});
         const qd=await qr.json();
         const questions=qd.form?.questions||qd.questions||[];
+        console.log(`[quiz] ${formId.substring(0,8)} questions=`,questions.length, questions[0]?JSON.stringify(questions[0]).substring(0,200):'');
         if(!questions.length){ rows.push([formId,title,desc,'','','','','','','']); continue; }
         questions.forEach((q,qi)=>{
           const qText=q.question||q.title||q.description||'';
