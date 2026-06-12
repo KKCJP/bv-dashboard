@@ -1889,7 +1889,7 @@ async function runQuizImport(){
             required:true,
             options:q.options.map((opt,oi)=>({text:opt,is_answer:oi===q.answer-1,sequence:oi+1})),
           }));
-          await cpmPut(`/bv/cpm/v1alpha1/sites/${site}/forms/${formId}`,{form:{title:quiz.title,description:quiz.description||'',questions:questionsBody}});
+          await cpmPut(`/bv/cpm/v1alpha1/sites/${site}/forms/${formId}`,{form:{title:quiz.title,type:'FORM_TYPE_QUIZ',description:quiz.description||'',questions:questionsBody}});
           log(`  ✅ ${quiz.questions.length}問 追加完了`,'done');
         }
       }catch(e){ log(`  ❌ ${e.message}`,'error'); }
