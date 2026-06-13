@@ -1895,6 +1895,7 @@ async function runQuizImport(){
           const hasCorrect=questionsBody.every(q=>q.options.some(o=>o.is_answer));
           if(!hasCorrect) log(`  ⚠️ 正解なしの問題あり：answer値を確認してください`);
           log(`  📝 ${questionsBody.length}問、正解設定: ${hasCorrect?'✅':'❌'}`);
+          console.log('[quiz import] first question=', JSON.stringify(questionsBody[0]));
           await cpmPut(`/bv/cpm/v1alpha1/sites/${site}/forms/${formId}`,{form:{title:quiz.title,type:'FORM_TYPE_QUIZ',description:quiz.description||'',questions:questionsBody}});
           log(`  ✅ ${quiz.questions.length}問 追加完了`,'done');
         }
