@@ -1887,9 +1887,10 @@ async function runQuizImport(){
             title:q.question,
             type:'QUESTION_TYPE_SINGLE_CHOICE',
             required:true,
+            has_correct_answer:true,
             options:q.options
               .map((opt,oi)=>({text:opt,is_answer:oi===q.answer-1,sequence:oi+1}))
-              .filter(o=>o.text), // 空の選択肢を除外
+              .filter(o=>o.text),
           }));
           // デバッグ：正解確認
           const hasCorrect=questionsBody.every(q=>q.options.some(o=>o.is_answer));
