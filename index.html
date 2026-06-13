@@ -1682,6 +1682,9 @@ async function runOutlineImport(){
     const outlineId=outlineImportData[0]?.outline_id||'';
     if(!outlineId) throw new Error('outline_id が見つかりません');
 
+    console.log('[outline] first row=', JSON.stringify(outlineImportData[0]));
+    console.log('[outline] total rows=', outlineImportData.length);
+
     // CSV からネスト構造を再構築
     // 大分類（cat）→ 中分類（sub_cat）→ Space → contents
     const catMap=new Map();
