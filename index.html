@@ -1818,7 +1818,7 @@ function handleQuizCsv(event){
         if(!key) continue;
         if(!quizMap.has(key)) quizMap.set(key,{quiz_id:quizId,title:quizTitle,description:quizDesc,questions:[]});
         if(qText){
-          const opts=[getCol(row,'option_1'),getCol(row,'option_2'),getCol(row,'option_3'),getCol(row,'option_4')].filter(Boolean);
+          const opts=[getCol(row,'option_1'),getCol(row,'option_2'),getCol(row,'option_3'),getCol(row,'option_4')];
           const answerNo=parseInt(getCol(row,'answer'))||1;
           quizMap.get(key).questions.push({question:qText,options:opts,answer:answerNo});
         }
@@ -1887,8 +1887,14 @@ async function runQuizImport(){
             title:q.question,
             type:'QUESTION_TYPE_SINGLE_CHOICE',
             required:true,
-            options:q.options.map((opt,oi)=>({text:opt,is_answer:oi===q.answer-1,sequence:oi+1})),
+            options:q.options
+              .map((opt,oi)=>({text:opt,is_answer:oi===q.answer-1,sequence:oi+1}))
+              .filter(o=>o.text), // 空の選択肢を除外
           }));
+          // デバッグ：正解確認
+          const hasCorrect=questionsBody.every(q=>q.options.some(o=>o.is_answer));
+          if(!hasCorrect) log(`  ⚠️ 正解なしの問題あり：answer値を確認してください`);
+          log(`  📝 ${questionsBody.length}問、正解設定: ${hasCorrect?'✅':'❌'}`);
           await cpmPut(`/bv/cpm/v1alpha1/sites/${site}/forms/${formId}`,{form:{title:quiz.title,type:'FORM_TYPE_QUIZ',description:quiz.description||'',questions:questionsBody}});
           log(`  ✅ ${quiz.questions.length}問 追加完了`,'done');
         }
