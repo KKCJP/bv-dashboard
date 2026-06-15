@@ -1718,15 +1718,19 @@ async function runOutlineImport(){
           cat.sub_categories.push(subCat);
         }
         // 第3階層（Space）を追加
-        if(row.space_id){
-          let space=subCat.sub_categories.find(s=>s.id===row.space_id);
+        if(row.space_id||row.space_name){
+          let space=row.space_id
+            ? subCat.sub_categories.find(s=>s.id===row.space_id)
+            : subCat.sub_categories.find(s=>s.name===row.space_name);
           if(!space){
-            space={id:row.space_id,name:row.space_name,type:'CATEGORY_TYPE_SPACE',sub_categories:[],contents:[],space_id:row.space_cat_id||''};
+            space=row.space_id
+              ? {id:row.space_id,name:row.space_name,type:'CATEGORY_TYPE_SPACE',sub_categories:[],contents:[]}
+              : {name:row.space_name,type:'CATEGORY_TYPE_SPACE',sub_categories:[],contents:[]};
             subCat.sub_categories.push(space);
           }
           if(row.content_id && space){
             if(!space.contents.find(c=>c.id===row.content_id)){
-              space.contents.push({id:row.content_id,name:row.content_name,type:row.content_type||'CONTENT_TYPE_PROGRAM'});
+              space.contents.push({id:row.content_id,type:row.content_type||'CONTENT_TYPE_PROGRAM'});
             }
           }
         }
@@ -1734,12 +1738,14 @@ async function runOutlineImport(){
         // 第2階層なしで直接 Space
         let space=cat.sub_categories.find(s=>s.id===row.space_id);
         if(!space){
-          space={id:row.space_id,name:row.space_name,type:'CATEGORY_TYPE_SPACE',sub_categories:[],contents:[],space_id:row.space_cat_id||''};
+          space=row.space_id
+          ? {id:row.space_id,name:row.space_name,type:'CATEGORY_TYPE_SPACE',sub_categories:[],contents:[]}
+          : {name:row.space_name,type:'CATEGORY_TYPE_SPACE',sub_categories:[],contents:[]};
           cat.sub_categories.push(space);
         }
         if(row.content_id && space){
           if(!space.contents.find(c=>c.id===row.content_id)){
-            space.contents.push({id:row.content_id,name:row.content_name,type:row.content_type||'CONTENT_TYPE_PROGRAM'});
+            space.contents.push({id:row.content_id,type:row.content_type||'CONTENT_TYPE_PROGRAM'});
           }
         }
       }
