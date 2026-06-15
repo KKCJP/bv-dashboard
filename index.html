@@ -1288,6 +1288,13 @@ async function confirmBatch(){
           } else log(t('log_tag_none'));
         }catch(e){ log(`  ❌ ${e.message}`,'error'); }
       }
+      if(doCpm){
+        try{
+          const vodName=(vodsAll||[]).find(v=>v.id===vodId)?.name||vodId;
+          await addVodToCpm(vodId, vodName);
+          log(`  ✅ CPM に追加（${vodName}）`,'done');
+        }catch(e){ log(`  ❌ CPM 追加失敗: ${e.message}`,'error'); }
+      }
       ok++;
     }catch(e){ fail++; log(`  ❌ ${e.message}`,'error'); }
   }
@@ -1728,9 +1735,15 @@ async function runOutlineImport(){
               : {name:row.space_name,type:'CATEGORY_TYPE_SPACE',sub_categories:[],contents:[]};
             subCat.sub_categories.push(space);
           }
-          if(row.content_id && space){
-            if(!space.contents.find(c=>c.id===row.content_id)){
-              space.contents.push({id:row.content_id,type:row.content_type||'CONTENT_TYPE_PROGRAM'});
+          if(space){
+            // content_id があればそのまま、なければ name を検索キーとして保存
+            const contentEntry=row.content_id
+              ? {id:row.content_id,type:row.content_type||'CONTENT_TYPE_VOD'}
+              : row.content_name
+                ? {_search_name:row.content_name,type:row.content_type||'CONTENT_TYPE_VOD'}
+                : null;
+            if(contentEntry && !space.contents.find(c=>c.id===contentEntry.id&&contentEntry.id)){
+              space.contents.push(contentEntry);
             }
           }
         }
@@ -1743,9 +1756,14 @@ async function runOutlineImport(){
           : {name:row.space_name,type:'CATEGORY_TYPE_SPACE',sub_categories:[],contents:[]};
           cat.sub_categories.push(space);
         }
-        if(row.content_id && space){
-          if(!space.contents.find(c=>c.id===row.content_id)){
-            space.contents.push({id:row.content_id,type:row.content_type||'CONTENT_TYPE_PROGRAM'});
+        if(space){
+          const contentEntry=row.content_id
+            ? {id:row.content_id,type:row.content_type||'CONTENT_TYPE_VOD'}
+            : row.content_name
+              ? {_search_name:row.content_name,type:row.content_type||'CONTENT_TYPE_VOD'}
+              : null;
+          if(contentEntry && !space.contents.find(c=>c.id===contentEntry.id&&contentEntry.id)){
+            space.contents.push(contentEntry);
           }
         }
       }
@@ -1773,6 +1791,37 @@ async function runOutlineImport(){
     }
 
     // PUT で outline 更新
+    // _search_name を持つ content を CPM で検索して ID を解決
+    const resolveContentNames=async(cats)=>{
+      for(const cat of cats){
+        for(const sub of cat.sub_categories||[]){
+          if(sub.type==='CATEGORY_TYPE_SPACE'){
+            const resolved=[];
+            const missing=[];
+            for(const c of sub.contents||[]){
+              if(c.id){
+                resolved.push(c);
+              } else if(c._search_name){
+                try{
+                  const r=await fetch(`${BASE()}/bv/cpm/v1alpha1/sites/${site}/contents?current_page=1&items_per_page=5&filter.title=${encodeURIComponent(c._search_name)}&filter.content_types=CONTENT_TYPE_VOD&filter.content_types=CONTENT_TYPE_PROGRAM`,{headers:HDR()});
+                  const d=await r.json();
+                  const hits=d.contents||[];
+                  const exact=hits.find(h=>h.title===c._search_name);
+                  const found=exact||hits[0];
+                  if(found) resolved.push({id:found.content_id,type:found.content_type||c.type});
+                  else missing.push(c._search_name);
+                }catch{ missing.push(c._search_name); }
+              }
+            }
+            sub.contents=resolved;
+            if(missing.length) log(`  ⚠️ content 未找到：${missing.join('、')}`);
+          }
+          await resolveContentNames(sub.sub_categories||[]);
+        }
+      }
+    };
+    await resolveContentNames(categories);
+
     // BV の PUT は {categories:[...]} 形式（outline でラップしない）
     // 第1階層は id 必須（ないと毎回新規作成される）
     const putBody={categories};
