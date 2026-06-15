@@ -1584,16 +1584,14 @@ async function exportOutlineCsv(){
     const processCategory=(cat,parentId='',parentName='')=>{
       for(const sub of cat.sub_categories||[]){
         if(sub.type==='CATEGORY_TYPE_SPACE'){
-          // space（最下層カテゴリ）
           for(const content of sub.contents||[]){
+            console.log('[outline export] cat=',cat.id,cat.name,'sub=',sub.id,sub.name,'content=',content.id);
             rows.push([outlineId, cat.id, cat.name, parentId||'', parentName||'', sub.id, sub.name, sub.space_id||'', content.id, content.name, content.type]);
           }
           if(!(sub.contents||[]).length){
-            // content なしの space も記録
             rows.push([outlineId, cat.id, cat.name, parentId||'', parentName||'', sub.id, sub.name, sub.space_id||'', '', '', '']);
           }
         } else {
-          // 中分類（CATEGORY_TYPE_NONE）→ 再帰
           processCategory(sub,cat.id,cat.name);
         }
       }
@@ -1928,7 +1926,7 @@ async function loadQuizVods(){
 function renderQuizVodList(){
   const el=document.getElementById('quiz-vod-list');
   if(!quizVodsFiltered.length){ el.innerHTML='<div style="padding:16px;text-align:center;color:var(--muted);">動画がありません</div>'; return; }
-  el.innerHTML=quizVodsFiltered.map(v=>`<label style="display:flex;align-items:center;gap:8px;padding:7px 12px;border-bottom:1px solid var(--border);cursor:pointer;font-size:12px;overflow:hidden;"><input type="checkbox" class="quiz-cb" style="flex-shrink:0;" value="${v.id}" data-name="${esc(v.name||'')}" onchange="updateQuizCount()"> <span style="overflow:hidden;text-overflow:ellipsis;white-space:nowrap;flex:1;" title="${esc(v.name||v.id)}">${esc(v.name||v.id)}</span></label>`).join('');
+  el.innerHTML=quizVodsFiltered.map(v=>`<label style="display:flex;flex-direction:row;align-items:center;gap:8px;padding:7px 12px;border-bottom:1px solid var(--border);cursor:pointer;font-size:12px;overflow:hidden;width:100%;box-sizing:border-box;"><input type="checkbox" class="quiz-cb" style="flex-shrink:0;flex-grow:0;order:0;" value="${v.id}" data-name="${esc(v.name||'')}" onchange="updateQuizCount()"><span style="overflow:hidden;text-overflow:ellipsis;white-space:nowrap;flex:1;min-width:0;order:1;" title="${esc(v.name||v.id)}">${esc(v.name||v.id)}</span></label>`).join('');
   updateQuizCount();
 }
 
