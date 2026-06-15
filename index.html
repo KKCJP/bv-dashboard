@@ -1702,35 +1702,53 @@ async function runOutlineImport(){
       const cat=catMap.get(row.cat_id);
 
       if(row.space_id){
-        let space=cat.sub_categories.find(s=>s.id===row.space_id);
-        if(!space){
-          // sub_cat_id がある場合は中分類の下に入れる
-          if(row.sub_cat_id){
-            let subCat=cat.sub_categories.find(s=>s.id===row.sub_cat_id);
-            if(!subCat){
-              subCat={id:row.sub_cat_id,name:row.sub_cat_name,type:'CATEGORY_TYPE_NONE',sub_categories:[],contents:[]};
-              cat.sub_categories.push(subCat);
-            }
+        let space=null;
+        // sub_cat_id がある場合は中分類の下に入れる
+        if(row.sub_cat_id){
+          let subCat=cat.sub_categories.find(s=>s.id===row.sub_cat_id);
+          if(!subCat){
+            subCat={id:row.sub_cat_id,name:row.sub_cat_name,type:'CATEGORY_TYPE_NONE',sub_categories:[],contents:[]};
+            cat.sub_categories.push(subCat);
+          }
+          space=subCat.sub_categories.find(s=>s.id===row.space_id);
+          if(!space){
             space={id:row.space_id,name:row.space_name,type:'CATEGORY_TYPE_SPACE',sub_categories:[],contents:[],space_id:row.space_cat_id||''};
             subCat.sub_categories.push(space);
-          } else {
+          }
+        } else {
+          space=cat.sub_categories.find(s=>s.id===row.space_id);
+          if(!space){
             space={id:row.space_id,name:row.space_name,type:'CATEGORY_TYPE_SPACE',sub_categories:[],contents:[],space_id:row.space_cat_id||''};
             cat.sub_categories.push(space);
           }
         }
-        if(row.content_id){
+        if(row.content_id && space){
           if(!space.contents.find(c=>c.id===row.content_id)){
             space.contents.push({id:row.content_id,name:row.content_name,type:row.content_type||'CONTENT_TYPE_PROGRAM'});
           }
         }
       }
     }
+    console.log('[outline import] catMap size=', catMap.size, [...catMap.values()].map(c=>c.name+':'+c.sub_categories.length+'subs'));
 
     const categories=[...catMap.values()];
-    log(`  📊 大分類 ${categories.length}件、Space ${[...catMap.values()].flatMap(c=>c.sub_categories).filter(s=>s.type==='CATEGORY_TYPE_SPACE').length}件`);
+
+    // Space 数を再帰でカウント
+    const countSpaces=(cats)=>cats.reduce((sum,cat)=>{
+      const direct=cat.sub_categories.filter(s=>s.type==='CATEGORY_TYPE_SPACE').length;
+      const nested=countSpaces(cat.sub_categories.filter(s=>s.type!=='CATEGORY_TYPE_SPACE'));
+      return sum+direct+nested;
+    },0);
+    const spaceCount=countSpaces(categories);
+    const contentCount=outlineImportData.filter(r=>r.content_id).length;
+
+    log(`  📊 大分類 ${categories.length}件、Space ${spaceCount}件、Content ${contentCount}件`);
 
     if(categories.length===0){
       throw new Error('カテゴリが0件です。CSV の内容を確認してください（上書きを防ぐため中止しました）');
+    }
+    if(spaceCount===0){
+      throw new Error('Space が0件です。CSV の階層構造を確認してください（上書きを防ぐため中止しました）');
     }
 
     // PUT で outline 更新
