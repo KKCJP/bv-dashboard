@@ -1752,17 +1752,21 @@ async function runOutlineImport(){
     }
 
     // PUT で outline 更新
-    const putBody={outline:{id:outlineId,categories}};
-    log(`  🚀 Outline PUT 実行中...`);
-    console.log('[outline PUT] body=', JSON.stringify(putBody).substring(0,500));
-    const r=await fetch(`${BASE()}/bv/cpm/marketplace/v1alpha1/sites/${site}/outlines/${outlineId}`,{
-      method:'PUT',headers:HDR(),body:JSON.stringify(putBody)
+    // outline_id があれば更新、なければ新規作成
+    const postBody={outline:{categories}};
+    if(outlineId) postBody.outline.id=outlineId;
+    log(`  🚀 Outline POST 実行中...`);
+    console.log('[outline POST] body=', JSON.stringify(postBody).substring(0,500));
+    const r=await fetch(`${BASE()}/bv/cpm/marketplace/v1alpha1/sites/${site}/outlines:create-for-licensing`,{
+      method:'POST',headers:HDR(),body:JSON.stringify(postBody)
     });
     if(!r.ok){
       const err=await r.text();
       throw new Error(`${r.status}: ${err.substring(0,200)}`);
     }
-    log(`  ✅ Outline 更新完了`,'done');
+    const rd=await r.json();
+    const newOutlineId=rd.outline?.id||'';
+    log(`  ✅ Outline 完了${newOutlineId?' (ID: '+newOutlineId.substring(0,16)+'...)':''}`, 'done');
     log('🏁 完了','done');
     toast('Outline 匯入完了','success');
   }catch(e){
