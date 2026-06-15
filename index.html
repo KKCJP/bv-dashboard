@@ -178,6 +178,7 @@ tr:last-child td{border-bottom:none;}
           <label style="font-size:11px;display:flex;align-items:center;gap:3px;cursor:pointer;"><input type="checkbox" class="force-lang-cb" value="ko-KR"> 한국어</label>
         </div>
         <label style="display:flex;align-items:center;gap:6px;cursor:pointer;white-space:nowrap;"><input type="checkbox" id="b-tag" checked> <span id="b-tag-label">タグ生成</span></label>
+        <label style="display:flex;align-items:center;gap:6px;cursor:pointer;white-space:nowrap;"><input type="checkbox" id="b-cpm"> <span>＋CPM</span></label>
         <button class="btn btn-primary btn-sm" onclick="confirmBatch()">🚀 実行</button>
         <button class="btn btn-danger btn-sm" onclick="deleteSelectedVods()">🗑 削除</button>
         <button class="btn btn-secondary btn-sm" onclick="selectNoneVods()">✕ 解除</button>
@@ -1194,7 +1195,8 @@ async function confirmBatch(){
   const doTrans=document.getElementById('b-translate').checked;
   const doSum=document.getElementById('b-summary').checked;
   const doTag=document.getElementById('b-tag').checked;
-  if(!doSub&&!doTrans&&!doSum&&!doTag){ toast('実行内容を選択してください','error'); return; }
+  const doCpm=document.getElementById('b-cpm')?.checked||false;
+  if(!doSub&&!doTrans&&!doSum&&!doTag&&!doCpm){ toast('実行内容を選択してください','error'); return; }
   document.getElementById('batch-options').style.display='none';
   const log=makeLog('batch-log','batch-log-card');
   log(t('log_batch_start',ids.length));
