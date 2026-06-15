@@ -1625,8 +1625,8 @@ function handleOutlineCsv(event){
     try{
       const lines=e.target.result.split(/\r?\n/).filter(l=>l.trim());
       if(!lines.length){ toast('データがありません','error'); return; }
-      const header=parseCSVLine(lines[0]).map(h=>h.trim().toLowerCase());
-      const getCol=(row,key)=>{ const i=header.indexOf(key); return i>=0?(row[i]||'').trim():''; };
+      const header=parseCSVLine(lines[0]).map(h=>h.trim());
+      const getCol=(row,key)=>{ const i=header.findIndex(h=>h.toLowerCase()===key.toLowerCase()||h===key); return i>=0?(row[i]||'').trim():''; };
 
       const rows=[];
       for(const line of lines.slice(1)){
