@@ -1583,7 +1583,13 @@ async function exportOutlineCsv(){
 
     // 第1階層ID/Name, 第2階層ID/Name, 第3階層ID/Name を正しく渡す
     const processCategory=(cat, l1Id='', l1Name='', l2Id='', l2Name='')=>{
-      for(const sub of cat.sub_categories||[]){
+      const subs=cat.sub_categories||[];
+      if(!subs.length){
+        // 子なし → この階層自体を出力
+        rows.push([outlineId, l1Id||cat.id, l1Name||cat.name, l2Id||'', l2Name||'', '', '', '', '', '', '']);
+        return;
+      }
+      for(const sub of subs){
         if(sub.type==='CATEGORY_TYPE_SPACE'){
           // sub が第3階層（Space）
           for(const content of sub.contents||[]){
@@ -1595,10 +1601,8 @@ async function exportOutlineCsv(){
         } else {
           // 中間階層 → 再帰
           if(!l1Id){
-            // cat が第1階層、sub が第2階層
             processCategory(sub, cat.id, cat.name, sub.id, sub.name);
           } else {
-            // cat が第2階層、sub が第3階層（NONE タイプ）
             processCategory(sub, l1Id, l1Name, cat.id, cat.name);
           }
         }
