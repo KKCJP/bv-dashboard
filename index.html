@@ -1758,40 +1758,20 @@ async function runOutlineImport(){
     }
 
     // PUT で outline 更新
-    const postBody={outline:{categories}};
-    if(outlineId) postBody.outline.id=outlineId;
-    log(`  🚀 Outline 送信中...`);
-    console.log('[outline POST] body=', JSON.stringify(postBody).substring(0,500));
-
-    // まず create-for-licensing を試して、既存なら update-for-licensing を試す
-    let r=await fetch(`${BASE()}/bv/cpm/marketplace/v1alpha1/sites/${site}/outlines:create-for-licensing`,{
-      method:'POST',headers:HDR(),body:JSON.stringify(postBody)
+    // BV の PUT は {categories:[...]} 形式（outline でラップしない）
+    // 第1階層は id 必須（ないと毎回新規作成される）
+    const putBody={categories};
+    log(`  🚀 Outline PUT 実行中...`);
+    console.log('[outline PUT] body=', JSON.stringify(putBody).substring(0,500));
+    const r=await fetch(`${BASE()}/bv/cpm/marketplace/v1alpha1/sites/${site}/outlines/${outlineId}`,{
+      method:'PUT',headers:HDR(),body:JSON.stringify(putBody)
     });
     if(!r.ok){
-      const errText=await r.text();
-      if(errText.includes('already exists')){
-        log(`  ℹ️ 既存 outline を更新します`);
-        // update endpoint を試す
-        r=await fetch(`${BASE()}/bv/cpm/marketplace/v1alpha1/sites/${site}/outlines:update-for-licensing`,{
-          method:'POST',headers:HDR(),body:JSON.stringify(postBody)
-        });
-        if(!r.ok){
-          // PUT も試す
-          r=await fetch(`${BASE()}/bv/cpm/marketplace/v1alpha1/sites/${site}/outlines/${outlineId}`,{
-            method:'PUT',headers:HDR(),body:JSON.stringify(postBody)
-          });
-          if(!r.ok){
-            const err2=await r.text();
-            throw new Error(`${r.status}: ${err2.substring(0,200)}`);
-          }
-        }
-      } else {
-        throw new Error(`${r.status}: ${errText.substring(0,200)}`);
-      }
+      const err=await r.text();
+      throw new Error(`${r.status}: ${err.substring(0,200)}`);
     }
-    const rd=await r.json();
-    const newOutlineId=rd.outline?.id||'';
-    log(`  ✅ Outline 完了${newOutlineId?' (ID: '+newOutlineId.substring(0,16)+'...)':''}`, 'done');
+    await r.json();
+    log(`  ✅ Outline 更新完了`,'done');
     log('🏁 完了','done');
     toast('Outline 匯入完了','success');
   }catch(e){
