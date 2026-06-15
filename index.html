@@ -1748,7 +1748,7 @@ async function runOutlineImport(){
       throw new Error('カテゴリが0件です。CSV の内容を確認してください（上書きを防ぐため中止しました）');
     }
     if(spaceCount===0){
-      throw new Error('Space が0件です。CSV の階層構造を確認してください（上書きを防ぐため中止しました）');
+      log(`  ⚠️ Space が0件です。第1・第2階層のみで続行します`);
     }
 
     // PUT で outline 更新
