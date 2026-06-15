@@ -1754,6 +1754,7 @@ async function runOutlineImport(){
     // PUT で outline 更新
     const putBody={outline:{id:outlineId,categories}};
     log(`  🚀 Outline PUT 実行中...`);
+    console.log('[outline PUT] body=', JSON.stringify(putBody).substring(0,500));
     const r=await fetch(`${BASE()}/bv/cpm/marketplace/v1alpha1/sites/${site}/outlines/${outlineId}`,{
       method:'PUT',headers:HDR(),body:JSON.stringify(putBody)
     });
