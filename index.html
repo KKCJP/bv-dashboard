@@ -1705,11 +1705,16 @@ async function runOutlineImport(){
       }
       const cat=catMap.get(row.cat_id);
 
-      // 第2階層を追加（space_id がなくても）
-      if(row.sub_cat_id){
-        let subCat=cat.sub_categories.find(s=>s.id===row.sub_cat_id);
+      // 第2階層を追加（sub_cat_id なくても sub_cat_name があれば新規作成）
+      if(row.sub_cat_id||row.sub_cat_name){
+        const matchKey=row.sub_cat_id||row.sub_cat_name;
+        let subCat=row.sub_cat_id
+          ? cat.sub_categories.find(s=>s.id===row.sub_cat_id)
+          : cat.sub_categories.find(s=>s.name===row.sub_cat_name);
         if(!subCat){
-          subCat={id:row.sub_cat_id,name:row.sub_cat_name,type:'CATEGORY_TYPE_NONE',sub_categories:[],contents:[]};
+          subCat=row.sub_cat_id
+            ? {id:row.sub_cat_id,name:row.sub_cat_name,type:'CATEGORY_TYPE_NONE',sub_categories:[],contents:[]}
+            : {name:row.sub_cat_name,type:'CATEGORY_TYPE_NONE',sub_categories:[],contents:[]};
           cat.sub_categories.push(subCat);
         }
         // 第3階層（Space）を追加
