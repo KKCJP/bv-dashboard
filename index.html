@@ -1578,21 +1578,29 @@ async function exportOutlineCsv(){
     const outlineId=outline.id||'';
     const categories=outline.categories||[];
 
-    const header=['outline_id','cat_id','cat_name','sub_cat_id','sub_cat_name','space_id','space_name','space_cat_id','content_id','content_name','content_type'];
+    const header=['ライセンスOutline_ID','第一階層ID','第一階層Name','第二階層ID','第二階層Name','第三階層ID','第三階層Name','第三階層内Space_ID','コンテンツID','コンテンツName','コンテンツType'];
     const rows=[header];
 
-    const processCategory=(cat,parentId='',parentName='')=>{
+    // 第1階層ID/Name, 第2階層ID/Name, 第3階層ID/Name を正しく渡す
+    const processCategory=(cat, l1Id='', l1Name='', l2Id='', l2Name='')=>{
       for(const sub of cat.sub_categories||[]){
         if(sub.type==='CATEGORY_TYPE_SPACE'){
+          // sub が第3階層（Space）
           for(const content of sub.contents||[]){
-            console.log('[outline export] cat=',cat.id,cat.name,'sub=',sub.id,sub.name,'content=',content.id);
-            rows.push([outlineId, cat.id, cat.name, parentId||'', parentName||'', sub.id, sub.name, sub.space_id||'', content.id, content.name, content.type]);
+            rows.push([outlineId, l1Id||cat.id, l1Name||cat.name, l2Id||'', l2Name||'', sub.id, sub.name, sub.space_id||'', content.id, content.name, content.type]);
           }
           if(!(sub.contents||[]).length){
-            rows.push([outlineId, cat.id, cat.name, parentId||'', parentName||'', sub.id, sub.name, sub.space_id||'', '', '', '']);
+            rows.push([outlineId, l1Id||cat.id, l1Name||cat.name, l2Id||'', l2Name||'', sub.id, sub.name, sub.space_id||'', '', '', '']);
           }
         } else {
-          processCategory(sub,cat.id,cat.name);
+          // 中間階層 → 再帰
+          if(!l1Id){
+            // cat が第1階層、sub が第2階層
+            processCategory(sub, cat.id, cat.name, sub.id, sub.name);
+          } else {
+            // cat が第2階層、sub が第3階層（NONE タイプ）
+            processCategory(sub, l1Id, l1Name, cat.id, cat.name);
+          }
         }
       }
     };
@@ -1625,17 +1633,17 @@ function handleOutlineCsv(event){
         const row=parseCSVLine(line);
         if(!row.length||row.every(c=>!c.trim())) continue;
         rows.push({
-          outline_id: getCol(row,'outline_id'),
-          cat_id: getCol(row,'cat_id'),
-          cat_name: getCol(row,'cat_name'),
-          sub_cat_id: getCol(row,'sub_cat_id'),
-          sub_cat_name: getCol(row,'sub_cat_name'),
-          space_id: getCol(row,'space_id'),
-          space_name: getCol(row,'space_name'),
-          space_cat_id: getCol(row,'space_cat_id'),
-          content_id: getCol(row,'content_id'),
-          content_name: getCol(row,'content_name'),
-          content_type: getCol(row,'content_type')||'CONTENT_TYPE_PROGRAM',
+          outline_id: getCol(row,'ライセンスOutline_ID')||getCol(row,'outline_id'),
+          cat_id: getCol(row,'第一階層ID'),
+          cat_name: getCol(row,'第一階層Name'),
+          sub_cat_id: getCol(row,'第二階層ID'),
+          sub_cat_name: getCol(row,'第二階層Name'),
+          space_id: getCol(row,'第三階層ID'),
+          space_name: getCol(row,'第三階層Name'),
+          space_cat_id: getCol(row,'第三階層内Space_ID'),
+          content_id: getCol(row,'コンテンツID'),
+          content_name: getCol(row,'コンテンツName'),
+          content_type: getCol(row,'コンテンツType')||'CONTENT_TYPE_PROGRAM',
         });
       }
 
@@ -1677,7 +1685,7 @@ async function runOutlineImport(){
   log(`▶ Outline 匯入開始：${outlineImportData.length}行`);
 
   try{
-    const outlineId=outlineImportData[0]?.outline_id||'';
+    const outlineId=outlineImportData[0]?.outline_id||outlineImportData[0]?.['ライセンスOutline_ID']||'';
     if(!outlineId) throw new Error('outline_id が見つかりません');
 
     console.log('[outline] first row=', JSON.stringify(outlineImportData[0]));
@@ -1720,6 +1728,10 @@ async function runOutlineImport(){
 
     const categories=[...catMap.values()];
     log(`  📊 大分類 ${categories.length}件、Space ${[...catMap.values()].flatMap(c=>c.sub_categories).filter(s=>s.type==='CATEGORY_TYPE_SPACE').length}件`);
+
+    if(categories.length===0){
+      throw new Error('カテゴリが0件です。CSV の内容を確認してください（上書きを防ぐため中止しました）');
+    }
 
     // PUT で outline 更新
     const putBody={outline:{id:outlineId,categories}};
