@@ -1701,26 +1701,32 @@ async function runOutlineImport(){
       }
       const cat=catMap.get(row.cat_id);
 
-      if(row.space_id){
-        let space=null;
-        // sub_cat_id がある場合は中分類の下に入れる
-        if(row.sub_cat_id){
-          let subCat=cat.sub_categories.find(s=>s.id===row.sub_cat_id);
-          if(!subCat){
-            subCat={id:row.sub_cat_id,name:row.sub_cat_name,type:'CATEGORY_TYPE_NONE',sub_categories:[],contents:[]};
-            cat.sub_categories.push(subCat);
-          }
-          space=subCat.sub_categories.find(s=>s.id===row.space_id);
+      // 第2階層を追加（space_id がなくても）
+      if(row.sub_cat_id){
+        let subCat=cat.sub_categories.find(s=>s.id===row.sub_cat_id);
+        if(!subCat){
+          subCat={id:row.sub_cat_id,name:row.sub_cat_name,type:'CATEGORY_TYPE_NONE',sub_categories:[],contents:[]};
+          cat.sub_categories.push(subCat);
+        }
+        // 第3階層（Space）を追加
+        if(row.space_id){
+          let space=subCat.sub_categories.find(s=>s.id===row.space_id);
           if(!space){
             space={id:row.space_id,name:row.space_name,type:'CATEGORY_TYPE_SPACE',sub_categories:[],contents:[],space_id:row.space_cat_id||''};
             subCat.sub_categories.push(space);
           }
-        } else {
-          space=cat.sub_categories.find(s=>s.id===row.space_id);
-          if(!space){
-            space={id:row.space_id,name:row.space_name,type:'CATEGORY_TYPE_SPACE',sub_categories:[],contents:[],space_id:row.space_cat_id||''};
-            cat.sub_categories.push(space);
+          if(row.content_id && space){
+            if(!space.contents.find(c=>c.id===row.content_id)){
+              space.contents.push({id:row.content_id,name:row.content_name,type:row.content_type||'CONTENT_TYPE_PROGRAM'});
+            }
           }
+        }
+      } else if(row.space_id){
+        // 第2階層なしで直接 Space
+        let space=cat.sub_categories.find(s=>s.id===row.space_id);
+        if(!space){
+          space={id:row.space_id,name:row.space_name,type:'CATEGORY_TYPE_SPACE',sub_categories:[],contents:[],space_id:row.space_cat_id||''};
+          cat.sub_categories.push(space);
         }
         if(row.content_id && space){
           if(!space.contents.find(c=>c.id===row.content_id)){
@@ -1752,17 +1758,36 @@ async function runOutlineImport(){
     }
 
     // PUT で outline 更新
-    // outline_id があれば更新、なければ新規作成
     const postBody={outline:{categories}};
     if(outlineId) postBody.outline.id=outlineId;
-    log(`  🚀 Outline POST 実行中...`);
+    log(`  🚀 Outline 送信中...`);
     console.log('[outline POST] body=', JSON.stringify(postBody).substring(0,500));
-    const r=await fetch(`${BASE()}/bv/cpm/marketplace/v1alpha1/sites/${site}/outlines:create-for-licensing`,{
+
+    // まず create-for-licensing を試して、既存なら update-for-licensing を試す
+    let r=await fetch(`${BASE()}/bv/cpm/marketplace/v1alpha1/sites/${site}/outlines:create-for-licensing`,{
       method:'POST',headers:HDR(),body:JSON.stringify(postBody)
     });
     if(!r.ok){
-      const err=await r.text();
-      throw new Error(`${r.status}: ${err.substring(0,200)}`);
+      const errText=await r.text();
+      if(errText.includes('already exists')){
+        log(`  ℹ️ 既存 outline を更新します`);
+        // update endpoint を試す
+        r=await fetch(`${BASE()}/bv/cpm/marketplace/v1alpha1/sites/${site}/outlines:update-for-licensing`,{
+          method:'POST',headers:HDR(),body:JSON.stringify(postBody)
+        });
+        if(!r.ok){
+          // PUT も試す
+          r=await fetch(`${BASE()}/bv/cpm/marketplace/v1alpha1/sites/${site}/outlines/${outlineId}`,{
+            method:'PUT',headers:HDR(),body:JSON.stringify(postBody)
+          });
+          if(!r.ok){
+            const err2=await r.text();
+            throw new Error(`${r.status}: ${err2.substring(0,200)}`);
+          }
+        }
+      } else {
+        throw new Error(`${r.status}: ${errText.substring(0,200)}`);
+      }
     }
     const rd=await r.json();
     const newOutlineId=rd.outline?.id||'';
