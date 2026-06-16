@@ -1292,7 +1292,7 @@ async function confirmBatch(){
       }
       if(doCpm){
         try{
-          const vodName=(vodsAll||[]).find(v=>v.id===vodId)?.name||vodId;
+          const vodName=(vodsData||[]).find(v=>v.id===vodId)?.name||vodId;
           await addVodToCpm(vodId, vodName);
           log(`  ✅ CPM に追加（${vodName}）`,'done');
         }catch(e){ log(`  ❌ CPM 追加失敗: ${e.message}`,'error'); }
