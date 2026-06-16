@@ -282,6 +282,7 @@ tr:last-child td{border-bottom:none;}
     <button class="tab-btn active" id="tab-quiz" onclick="switchTab('quiz')">🧠 Quiz</button>
     <button class="tab-btn" id="tab-program" onclick="switchTab('program')">📚 Program</button>
     <button class="tab-btn" id="tab-outline" onclick="switchTab('outline')">🗂️ Outline</button>
+    <button class="tab-btn" id="tab-cpmvod" onclick="switchTab('cpmvod')">🎬 VOD</button>
   </div>
   <div id="cpm-tab-quiz">
     <div class="card">
@@ -325,6 +326,43 @@ tr:last-child td{border-bottom:none;}
       <div class="log-box" id="quiz-log"></div>
     </div>
   </div>
+  <div id="cpm-tab-cpmvod" style="display:none;">
+    <div class="card">
+      <div class="card-title">🎬 CPM VOD 管理</div>
+      <div class="btn-row" style="margin-bottom:12px;">
+        <button class="btn btn-secondary btn-sm" onclick="loadCpmVods()">🔄 読み込み</button>
+        <button class="btn btn-secondary btn-sm" onclick="exportCpmVodCsv()">⬇ CSV</button>
+        <button class="btn btn-secondary btn-sm" onclick="batchUpdateCpmTitlesFromTable()" title="VOD name → CPM title 一括更新">📝 一括 title 更新</button>
+        <span id="cpm-vod-count" style="font-size:11px;color:var(--muted);"></span>
+      </div>
+      <div id="cpm-vod-batch" style="display:none;background:var(--surface2);border-radius:6px;padding:8px 12px;margin-bottom:10px;font-size:12px;">
+        <span id="cpm-vod-selected-count" style="color:var(--accent);font-weight:600;margin-right:12px;"></span>
+        <button class="btn btn-secondary btn-sm" onclick="cpmVodBatchPublish('CONTENT_VISIBILITY_PUBLISHED')">✅ 公開</button>
+        <button class="btn btn-secondary btn-sm" onclick="cpmVodBatchPublish('CONTENT_VISIBILITY_DRAFT')">⏸ 非公開</button>
+        <button class="btn btn-danger btn-sm" onclick="cpmVodBatchDelete()" style="background:#e53935;color:#fff;border:none;">🗑 削除</button>
+      </div>
+      <div id="cpm-vod-table-wrap" style="overflow-x:auto;">
+        <table id="cpm-vod-table" style="display:none;">
+          <thead><tr>
+            <th><input type="checkbox" id="cpm-vod-check-all" onchange="toggleAllCpmVods(this.checked)"></th>
+            <th>タイトル</th>
+            <th>VOD 名</th>
+            <th>状態</th>
+            <th>操作</th>
+          </tr></thead>
+          <tbody id="cpm-vod-tbody"></tbody>
+        </table>
+        <div id="cpm-vod-empty" style="color:var(--muted);font-size:12px;padding:20px;text-align:center;">「読み込み」を押してください</div>
+      </div>
+    </div>
+    <div class="card" id="cpm-vod-log-card" style="display:none;">
+      <div class="card-title">📋 実行ログ
+        <button class="btn btn-secondary btn-xs" style="margin-left:auto;" onclick="document.getElementById('cpm-vod-log-card').style.display='none'">✕</button>
+      </div>
+      <div class="log-box" id="cpm-vod-log"></div>
+    </div>
+  </div>
+
   <div id="cpm-tab-outline" style="display:none;">
     <div class="card">
       <div class="card-title">🗂️ Outline 管理</div>
@@ -2025,6 +2063,210 @@ async function batchUpdateCpmTitles(){
 
 // ════ VOD → CPM 追加 終 ══════════════════════════════════
 
+// ════ CPM VOD 管理 ═══════════════════════════════════════
+let cpmVodData=[]; // {content_id, vod_id, title, vod_name, visibility}
+
+async function loadCpmVods(){
+  const site=siteId();
+  const tbody=document.getElementById('cpm-vod-tbody');
+  const table=document.getElementById('cpm-vod-table');
+  const empty=document.getElementById('cpm-vod-empty');
+  const count=document.getElementById('cpm-vod-count');
+  empty.textContent='取得中...'; table.style.display='none';
+
+  try{
+    // CPM VOD 一覧取得
+    let all=[], page=1;
+    while(true){
+      const r=await fetch(`${BASE()}/bv/cpm/v1alpha1/sites/${site}/contents?current_page=${page}&items_per_page=100&filter.content_types=CONTENT_TYPE_VOD`,{headers:HDR()});
+      const d=await r.json();
+      const items=d.contents||[];
+      all.push(...items);
+      if(items.length<100) break;
+      page++;
+    }
+
+    // vodsData がなければ取得
+    if(!vodsData.length){
+      let p=1;
+      while(true){
+        const d=await bvGet(`/bv/cms/v1/vods?current_page=${p}&items_per_page=50`);
+        vodsData.push(...(d.vods||[]));
+        if((d.vods||[]).length<50) break;
+        p++;
+      }
+    }
+
+    // 各 CPM VOD の source.vod.id を取得して VOD name を紐付け
+    cpmVodData=[];
+    count.textContent=`取得中 0/${all.length}...`;
+    for(let i=0;i<all.length;i++){
+      const c=all[i];
+      let vodId='', vodName='';
+      try{
+        const r=await fetch(`${BASE()}/bv/cpm/v1alpha1/sites/${site}/vods/${c.content_id}`,{headers:HDR()});
+        if(r.ok){
+          const d=await r.json();
+          vodId=d.vod?.source?.vod?.id||d.source?.vod?.id||'';
+          vodName=vodsData.find(v=>v.id===vodId)?.name||'';
+        }
+      }catch{}
+      cpmVodData.push({content_id:c.content_id,vod_id:vodId,title:c.title||'',vod_name:vodName,visibility:c.visibility||''});
+      if((i+1)%10===0) count.textContent=`取得中 ${i+1}/${all.length}...`;
+      await new Promise(r=>setTimeout(r,50));
+    }
+
+    renderCpmVodTable();
+    count.textContent=`${cpmVodData.length}件`;
+    empty.style.display='none';
+    table.style.display='';
+  }catch(e){ empty.textContent='取得失敗: '+e.message; }
+}
+
+function renderCpmVodTable(){
+  const tbody=document.getElementById('cpm-vod-tbody');
+  tbody.innerHTML=cpmVodData.map(v=>`<tr>
+    <td><input type="checkbox" class="cpm-vod-cb" value="${v.content_id}" onchange="updateCpmVodBatch()"></td>
+    <td style="max-width:200px;overflow:hidden;text-overflow:ellipsis;white-space:nowrap;" title="${esc(v.title)}">${esc(v.title)}</td>
+    <td style="max-width:250px;overflow:hidden;text-overflow:ellipsis;white-space:nowrap;color:var(--muted);" title="${esc(v.vod_name)}">${esc(v.vod_name)||'—'}</td>
+    <td><span class="badge ${v.visibility==='CONTENT_VISIBILITY_PUBLISHED'?'badge-green':'badge-gray'}">${v.visibility==='CONTENT_VISIBILITY_PUBLISHED'?'公開':'非公開'}</span></td>
+    <td style="white-space:nowrap;">
+      <button class="btn btn-secondary btn-xs" onclick="cpmVodUpdateTitle('${v.content_id}','${(v.vod_name||v.title).replace(/'/g,"\\'")}','${v.visibility}')" title="VOD名に更新">📝</button>
+      <button class="btn btn-secondary btn-xs" onclick="cpmVodSetVisibility('${v.content_id}','${v.visibility==='CONTENT_VISIBILITY_PUBLISHED'?'CONTENT_VISIBILITY_DRAFT':'CONTENT_VISIBILITY_PUBLISHED'}','${(v.title).replace(/'/g,"\\'")}')">
+        ${v.visibility==='CONTENT_VISIBILITY_PUBLISHED'?'⏸':'✅'}
+      </button>
+    </td>
+  </tr>`).join('');
+}
+
+function updateCpmVodBatch(){
+  const checked=[...document.querySelectorAll('.cpm-vod-cb:checked')];
+  const batch=document.getElementById('cpm-vod-batch');
+  const sel=document.getElementById('cpm-vod-selected-count');
+  batch.style.display=checked.length?'flex':'none';
+  sel.textContent=`${checked.length}件選択中`;
+}
+
+function toggleAllCpmVods(checked){
+  document.querySelectorAll('.cpm-vod-cb').forEach(cb=>cb.checked=checked);
+  updateCpmVodBatch();
+}
+
+async function cpmVodUpdateTitle(contentId, vodName, visibility){
+  const site=siteId();
+  try{
+    await cpmPut(`/bv/cpm/v1alpha1/sites/${site}/contents/setting`,{content:{
+      content_id:contentId,content_type:'CONTENT_TYPE_VOD',
+      title:vodName,visibility:visibility||'CONTENT_VISIBILITY_DRAFT',
+      labels:[],part_numbers:[],
+      schedule:{start_time:null,end_time:null},
+      license_setting:{license:'CONTENT_LICENSE_LICENSE_ONLY',custom_url_resource:''},
+      note:'',form_type:null
+    }});
+    const v=cpmVodData.find(v=>v.content_id===contentId);
+    if(v) v.title=vodName;
+    renderCpmVodTable();
+    toast(`✅ 更新（${esc(vodName)}）`,'success');
+  }catch(e){ toast('失敗: '+e.message,'error'); }
+}
+
+async function cpmVodSetVisibility(contentId, visibility, title){
+  const site=siteId();
+  try{
+    await cpmPut(`/bv/cpm/v1alpha1/sites/${site}/contents/setting`,{content:{
+      content_id:contentId,content_type:'CONTENT_TYPE_VOD',
+      title:title,visibility:visibility,
+      labels:[],part_numbers:[],
+      schedule:{start_time:null,end_time:null},
+      license_setting:{license:'CONTENT_LICENSE_LICENSE_ONLY',custom_url_resource:''},
+      note:'',form_type:null
+    }});
+    const v=cpmVodData.find(v=>v.content_id===contentId);
+    if(v) v.visibility=visibility;
+    renderCpmVodTable();
+    toast(`✅ ${visibility==='CONTENT_VISIBILITY_PUBLISHED'?'公開':'非公開'}に変更`,'success');
+  }catch(e){ toast('失敗: '+e.message,'error'); }
+}
+
+async function cpmVodBatchPublish(visibility){
+  const site=siteId();
+  const ids=[...document.querySelectorAll('.cpm-vod-cb:checked')].map(c=>c.value);
+  if(!ids.length) return;
+  const log=makeLog('cpm-vod-log','cpm-vod-log-card');
+  log(`▶ ${visibility==='CONTENT_VISIBILITY_PUBLISHED'?'公開':'非公開'} 一括変更：${ids.length}件`);
+  let ok=0,fail=0;
+  for(const id of ids){
+    const v=cpmVodData.find(v=>v.content_id===id);
+    try{
+      await cpmPut(`/bv/cpm/v1alpha1/sites/${site}/contents/setting`,{content:{
+        content_id:id,content_type:'CONTENT_TYPE_VOD',
+        title:v?.title||'',visibility,
+        labels:[],part_numbers:[],
+        schedule:{start_time:null,end_time:null},
+        license_setting:{license:'CONTENT_LICENSE_LICENSE_ONLY',custom_url_resource:''},
+        note:'',form_type:null
+      }});
+      if(v) v.visibility=visibility;
+      ok++;
+    }catch(e){ fail++; }
+    await new Promise(r=>setTimeout(r,100));
+  }
+  renderCpmVodTable();
+  log(`🏁 完了：${ok}件 / 失敗${fail}件`,'done');
+  toast(`完了：${ok}件`,'success');
+}
+
+async function cpmVodBatchDelete(){
+  const site=siteId();
+  const ids=[...document.querySelectorAll('.cpm-vod-cb:checked')].map(c=>c.value);
+  if(!ids.length) return;
+  if(!confirm(`${ids.length}件を CPM から削除しますか？`)) return;
+  const log=makeLog('cpm-vod-log','cpm-vod-log-card');
+  log(`▶ CPM VOD 削除：${ids.length}件`);
+  let ok=0,fail=0;
+  for(const id of ids){
+    try{
+      const r=await fetch(`${BASE()}/bv/cpm/v1alpha1/sites/${site}/contents/${id}`,{method:'DELETE',headers:HDR()});
+      if(!r.ok) throw new Error(r.status);
+      cpmVodData=cpmVodData.filter(v=>v.content_id!==id);
+      ok++;
+    }catch(e){ fail++; log(`  ❌ ${id}: ${e.message}`,'error'); }
+    await new Promise(r=>setTimeout(r,100));
+  }
+  renderCpmVodTable();
+  document.getElementById('cpm-vod-count').textContent=`${cpmVodData.length}件`;
+  log(`🏁 完了：${ok}件削除 / 失敗${fail}件`,'done');
+  toast(`削除完了：${ok}件`,'success');
+}
+
+// 一括 title 更新（VOD name → CPM title）
+async function batchUpdateCpmTitlesFromTable(){
+  const site=siteId();
+  const log=makeLog('cpm-vod-log','cpm-vod-log-card');
+  const targets=cpmVodData.filter(v=>v.vod_name && v.vod_name!==v.title);
+  log(`▶ CPM title 一括更新：${targets.length}件`);
+  let ok=0,fail=0;
+  for(const v of targets){
+    try{
+      await cpmPut(`/bv/cpm/v1alpha1/sites/${site}/contents/setting`,{content:{
+        content_id:v.content_id,content_type:'CONTENT_TYPE_VOD',
+        title:v.vod_name,visibility:v.visibility||'CONTENT_VISIBILITY_DRAFT',
+        labels:[],part_numbers:[],
+        schedule:{start_time:null,end_time:null},
+        license_setting:{license:'CONTENT_LICENSE_LICENSE_ONLY',custom_url_resource:''},
+        note:'',form_type:null
+      }});
+      v.title=v.vod_name;
+      ok++;
+    }catch(e){ fail++; }
+    await new Promise(r=>setTimeout(r,100));
+  }
+  renderCpmVodTable();
+  log(`🏁 完了：更新${ok}件 / 失敗${fail}件`,'done');
+  toast(`title 更新完了：${ok}件`,'success');
+}
+// ════ CPM VOD 管理 終 ══════════════════════════════════
+
 // ════ CPM Quiz 匯出/匯入 ═════════════════════════════
 let quizImportData=[];
 
@@ -2307,11 +2549,27 @@ async function exportCpmVodCsv(){
       }catch{}
     }
 
-    const header=['content_id','cpm_title','vod_name'];
+    const header=['content_id','vod_id','cpm_title','vod_name'];
     const rows=[header];
+    let done=0;
     for(const c of all){
-      const vodMatch=vodsData.find(v=>v.id===c.content_id);
-      rows.push([c.content_id, c.title||'', vodMatch?.name||'']);
+      // /vods/{content_id} で source.vod.id を取得
+      let vodId='', vodName='';
+      try{
+        const r=await fetch(`${BASE()}/bv/cpm/v1alpha1/sites/${site}/vods/${c.content_id}`,{headers:HDR()});
+        if(r.ok){
+          const d=await r.json();
+          vodId=d.vod?.source?.vod?.id||d.source?.vod?.id||'';
+          if(vodId){
+            const match=vodsData.find(v=>v.id===vodId);
+            vodName=match?.name||'';
+          }
+        }
+      }catch{}
+      rows.push([c.content_id, vodId, c.title||'', vodName]);
+      done++;
+      if(done%20===0 && btn) btn.textContent=`⬇ 取得中 ${done}/${all.length}...`;
+      await new Promise(r=>setTimeout(r,50));
     }
 
     const csv=rows.map(r=>r.map(c=>`"${(c||'').toString().replace(/"/g,'""')}"`).join(',')).join('\n');
@@ -2330,6 +2588,7 @@ function switchTab(tab){
   document.getElementById('cpm-tab-quiz').style.display=tab==='quiz'?'block':'none';
   document.getElementById('cpm-tab-program').style.display=tab==='program'?'block':'none';
   document.getElementById('cpm-tab-outline').style.display=tab==='outline'?'block':'none';
+  document.getElementById('cpm-tab-cpmvod').style.display=tab==='cpmvod'?'block':'none';
 }
 
 async function exportProgramCsv(){
