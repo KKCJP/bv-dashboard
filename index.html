@@ -151,6 +151,7 @@ tr:last-child td{border-bottom:none;}
         <button class="btn btn-secondary btn-sm" onclick="exportVodCsv()">⬇ CSV</button>
         <button class="btn btn-secondary btn-sm" onclick="document.getElementById('import-csv-input').click()">⬆ CSV改名</button>
         <input type="file" id="import-csv-input" accept=".csv" style="display:none" onchange="importRenameCsv(event)">
+        <button class="btn btn-secondary btn-sm" onclick="batchUpdateCpmTitles()" title="CPM の title を VOD name に一括更新">📝 CPM 名更新</button>
       </div>
     </div>
     <!-- 勾選時に表示 -->
@@ -1867,7 +1868,7 @@ async function addVodToCpm(vodId, vodName){
       // Method Not Allowed → 方法2 を試す
     } else {
       const e=await r.text();
-      if(e.includes('already')) { added=true; } // 既存も OK
+      if(e.includes('already')) added=true;
       else throw new Error(`${r.status}: ${e.substring(0,200)}`);
     }
   }catch(e){
@@ -1894,22 +1895,45 @@ async function addVodToCpm(vodId, vodName){
     }
   }
 
-  if(added){
-    // title を VOD 名に更新
-    await new Promise(r=>setTimeout(r,800));
+  if(added) toast(`✅ CPM に追加（${esc(vodName)}）`,'success');
+}
+// CPM の VOD title を一括更新（VOD name に合わせる）
+async function batchUpdateCpmTitles(){
+  const site=siteId();
+  if(!site){ toast('CPM Site ID が設定されていません','error'); return; }
+  if(!vodsData.length){ toast('先に VOD 一覧を読み込んでください','error'); return; }
+
+  const log=makeLog('batch-log','batch-log-card');
+  log(`▶ CPM title 一括更新開始：${vodsData.length}件`);
+
+  let ok=0, skip=0, fail=0;
+  for(let i=0;i<vodsData.length;i++){
+    const v=vodsData[i];
     try{
+      const r=await fetch(`${BASE()}/bv/cpm/v1alpha1/sites/${site}/vods/${v.id}`,{headers:HDR()});
+      if(!r.ok){ skip++; continue; } // CPM に未登録
+      const d=await r.json();
+      const cpmTitle=(d.vod?.title||'').trim();
+      const vodName=(v.name||'').trim();
+      if(cpmTitle===vodName){ skip++; continue; } // 既に同じ
+      // title を更新
       await cpmPut(`/bv/cpm/v1alpha1/sites/${site}/contents/setting`,{content:{
-        content_id:vodId,content_type:'CONTENT_TYPE_VOD',
-        title:vodName,visibility:'CONTENT_VISIBILITY_DRAFT',
-        labels:[],part_numbers:[],
+        content_id:v.id,content_type:'CONTENT_TYPE_VOD',
+        title:vodName,visibility:d.vod?.visibility||'CONTENT_VISIBILITY_DRAFT',
+        labels:d.vod?.labels||[],part_numbers:d.vod?.part_numbers||[],
         schedule:{start_time:null,end_time:null},
         license_setting:{license:'CONTENT_LICENSE_LICENSE_ONLY',custom_url_resource:''},
         note:'',form_type:null
       }});
-    }catch(e2){ console.warn('[addVodToCpm] title update failed:', e2.message); }
-    toast(`✅ CPM に追加（${esc(vodName)}）`,'success');
+      ok++;
+      if(ok%20===0) log(`  ${i+1}/${vodsData.length} 更新中... (${ok}件完了)`);
+    }catch(e){ fail++; }
+    await new Promise(r=>setTimeout(r,100));
   }
+  log(`🏁 完了：更新${ok}件 / スキップ${skip}件 / 失敗${fail}件`,'done');
+  toast(`CPM title 更新完了：${ok}件`,'success');
 }
+
 // ════ VOD → CPM 追加 終 ══════════════════════════════════
 
 // ════ CPM Quiz 匯出/匯入 ═════════════════════════════
