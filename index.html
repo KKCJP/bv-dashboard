@@ -1795,7 +1795,7 @@ async function runOutlineImport(){
     }
 
     // PUT で outline 更新
-    // _search_name を持つ content を CPM で検索して ID を解決
+    // _search_name を持つ content を VOD name で検索して ID を解決
     const resolveContentNames=async(cats)=>{
       for(const cat of cats){
         for(const sub of cat.sub_categories||[]){
@@ -1807,13 +1807,15 @@ async function runOutlineImport(){
                 resolved.push(c);
               } else if(c._search_name){
                 try{
-                  const r=await fetch(`${BASE()}/bv/cpm/v1alpha1/sites/${site}/contents?current_page=1&items_per_page=5&filter.title=${encodeURIComponent(c._search_name)}&filter.content_types=CONTENT_TYPE_VOD&filter.content_types=CONTENT_TYPE_PROGRAM`,{headers:HDR()});
+                  // VOD の name で検索（CPM title ではなく VOD name）
+                  const searchName=c._search_name;
+                  const r=await fetch(`${BASE()}/bv/cms/v1/vods?current_page=1&items_per_page=5&filter.name=${encodeURIComponent(searchName)}`,{headers:HDR()});
                   const d=await r.json();
-                  const hits=d.contents||[];
-                  const exact=hits.find(h=>h.title===c._search_name);
+                  const hits=d.vods||[];
+                  const exact=hits.find(h=>h.name===searchName);
                   const found=exact||hits[0];
-                  if(found) resolved.push({id:found.content_id,type:found.content_type||c.type});
-                  else missing.push(c._search_name);
+                  if(found) resolved.push({id:found.id,type:'CONTENT_TYPE_VOD'});
+                  else missing.push(searchName);
                 }catch{ missing.push(c._search_name); }
               }
             }
@@ -2625,15 +2627,15 @@ async function runProgramImport(){
           let contentId=c.content_id||''; // content_id が直接指定されていれば優先
 
           if(!contentId && searchName){
-            // name で検索
+            // VOD name で検索（CPM title ではなく VOD name）
             try{
-              const cands=[searchName,searchName.match(/^(\d+_\d+)/)?.[1]].filter(Boolean);
+              const cands=[searchName,searchName.match(/^(\d+[._]\d+)/)?.[1]].filter(Boolean);
               for(const q of cands){
-                const r=await fetch(`${BASE()}/bv/cpm/v1alpha1/sites/${site}/contents?current_page=1&items_per_page=5&filter.title=${encodeURIComponent(q)}&filter.content_types=CONTENT_TYPE_VOD&filter.content_types=CONTENT_TYPE_FORM`,{headers:HDR()});
-                const d=await r.json(); const hits=d.contents||[];
+                const r=await fetch(`${BASE()}/bv/cms/v1/vods?current_page=1&items_per_page=5&filter.name=${encodeURIComponent(q)}`,{headers:HDR()});
+                const d=await r.json(); const hits=d.vods||[];
                 if(hits.length){
-                  const exact=hits.find(h=>h.title===searchName);
-                  contentId=(exact||hits[0]).content_id||'';
+                  const exact=hits.find(h=>h.name===searchName);
+                  contentId=(exact||hits[0]).id||'';
                   break;
                 }
               }
