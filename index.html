@@ -1807,13 +1807,18 @@ async function runOutlineImport(){
                 resolved.push(c);
               } else if(c._search_name){
                 try{
-                  // VOD の name で検索（CPM title ではなく VOD name）
+                  // まず vodsData から直接検索
                   const searchName=c._search_name;
-                  const r=await fetch(`${BASE()}/bv/cms/v1/vods?current_page=1&items_per_page=5&filter.name=${encodeURIComponent(searchName)}`,{headers:HDR()});
-                  const d=await r.json();
-                  const hits=d.vods||[];
-                  const exact=hits.find(h=>h.name===searchName);
-                  const found=exact||hits[0];
+                  let found=vodsData.find(v=>v.name===searchName)
+                    ||vodsData.find(v=>v.name?.startsWith(searchName))
+                    ||vodsData.find(v=>searchName && v.name?.includes(searchName));
+                  if(!found){
+                    // fallback: API 検索
+                    const r=await fetch(`${BASE()}/bv/cms/v1/vods?current_page=1&items_per_page=5&filter.name=${encodeURIComponent(searchName)}`,{headers:HDR()});
+                    const d=await r.json();
+                    const hits=d.vods||[];
+                    found=hits.find(h=>h.name===searchName)||hits[0];
+                  }
                   if(found) resolved.push({id:found.id,type:'CONTENT_TYPE_VOD'});
                   else missing.push(searchName);
                 }catch{ missing.push(c._search_name); }
@@ -2627,19 +2632,27 @@ async function runProgramImport(){
           let contentId=c.content_id||''; // content_id が直接指定されていれば優先
 
           if(!contentId && searchName){
-            // VOD name で検索（CPM title ではなく VOD name）
-            try{
-              const cands=[searchName,searchName.match(/^(\d+[._]\d+)/)?.[1]].filter(Boolean);
-              for(const q of cands){
-                const r=await fetch(`${BASE()}/bv/cms/v1/vods?current_page=1&items_per_page=5&filter.name=${encodeURIComponent(q)}`,{headers:HDR()});
-                const d=await r.json(); const hits=d.vods||[];
-                if(hits.length){
-                  const exact=hits.find(h=>h.name===searchName);
-                  contentId=(exact||hits[0]).id||'';
-                  break;
+            // まず vodsData から直接検索
+            const directHit=vodsData.find(v=>v.name===searchName)
+              ||vodsData.find(v=>v.name?.startsWith(searchName))
+              ||vodsData.find(v=>searchName && v.name?.includes(searchName));
+            if(directHit){
+              contentId=directHit.id;
+            } else {
+              // fallback: API 検索
+              try{
+                const cands=[searchName,searchName.match(/^(\d+[._]\d+)/)?.[1]].filter(Boolean);
+                for(const q of cands){
+                  const r=await fetch(`${BASE()}/bv/cms/v1/vods?current_page=1&items_per_page=5&filter.name=${encodeURIComponent(q)}`,{headers:HDR()});
+                  const d=await r.json(); const hits=d.vods||[];
+                  if(hits.length){
+                    const exact=hits.find(h=>h.name===searchName);
+                    contentId=(exact||hits[0]).id||'';
+                    break;
+                  }
                 }
-              }
-            }catch{}
+              }catch{}
+            }
           }
 
           if(!contentId){
