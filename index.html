@@ -1928,35 +1928,63 @@ async function batchUpdateCpmTitles(){
   const log=makeLog('batch-log','batch-log-card');
   log(`▶ CPM title 一括更新開始`);
 
-  // CPM の VOD contents を全件取得
-  log(`  📋 CPM contents 取得中...`);
-  const cpmContents={};
+  // CPM の VOD 一覧を全件取得（media_id → content_id のマッピング）
+  log(`  📋 CPM VOD 取得中...`);
+  const vodIdToContentId={};  // VOD id → CPM content_id
+  const cpmTitles={};          // CPM content_id → title
   try{
     let page=1;
     while(true){
-      const r=await fetch(`${BASE()}/bv/cpm/v1alpha1/sites/${site}/contents?current_page=${page}&items_per_page=100&filter.content_types=CONTENT_TYPE_VOD`,{headers:HDR()});
+      const r=await fetch(`${BASE()}/bv/cpm/v1alpha1/sites/${site}/vods?current_page=${page}&items_per_page=100`,{headers:HDR()});
       const d=await r.json();
-      const items=d.contents||[];
-      items.forEach(c=>{ cpmContents[c.content_id]={title:c.title,visibility:c.visibility}; });
+      const items=d.vods||d.contents||[];
+      items.forEach(c=>{
+        // /vods API は vod_id または media_id を持つ
+        const mediaId=c.vod_id||c.media_id||c.source?.vod?.id||'';
+        const contentId=c.content_id||c.id||'';
+        if(mediaId && contentId){
+          vodIdToContentId[mediaId]=contentId;
+          cpmTitles[contentId]=c.title||'';
+        }
+      });
       if(items.length<100) break;
       page++;
     }
-    log(`  📋 CPM VOD ${Object.keys(cpmContents).length}件取得`);
-  }catch(e){ log(`  ❌ CPM 取得失敗: ${e.message}`,'error'); return; }
+    log(`  📋 CPM VOD ${Object.keys(vodIdToContentId).length}件取得`);
+  }catch(e){
+    // fallback: /contents API
+    log(`  ⚠️ /vods API 失敗、/contents で再試行...`);
+    try{
+      let page=1;
+      while(true){
+        const r=await fetch(`${BASE()}/bv/cpm/v1alpha1/sites/${site}/contents?current_page=${page}&items_per_page=100&filter.content_types=CONTENT_TYPE_VOD`,{headers:HDR()});
+        const d=await r.json();
+        const items=d.contents||[];
+        items.forEach(c=>{
+          // contents API では content_id = VOD id の場合もある
+          vodIdToContentId[c.content_id]=c.content_id;
+          cpmTitles[c.content_id]=c.title||'';
+        });
+        if(items.length<100) break;
+        page++;
+      }
+      log(`  📋 CPM VOD ${Object.keys(vodIdToContentId).length}件取得（fallback）`);
+    }catch(e2){ log(`  ❌ CPM 取得失敗: ${e2.message}`,'error'); return; }
+  }
 
   // VOD name と CPM title を比較して更新
   let ok=0, skip=0, fail=0;
   for(const v of vodsData){
-    const cpm=cpmContents[v.id];
-    if(!cpm){ skip++; continue; } // CPM に未登録
+    const contentId=vodIdToContentId[v.id];
+    if(!contentId){ skip++; continue; } // CPM に未登録
     const vodName=(v.name||'').trim();
-    if((cpm.title||'').trim()===vodName){ skip++; continue; } // 既に同じ
+    if((cpmTitles[contentId]||'').trim()===vodName){ skip++; continue; } // 既に同じ
 
     try{
       await cpmPut(`/bv/cpm/v1alpha1/sites/${site}/contents/setting`,{content:{
-        content_id:v.id,content_type:'CONTENT_TYPE_VOD',
+        content_id:contentId,content_type:'CONTENT_TYPE_VOD',
         title:vodName,
-        visibility:cpm.visibility||'CONTENT_VISIBILITY_DRAFT',
+        visibility:'CONTENT_VISIBILITY_DRAFT',
         labels:[],part_numbers:[],
         schedule:{start_time:null,end_time:null},
         license_setting:{license:'CONTENT_LICENSE_LICENSE_ONLY',custom_url_resource:''},
