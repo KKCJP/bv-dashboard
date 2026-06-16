@@ -1842,9 +1842,9 @@ async function runOutlineImport(){
           if(space){
             // content_id があればそのまま、なければ name を検索キーとして保存
             const contentEntry=row.content_id
-              ? {id:row.content_id,type:row.content_type||'CONTENT_TYPE_VOD'}
+              ? {id:row.content_id,type:row.content_type||'CONTENT_TYPE_PROGRAM'}
               : row.content_name
-                ? {_search_name:row.content_name,type:row.content_type||'CONTENT_TYPE_VOD'}
+                ? {_search_name:row.content_name,type:row.content_type||'CONTENT_TYPE_PROGRAM'}
                 : null;
             if(contentEntry && !space.contents.find(c=>c.id===contentEntry.id&&contentEntry.id)){
               space.contents.push(contentEntry);
@@ -1862,9 +1862,9 @@ async function runOutlineImport(){
         }
         if(space){
           const contentEntry=row.content_id
-            ? {id:row.content_id,type:row.content_type||'CONTENT_TYPE_VOD'}
+            ? {id:row.content_id,type:row.content_type||'CONTENT_TYPE_PROGRAM'}
             : row.content_name
-              ? {_search_name:row.content_name,type:row.content_type||'CONTENT_TYPE_VOD'}
+              ? {_search_name:row.content_name,type:row.content_type||'CONTENT_TYPE_PROGRAM'}
               : null;
           if(contentEntry && !space.contents.find(c=>c.id===contentEntry.id&&contentEntry.id)){
             space.contents.push(contentEntry);
@@ -1895,21 +1895,24 @@ async function runOutlineImport(){
     }
 
     // PUT で outline 更新
-    // _search_name を持つ content を VOD name で検索して ID を解決
-    // CPM contents 一覧を先に全件取得（title → content_id マップ）
-    const cpmContentTitleMap={};
+    // _search_name を持つ content を name で検索して CPM content_id を解決
+    // CPM contents 全種類（VOD・Program・Form）を先に全件取得（title → {content_id, content_type} マップ）
+    const cpmContentTitleMap={};  // title → {id, type}
     try{
-      let _p=1;
-      while(true){
-        const _r=await fetch(`${BASE()}/bv/cpm/v1alpha1/sites/${site}/contents?current_page=${_p}&items_per_page=100&filter.content_types=CONTENT_TYPE_VOD`,{headers:HDR()});
-        const _d=await _r.json();
-        const _items=_d.contents||[];
-        _items.forEach(c=>{ if(c.title&&c.content_id) cpmContentTitleMap[c.title]=c.content_id; });
-        if(_items.length<100) break;
-        _p++;
+      const fetchTypes=['CONTENT_TYPE_PROGRAM','CONTENT_TYPE_VOD','CONTENT_TYPE_FORM'];
+      for(const ct of fetchTypes){
+        let _p=1;
+        while(true){
+          const _r=await fetch(`${BASE()}/bv/cpm/v1alpha1/sites/${site}/contents?current_page=${_p}&items_per_page=100&filter.content_types=${ct}`,{headers:HDR()});
+          const _d=await _r.json();
+          const _items=_d.contents||[];
+          _items.forEach(c=>{ if(c.title&&c.content_id) cpmContentTitleMap[c.title]={id:c.content_id,type:ct}; });
+          if(_items.length<100) break;
+          _p++;
+        }
       }
-      log(`  📋 CPM コンテンツ ${Object.keys(cpmContentTitleMap).length}件 取得完了`);
-    }catch(e){ log(`  ⚠️ CPM コンテンツ取得失敗（name検索は vodsData のみ）: ${e.message}`); }
+      log(`  📋 CPM コンテンツ ${Object.keys(cpmContentTitleMap).length}件 取得完了（VOD・Program・Form）`);
+    }catch(e){ log(`  ⚠️ CPM コンテンツ取得失敗: ${e.message}`); }
 
     // 再帰的に全 Space の contents を解決する
     const resolveContentNames=async(node)=>{
@@ -1924,15 +1927,15 @@ async function runOutlineImport(){
             } else if(c._search_name){
               const searchName=c._search_name;
               try{
-                // 1) CPM title マップから直接検索（最優先）
-                let cpmId=cpmContentTitleMap[searchName];
-                if(!cpmId){
+                // 1) CPM title マップから完全一致で検索（最優先）
+                let cpmEntry=cpmContentTitleMap[searchName];
+                if(!cpmEntry){
                   // 部分一致でも試みる
                   const matchedKey=Object.keys(cpmContentTitleMap).find(k=>k===searchName||k.startsWith(searchName)||searchName.startsWith(k.substring(0,10)));
-                  cpmId=matchedKey?cpmContentTitleMap[matchedKey]:null;
+                  cpmEntry=matchedKey?cpmContentTitleMap[matchedKey]:null;
                 }
-                if(cpmId){
-                  resolved.push({id:cpmId,type:c.type||'CONTENT_TYPE_VOD'});
+                if(cpmEntry){
+                  resolved.push({id:cpmEntry.id,type:c.type||cpmEntry.type||'CONTENT_TYPE_PROGRAM'});
                   continue;
                 }
                 // 2) vodsData から検索して VOD id を取得後 CPM content_id に変換
