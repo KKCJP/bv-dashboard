@@ -359,6 +359,7 @@ tr:last-child td{border-bottom:none;}
       <div class="btn-row" style="margin-bottom:20px;">
         <button class="btn btn-secondary" onclick="downloadProgramTemplate()">⬇ テンプレートDL</button>
         <button class="btn btn-secondary" id="export-prog-btn" onclick="exportProgramCsv()">⬇ 既存Program CSV匯出</button>
+        <button class="btn btn-secondary" id="export-cpm-vod-btn" onclick="exportCpmVodCsv()">⬇ CPM VOD 一覧CSV</button>
         <button class="btn btn-secondary" onclick="document.getElementById('prog-csv-input').click()">⬆ CSV アップロード</button>
         <input type="file" id="prog-csv-input" accept=".csv" style="display:none" onchange="handleProgramCSV(event)">
       </div>
@@ -1699,6 +1700,23 @@ async function runOutlineImport(){
   const log=makeLog('outline-log','outline-log-card');
   log(`▶ Outline 匯入開始：${outlineImportData.length}行`);
 
+  // vodsData が空なら VOD を全件取得（content name 検索のため）
+  if(!vodsData.length){
+    log('  📋 VOD 一覧を取得中...');
+    try{
+      let page=1, all=[];
+      while(true){
+        const d=await bvGet(`/bv/cms/v1/vods?current_page=${page}&items_per_page=50`);
+        const vods=d.vods||[];
+        all.push(...vods);
+        if(vods.length<50) break;
+        page++;
+      }
+      vodsData=all;
+      log(`  📋 VOD ${vodsData.length}件取得完了`);
+    }catch(e){ log(`  ⚠️ VOD 取得失敗: ${e.message}`); }
+  }
+
   try{
     const outlineId=outlineImportData[0]?.outline_id||outlineImportData[0]?.['ライセンスOutline_ID']||'';
     if(!outlineId) throw new Error('outline_id が見つかりません');
@@ -2257,6 +2275,53 @@ async function runQuizBatch(){
 }
 
 // ════ CPM Program ════════════════════════════════════════
+
+async function exportCpmVodCsv(){
+  const btn=document.getElementById('export-cpm-vod-btn');
+  if(btn){btn.disabled=true;btn.textContent='⬇ 取得中...';}
+  const reset=()=>{ if(btn){btn.disabled=false;btn.textContent='⬇ CPM VOD 一覧CSV';} };
+  try{
+    const site=siteId();
+    let all=[], page=1;
+    while(true){
+      const r=await fetch(`${BASE()}/bv/cpm/v1alpha1/sites/${site}/contents?current_page=${page}&items_per_page=100&filter.content_types=CONTENT_TYPE_VOD`,{headers:HDR()});
+      const d=await r.json();
+      const items=d.contents||[];
+      all.push(...items);
+      if(items.length<100) break;
+      page++;
+    }
+    if(!all.length){ toast('CPM VOD が見つかりません','error'); reset(); return; }
+
+    // vodsData がなければ取得
+    if(!vodsData.length){
+      try{
+        let p=1, vs=[];
+        while(true){
+          const d=await bvGet(`/bv/cms/v1/vods?current_page=${p}&items_per_page=50`);
+          vs.push(...(d.vods||[]));
+          if((d.vods||[]).length<50) break;
+          p++;
+        }
+        vodsData=vs;
+      }catch{}
+    }
+
+    const header=['content_id','cpm_title','vod_name'];
+    const rows=[header];
+    for(const c of all){
+      const vodMatch=vodsData.find(v=>v.id===c.content_id);
+      rows.push([c.content_id, c.title||'', vodMatch?.name||'']);
+    }
+
+    const csv=rows.map(r=>r.map(c=>`"${(c||'').toString().replace(/"/g,'""')}"`).join(',')).join('\n');
+    const a=document.createElement('a');
+    a.href='data:text/csv;charset=utf-8,\uFEFF'+encodeURIComponent(csv);
+    a.download='cpm_vod_list.csv'; a.click();
+    reset();
+    toast(`✅ CPM VOD ${all.length}件匯出`,'success');
+  }catch(e){ reset(); toast('失敗: '+e.message,'error'); }
+}
 let programImportData=[], programListCache=[], thumbFiles=[];
 
 function switchTab(tab){
@@ -2574,6 +2639,23 @@ async function runProgramImport(){
   const log=makeLog('prog-log','prog-log-card');
   log(t('log_batch_start',programImportData.length));
   const missingPrograms=[]; // content が見つからなかった Program を記録
+
+  // vodsData が空なら VOD を全件取得（content name 検索のため）
+  if(!vodsData.length){
+    log('  📋 VOD 一覧を取得中...');
+    try{
+      let page=1, all=[];
+      while(true){
+        const d=await bvGet(`/bv/cms/v1/vods?current_page=${page}&items_per_page=50`);
+        const vods=d.vods||[];
+        all.push(...vods);
+        if(vods.length<50) break;
+        page++;
+      }
+      vodsData=all;
+      log(`  📋 VOD ${vodsData.length}件取得完了`);
+    }catch(e){ log(`  ⚠️ VOD 取得失敗: ${e.message}`); }
+  }
 
   try{
 
