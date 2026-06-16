@@ -1854,18 +1854,25 @@ async function addVodToCpm(vodId, vodName){
   const site=siteId();
   if(!site){ toast('CPM Site ID が設定されていません','error'); return; }
   try{
-    await cpmPost(`/bv/cpm/v1alpha1/sites/${site}/contents`,{
-      content:{
-        content_id:vodId,
-        content_type:'CONTENT_TYPE_VOD',
+    // Step1: CPM に VOD を追加
+    await fetch(`${BASE()}/bv/cpm/marketplace/v1alpha1/sites/${site}/medias:batch-create`,{
+      method:'POST',headers:HDR(),
+      body:JSON.stringify({medias:[{content_type:'CONTENT_TYPE_VOD',media_id:vodId}]})
+    }).then(async r=>{ if(!r.ok){ const e=await r.text(); throw new Error(`${r.status}: ${e.substring(0,200)}`); } });
+
+    // Step2: title を VOD 名に更新
+    try{
+      await cpmPut(`/bv/cpm/v1alpha1/sites/${site}/contents/setting`,{content:{
+        content_id:vodId,content_type:'CONTENT_TYPE_VOD',
         title:vodName,
         visibility:'CONTENT_VISIBILITY_DRAFT',
         labels:[],part_numbers:[],
         schedule:{start_time:null,end_time:null},
         license_setting:{license:'CONTENT_LICENSE_LICENSE_ONLY',custom_url_resource:''},
         note:'',form_type:null
-      }
-    });
+      }});
+    }catch(e2){ console.warn('[addVodToCpm] title update failed:', e2.message); }
+
     toast(`✅ CPM に追加（${esc(vodName)}）`,'success');
   }catch(e){
     if(e.message?.includes('already')||e.message?.includes('409')){
