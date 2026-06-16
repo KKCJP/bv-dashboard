@@ -1895,25 +1895,18 @@ async function addVodToCpm(vodId, vodName){
   }
 
   if(added){
-    // title を VOD 名に更新（/vods/{id} の title フィールド）
+    // title を VOD 名に更新
     await new Promise(r=>setTimeout(r,800));
     try{
-      await cpmPut(`/bv/cpm/v1alpha1/sites/${site}/vods/${vodId}`,{
-        vod:{title:vodName}
-      });
-    }catch(e2){
-      // fallback: /contents/setting
-      try{
-        await cpmPut(`/bv/cpm/v1alpha1/sites/${site}/contents/setting`,{content:{
-          content_id:vodId,content_type:'CONTENT_TYPE_VOD',
-          title:vodName,visibility:'CONTENT_VISIBILITY_DRAFT',
-          labels:[],part_numbers:[],
-          schedule:{start_time:null,end_time:null},
-          license_setting:{license:'CONTENT_LICENSE_LICENSE_ONLY',custom_url_resource:''},
-          note:'',form_type:null
-        }});
-      }catch(e3){ console.warn('[addVodToCpm] title update failed:', e3.message); }
-    }
+      await cpmPut(`/bv/cpm/v1alpha1/sites/${site}/contents/setting`,{content:{
+        content_id:vodId,content_type:'CONTENT_TYPE_VOD',
+        title:vodName,visibility:'CONTENT_VISIBILITY_DRAFT',
+        labels:[],part_numbers:[],
+        schedule:{start_time:null,end_time:null},
+        license_setting:{license:'CONTENT_LICENSE_LICENSE_ONLY',custom_url_resource:''},
+        note:'',form_type:null
+      }});
+    }catch(e2){ console.warn('[addVodToCpm] title update failed:', e2.message); }
     toast(`✅ CPM に追加（${esc(vodName)}）`,'success');
   }
 }
