@@ -973,6 +973,7 @@ function renderVodTable(){
         <button class="btn btn-secondary btn-xs" onclick="loadVodDetail('${id}')" title="更新">🔄</button>
         <button class="btn btn-secondary btn-xs" onclick="openSubUpload('${id}','${name.replace(/'/g,"\\'")}')" title="字幕UP">📄+</button>
         <button class="btn btn-secondary btn-xs" onclick="forceSummary('${id}')" title="摘要強制重産">📝↺</button>
+        <button class="btn btn-secondary btn-xs" onclick="addVodToCpm('${id}','${name.replace(/'/g,"\\'")}').catch(e=>toast(e.message,'error'))" title="CPMに追加">＋C</button>
       </td>
     </tr>`;
   }).join('');
@@ -1847,6 +1848,34 @@ async function runOutlineImport(){
     if(btn){btn.disabled=false;btn.textContent='🚀 匯入';}
   }
 }
+
+// ════ VOD → CPM 追加 ═══════════════════════════════════
+async function addVodToCpm(vodId, vodName){
+  const site=siteId();
+  if(!site){ toast('CPM Site ID が設定されていません','error'); return; }
+  try{
+    await cpmPost(`/bv/cpm/v1alpha1/sites/${site}/contents`,{
+      content:{
+        content_id:vodId,
+        content_type:'CONTENT_TYPE_VOD',
+        title:vodName,
+        visibility:'CONTENT_VISIBILITY_DRAFT',
+        labels:[],part_numbers:[],
+        schedule:{start_time:null,end_time:null},
+        license_setting:{license:'CONTENT_LICENSE_LICENSE_ONLY',custom_url_resource:''},
+        note:'',form_type:null
+      }
+    });
+    toast(`✅ CPM に追加（${esc(vodName)}）`,'success');
+  }catch(e){
+    if(e.message?.includes('already')||e.message?.includes('409')){
+      toast(`CPM に既に登録済み（${esc(vodName)}）`,'info');
+    } else {
+      throw e;
+    }
+  }
+}
+// ════ VOD → CPM 追加 終 ══════════════════════════════════
 
 // ════ CPM Quiz 匯出/匯入 ═════════════════════════════
 let quizImportData=[];
