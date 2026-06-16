@@ -1221,8 +1221,52 @@ async function deleteSelectedVods(){
   log(t('log_del_start',ids.length));
   let ok=0,fail=0;
   for(const id of ids){
-    try{ await bvDel(`/bv/cms/v1/vods/${id}`); ok++; log(`  ✅ ${id.substring(0,16)}...`,'done'); }
-    catch(e){ fail++; log(`  ❌ ${e.message}`,'error'); }
+    try{
+      await bvDel(`/bv/cms/v1/vods/${id}`);
+      ok++; log(`  ✅ ${id.substring(0,16)}...`,'done');
+    }catch(e){
+      // 400 "vod can not be deleted" → CPM から先に削除して再試行
+      if(e.message.includes('400')||e.message.toLowerCase().includes('can not be deleted')){
+        log(`  ⚠️ CPM登録済みのため、CPMから削除して再試行中...`);
+        try{
+          const site=cfg('site_id');
+          if(site){
+            // CPM content_id を取得（/contents API で照合）
+            const cr=await fetch(`${BASE()}/bv/cpm/v1alpha1/sites/${site}/contents?current_page=1&items_per_page=100&filter.content_types=CONTENT_TYPE_VOD`,{headers:HDR()});
+            const cd=await cr.json();
+            // source.vod.id で照合（/vods/{cid} をたたいて確認）
+            const cpmItems=cd.contents||[];
+            let deletedFromCpm=false;
+            for(const ci of cpmItems){
+              try{
+                const vr=await fetch(`${BASE()}/bv/cpm/v1alpha1/sites/${site}/vods/${ci.content_id}`,{headers:HDR()});
+                if(vr.ok){
+                  const vd=await vr.json();
+                  const sourceVodId=vd.vod?.source?.vod?.id||vd.source?.vod?.id||'';
+                  if(sourceVodId===id){
+                    await fetch(`${BASE()}/bv/cpm/v1alpha1/sites/${site}/vods/${ci.content_id}`,{method:'DELETE',headers:HDR()});
+                    log(`  ✅ CPM 削除完了（content_id: ${ci.content_id.substring(0,16)}...）`,'done');
+                    deletedFromCpm=true;
+                    break;
+                  }
+                }
+              }catch{}
+            }
+            if(deletedFromCpm){
+              await new Promise(r=>setTimeout(r,500));
+              await bvDel(`/bv/cms/v1/vods/${id}`);
+              ok++; log(`  ✅ VOD削除完了 ${id.substring(0,16)}...`,'done');
+            } else {
+              fail++; log(`  ❌ CPMのcontent_idが特定できず削除スキップ`,'error');
+            }
+          } else {
+            fail++; log(`  ❌ ${e.message}（Site IDが未設定、CPMからの削除は手動で行ってください）`,'error');
+          }
+        }catch(e2){ fail++; log(`  ❌ CPM削除試行も失敗: ${e2.message}`,'error'); }
+      } else {
+        fail++; log(`  ❌ ${e.message}`,'error');
+      }
+    }
   }
   log(t('log_del_done',ok,fail),ok>0?'done':'error');
   selectedVodIds.clear(); loadVods();
@@ -1852,42 +1896,80 @@ async function runOutlineImport(){
 
     // PUT で outline 更新
     // _search_name を持つ content を VOD name で検索して ID を解決
-    const resolveContentNames=async(cats)=>{
-      for(const cat of cats){
-        for(const sub of cat.sub_categories||[]){
-          if(sub.type==='CATEGORY_TYPE_SPACE'){
-            const resolved=[];
-            const missing=[];
-            for(const c of sub.contents||[]){
-              if(c.id){
-                resolved.push(c);
-              } else if(c._search_name){
-                try{
-                  // まず vodsData から直接検索
-                  const searchName=c._search_name;
-                  let found=vodsData.find(v=>v.name===searchName)
-                    ||vodsData.find(v=>v.name?.startsWith(searchName))
-                    ||vodsData.find(v=>searchName && v.name?.includes(searchName));
-                  if(!found){
-                    // fallback: API 検索
-                    const r=await fetch(`${BASE()}/bv/cms/v1/vods?current_page=1&items_per_page=5&filter.name=${encodeURIComponent(searchName)}`,{headers:HDR()});
-                    const d=await r.json();
-                    const hits=d.vods||[];
-                    found=hits.find(h=>h.name===searchName)||hits[0];
+    // CPM contents 一覧を先に全件取得（title → content_id マップ）
+    const cpmContentTitleMap={};
+    try{
+      let _p=1;
+      while(true){
+        const _r=await fetch(`${BASE()}/bv/cpm/v1alpha1/sites/${site}/contents?current_page=${_p}&items_per_page=100&filter.content_types=CONTENT_TYPE_VOD`,{headers:HDR()});
+        const _d=await _r.json();
+        const _items=_d.contents||[];
+        _items.forEach(c=>{ if(c.title&&c.content_id) cpmContentTitleMap[c.title]=c.content_id; });
+        if(_items.length<100) break;
+        _p++;
+      }
+      log(`  📋 CPM コンテンツ ${Object.keys(cpmContentTitleMap).length}件 取得完了`);
+    }catch(e){ log(`  ⚠️ CPM コンテンツ取得失敗（name検索は vodsData のみ）: ${e.message}`); }
+
+    // 再帰的に全 Space の contents を解決する
+    const resolveContentNames=async(node)=>{
+      const children=node.sub_categories||node.categories||[];
+      for(const child of children){
+        if(child.type==='CATEGORY_TYPE_SPACE'){
+          const resolved=[];
+          const missing=[];
+          for(const c of child.contents||[]){
+            if(c.id){
+              resolved.push(c);
+            } else if(c._search_name){
+              const searchName=c._search_name;
+              try{
+                // 1) CPM title マップから直接検索（最優先）
+                let cpmId=cpmContentTitleMap[searchName];
+                if(!cpmId){
+                  // 部分一致でも試みる
+                  const matchedKey=Object.keys(cpmContentTitleMap).find(k=>k===searchName||k.startsWith(searchName)||searchName.startsWith(k.substring(0,10)));
+                  cpmId=matchedKey?cpmContentTitleMap[matchedKey]:null;
+                }
+                if(cpmId){
+                  resolved.push({id:cpmId,type:c.type||'CONTENT_TYPE_VOD'});
+                  continue;
+                }
+                // 2) vodsData から検索して VOD id を取得後 CPM content_id に変換
+                let vodFound=vodsData.find(v=>v.name===searchName)
+                  ||vodsData.find(v=>v.name?.startsWith(searchName))
+                  ||vodsData.find(v=>searchName && v.name?.includes(searchName));
+                if(!vodFound){
+                  const r=await fetch(`${BASE()}/bv/cms/v1/vods?current_page=1&items_per_page=5&filter.name=${encodeURIComponent(searchName)}`,{headers:HDR()});
+                  const d=await r.json();
+                  const hits=d.vods||[];
+                  vodFound=hits.find(h=>h.name===searchName)||hits[0]||null;
+                }
+                if(vodFound){
+                  // VOD id を CPM content_id に変換（/contents?filter.title= で再検索）
+                  const cr=await fetch(`${BASE()}/bv/cpm/v1alpha1/sites/${site}/contents?current_page=1&items_per_page=5&filter.content_types=CONTENT_TYPE_VOD&filter.title=${encodeURIComponent(vodFound.name||searchName)}`,{headers:HDR()});
+                  const cd=await cr.json();
+                  const chit=(cd.contents||[]).find(h=>h.title===vodFound.name)||(cd.contents||[])[0];
+                  if(chit?.content_id){
+                    resolved.push({id:chit.content_id,type:c.type||'CONTENT_TYPE_VOD'});
+                    continue;
                   }
-                  if(found) resolved.push({id:found.id,type:'CONTENT_TYPE_VOD'});
-                  else missing.push(searchName);
-                }catch{ missing.push(c._search_name); }
-              }
+                  // CPM未登録 → VOD id をそのまま使用（フォールバック）
+                  resolved.push({id:vodFound.id,type:c.type||'CONTENT_TYPE_VOD'});
+                } else {
+                  missing.push(searchName);
+                }
+              }catch{ missing.push(c._search_name); }
             }
-            sub.contents=resolved;
-            if(missing.length) log(`  ⚠️ content 未找到：${missing.join('、')}`);
           }
-          await resolveContentNames(sub.sub_categories||[]);
+          child.contents=resolved;
+          if(missing.length) log(`  ⚠️ content 未找到（PUT から除外）：${missing.join('、')}`,'error');
         }
+        // 再帰（全階層を処理）
+        await resolveContentNames(child);
       }
     };
-    await resolveContentNames(categories);
+    await resolveContentNames({sub_categories:categories});
 
     // BV の PUT は {categories:[...]} 形式（outline でラップしない）
     // 第1階層は id 必須（ないと毎回新規作成される）
@@ -2054,10 +2136,14 @@ async function batchUpdateCpmTitles(){
         note:'',form_type:null
       }});
       ok++;
-    }catch(e){ fail++; log(`  ❌ ${v.name}: ${e.message}`,'error'); }
+    }catch(e){
+      if(e.message.includes('500')){ fail++; log(`  ⚠️ ${v.name}: /contents/setting が QA で 500（既知の問題）`,'error'); }
+      else { fail++; log(`  ❌ ${v.name}: ${e.message}`,'error'); }
+    }
     await new Promise(r=>setTimeout(r,100));
   }
   log(`🏁 完了：更新${ok}件 / スキップ${skip}件 / 失敗${fail}件`,'done');
+  if(fail>0) log(`  ℹ️ QA環境では /contents/setting が 500 になる場合があります。CPM VOD タブの「📝」ボタンで個別に更新してください`,'error');
   toast(`CPM title 更新完了：${ok}件`,'success');
 }
 
@@ -2167,7 +2253,10 @@ async function cpmVodUpdateTitle(contentId, vodName, visibility){
     if(v) v.title=vodName;
     renderCpmVodTable();
     toast(`✅ 更新（${esc(vodName)}）`,'success');
-  }catch(e){ toast('失敗: '+e.message,'error'); }
+  }catch(e){
+    if(e.message.includes('500')) toast(`⚠️ QA環境では /contents/setting が 500 になる場合があります（既知の問題）`,'error');
+    else toast('失敗: '+e.message,'error');
+  }
 }
 
 async function cpmVodSetVisibility(contentId, visibility, title){
@@ -3060,7 +3149,10 @@ async function runProgramImport(){
         if(f.author_name!==undefined) mergedAuthor.name=f.author_name;
         if(f.author_title!==undefined) mergedAuthor.author_title=f.author_title;
         if(f.author_desc!==undefined) mergedAuthor.description=f.author_desc;
-        if(f.author_avatar_library_id!==undefined && isValidUUID(f.author_avatar_library_id)) mergedAuthor.avatar_library_id=f.author_avatar_library_id;
+        if(f.author_avatar_library_id!==undefined){
+          if(isValidUUID(f.author_avatar_library_id)) mergedAuthor.avatar_library_id=f.author_avatar_library_id;
+          else delete mergedAuthor.avatar_library_id; // 空/無効は既存値を消去してAPIに任せる
+        }
 
         const mergedBg=f.background_library_id!==undefined
           ? (isValidUUID(f.background_library_id)?{type:'PROGRAM_BACKGROUND_TYPE_IMAGE',image:{id:f.background_library_id}}:{type:'PROGRAM_BACKGROUND_TYPE_DEFAULT'})
