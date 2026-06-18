@@ -2196,8 +2196,9 @@ async function loadCpmVods(){
         const r=await fetch(`${BASE()}/bv/cpm/v1alpha1/sites/${site}/vods/${c.content_id}`,{headers:HDR()});
         if(r.ok){
           const d=await r.json();
-          vodId=d.vod?.source?.vod?.id||d.source?.vod?.id||'';
-          vodName=vodsData.find(v=>v.id===vodId)?.name||'';
+          // d.vod.name = 元ファイル名（正しい名前）、d.source.vod.id = 元 VOD id
+          vodName=d.vod?.name||'';
+          vodId=d.source?.vod?.id||d.vod?.source?.vod?.id||'';
         }
       }catch{}
       cpmVodData.push({content_id:c.content_id,vod_id:vodId,title:c.title||'',vod_name:vodName,visibility:c.visibility||''});
@@ -2338,17 +2339,11 @@ async function updateOneCpmVodTitle(site, contentId, newTitle, visibility){
   }catch(e1){
     if(!e1.message.includes('500')&&!e1.message.includes('501')) throw e1;
   }
-  // 方法2: GET して既存データを保持したまま PUT /vods/{content_id}
+  // 方法2: PUT /vods/{content_id} に {vod:{title}} だけ送る（Network で確認済み）
   try{
-    const current=await fetch(`${BASE()}/bv/cpm/v1alpha1/sites/${site}/vods/${contentId}`,{headers:HDR()});
-    if(!current.ok) throw new Error(`GET /vods/${contentId} failed: ${current.status}`);
-    const cd=await current.json();
-    const vod=cd.vod||cd;
-    const putBody={vod:{...vod, title:newTitle}};
-    ['create_time','update_time','content_id','site_id','vod_id','media_id'].forEach(k=>{ delete putBody.vod[k]; });
     const putRes=await fetch(`${BASE()}/bv/cpm/v1alpha1/sites/${site}/vods/${contentId}`,{
       method:'PUT', headers:{...HDR(),'Content-Type':'application/json'},
-      body:JSON.stringify(putBody)
+      body:JSON.stringify({vod:{title:newTitle}})
     });
     if(!putRes.ok){ const errText=await putRes.text(); throw new Error(`${putRes.status}: ${errText}`); }
     return {ok:true, method:2};
@@ -2360,7 +2355,7 @@ async function updateOneCpmVodTitle(site, contentId, newTitle, visibility){
 async function batchUpdateCpmTitlesFromTable(){
   const site=siteId();
   const log=makeLog('cpm-vod-log','cpm-vod-log-card');
-  const targets=cpmVodData.filter(v=>v.vod_name && v.vod_name!==v.title);
+  const targets=cpmVodData.filter(v=>v.vod_name && v.vod_name.trim()!==v.title.trim());
   if(!targets.length){ log('更新が必要な項目はありません（CPM title = VOD name が一致）'); return; }
   log(`▶ CPM title 一括更新：${targets.length}件`);
   let ok=0,fail=0,m1=0,m2=0;
