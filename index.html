@@ -331,7 +331,7 @@ tr:last-child td{border-bottom:none;}
       <div class="card-title">🎬 CPM VOD 管理</div>
       <div class="btn-row" style="margin-bottom:12px;">
         <button class="btn btn-secondary btn-sm" onclick="loadCpmVods()">🔄 読み込み</button>
-        <button class="btn btn-secondary btn-sm" onclick="exportCpmVodCsv()">⬇ CSV</button>
+        <button class="btn btn-secondary btn-sm" id="cpm-vod-csv-btn" onclick="exportCpmVodCsv()">⬇ CSV</button>
         <button class="btn btn-secondary btn-sm" onclick="document.getElementById('cpm-title-csv-input').click()" title="CSV の cpm_title 列で title を上書き">⬆ CSV で title 上書き</button>
         <input type="file" id="cpm-title-csv-input" accept=".csv" style="display:none" onchange="importCpmTitleCsv(event)">
         <span id="cpm-vod-count" style="font-size:11px;color:var(--muted);"></span>
@@ -2682,9 +2682,13 @@ async function runQuizBatch(){
 // ════ CPM Program ════════════════════════════════════════
 
 async function exportCpmVodCsv(){
-  const btn=document.getElementById('export-cpm-vod-btn');
-  if(btn){btn.disabled=true;btn.textContent='⬇ 取得中...';}
-  const reset=()=>{ if(btn){btn.disabled=false;btn.textContent='⬇ CPM VOD 一覧CSV';} };
+  const btn1=document.getElementById('export-cpm-vod-btn');
+  const btn2=document.getElementById('cpm-vod-csv-btn');
+  const btns=[btn1,btn2].filter(Boolean);
+  const setText=t=>btns.forEach(b=>{b.disabled=true;b.textContent=t;});
+  const reset=()=>btns.forEach(b=>{b.disabled=false;b.textContent='⬇ CSV';});
+  if(btn1) btn1.textContent='⬇ CPM VOD 一覧CSV'; // Program タブのボタンは別テキスト
+  setText('⬇ 取得中...');
   try{
     const site=siteId();
     let all=[], page=1;
@@ -2698,40 +2702,23 @@ async function exportCpmVodCsv(){
     }
     if(!all.length){ toast('CPM VOD が見つかりません','error'); reset(); return; }
 
-    // vodsData がなければ取得
-    if(!vodsData.length){
-      try{
-        let p=1, vs=[];
-        while(true){
-          const d=await bvGet(`/bv/cms/v1/vods?current_page=${p}&items_per_page=50`);
-          vs.push(...(d.vods||[]));
-          if((d.vods||[]).length<50) break;
-          p++;
-        }
-        vodsData=vs;
-      }catch{}
-    }
-
     const header=['content_id','vod_id','cpm_title','vod_name'];
     const rows=[header];
     let done=0;
     for(const c of all){
-      // /vods/{content_id} で source.vod.id を取得
       let vodId='', vodName='';
       try{
         const r=await fetch(`${BASE()}/bv/cpm/v1alpha1/sites/${site}/vods/${c.content_id}`,{headers:HDR()});
         if(r.ok){
           const d=await r.json();
-          vodId=d.vod?.source?.vod?.id||d.source?.vod?.id||'';
-          if(vodId){
-            const match=vodsData.find(v=>v.id===vodId);
-            vodName=match?.name||'';
-          }
+          // d.vod.name = 元ファイル名、d.source.vod.id = 元 VOD id
+          vodName=d.vod?.name||'';
+          vodId=d.source?.vod?.id||d.vod?.source?.vod?.id||'';
         }
       }catch{}
       rows.push([c.content_id, vodId, c.title||'', vodName]);
       done++;
-      if(done%20===0 && btn) btn.textContent=`⬇ 取得中 ${done}/${all.length}...`;
+      if(done%20===0) setText(`⬇ 取得中 ${done}/${all.length}...`);
       await new Promise(r=>setTimeout(r,50));
     }
 
@@ -2740,8 +2727,9 @@ async function exportCpmVodCsv(){
     a.href='data:text/csv;charset=utf-8,\uFEFF'+encodeURIComponent(csv);
     a.download='cpm_vod_list.csv'; a.click();
     reset();
+    if(btn1){btn1.disabled=false;btn1.textContent='⬇ CPM VOD 一覧CSV';}
     toast(`✅ CPM VOD ${all.length}件匯出`,'success');
-  }catch(e){ reset(); toast('失敗: '+e.message,'error'); }
+  }catch(e){ reset(); if(btn1){btn1.disabled=false;btn1.textContent='⬇ CPM VOD 一覧CSV';} toast('失敗: '+e.message,'error'); }
 }
 let programImportData=[], programListCache=[], thumbFiles=[];
 
