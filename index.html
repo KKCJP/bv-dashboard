@@ -332,7 +332,8 @@ tr:last-child td{border-bottom:none;}
       <div class="btn-row" style="margin-bottom:12px;">
         <button class="btn btn-secondary btn-sm" onclick="loadCpmVods()">🔄 読み込み</button>
         <button class="btn btn-secondary btn-sm" onclick="exportCpmVodCsv()">⬇ CSV</button>
-        <button class="btn btn-secondary btn-sm" onclick="batchUpdateCpmTitlesFromTable()" title="VOD name → CPM title 一括更新">📝 一括 title 更新</button>
+        <button class="btn btn-secondary btn-sm" onclick="document.getElementById('cpm-title-csv-input').click()" title="CSV の cpm_title 列で title を上書き">⬆ CSV で title 上書き</button>
+        <input type="file" id="cpm-title-csv-input" accept=".csv" style="display:none" onchange="importCpmTitleCsv(event)">
         <span id="cpm-vod-count" style="font-size:11px;color:var(--muted);"></span>
       </div>
       <div id="cpm-vod-batch" style="display:none;background:var(--surface2);border-radius:6px;padding:8px 12px;margin-bottom:10px;font-size:12px;">
@@ -2368,7 +2369,66 @@ async function batchUpdateCpmTitlesFromTable(){
   log(`🏁 完了：成功${ok}件（/contents/setting:${m1}件 / PUT vods:${m2}件）/ 失敗${fail}件`, ok>0?'done':'error');
   if(ok>0) toast(`title 更新完了：${ok}件`,'success');
 }
-// ════ CPM VOD 管理 終 ══════════════════════════════════
+// ════ CPM VOD title CSV 上書きインポート ════════════════
+async function importCpmTitleCsv(event){
+  const file=event.target.files[0];
+  event.target.value='';
+  if(!file) return;
+
+  const site=siteId();
+  if(!site){ toast('CPM Site ID が設定されていません','error'); return; }
+
+  const log=makeLog('cpm-vod-log','cpm-vod-log-card');
+  log(`▶ CSV title 上書きインポート：${file.name}`);
+
+  // CSV パース
+  const text=await file.text();
+  const rows=text.trim().split('\n').map(r=>r.split(',').map(c=>c.trim().replace(/^"|"$/g,'')));
+  const header=rows[0].map(h=>h.toLowerCase().trim());
+  const colContentId=header.indexOf('content_id');
+  const colTitle=header.findIndex(h=>h==='cpm_title'||h==='title');
+
+  if(colContentId===-1||colTitle===-1){
+    log('❌ CSV に content_id 列と cpm_title（または title）列が必要です','error');
+    toast('CSV の列が不正です','error');
+    return;
+  }
+
+  const targets=rows.slice(1)
+    .map(r=>({ content_id:(r[colContentId]||'').trim(), title:(r[colTitle]||'').trim() }))
+    .filter(r=>r.content_id && r.title);
+
+  log(`  📋 更新対象：${targets.length}件`);
+  let ok=0, skip=0, fail=0;
+
+  for(const row of targets){
+    // 現在の title と同じなら skip
+    const current=cpmVodData.find(v=>v.content_id===row.content_id);
+    if(current && current.title.trim()===row.title){
+      skip++; continue;
+    }
+    try{
+      const r=await fetch(`${BASE()}/bv/cpm/v1alpha1/sites/${site}/vods/${row.content_id}`,{
+        method:'PUT', headers:{...HDR(),'Content-Type':'application/json'},
+        body:JSON.stringify({vod:{title:row.title}})
+      });
+      if(!r.ok){ const e=await r.text(); throw new Error(`${r.status}: ${e.substring(0,120)}`); }
+      // cpmVodData を更新
+      if(current) current.title=row.title;
+      ok++;
+      log(`  ✅ ${row.title}`,'done');
+    }catch(e){
+      fail++;
+      log(`  ❌ ${row.content_id.substring(0,16)}... : ${e.message}`,'error');
+    }
+    await new Promise(r=>setTimeout(r,100));
+  }
+
+  renderCpmVodTable();
+  log(`🏁 完了：成功${ok}件 / スキップ${skip}件 / 失敗${fail}件`, ok>0?'done':'error');
+  toast(`title 上書き完了：${ok}件`,'success');
+}
+// ════ CPM VOD title CSV 上書きインポート 終 ══════════════
 
 // ════ CPM Quiz 匯出/匯入 ═════════════════════════════
 let quizImportData=[];
