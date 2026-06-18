@@ -2050,18 +2050,14 @@ async function addVodToCpm(vodId, vodName){
   }
 
   if(added){
-    // content_id が取れた場合は title を VOD name に更新
+    // content_id が取れた場合は title を VOD name に更新（PUT /vods/{content_id} で確実に上書き）
     if(cpmContentId){
-      await new Promise(r=>setTimeout(r,500));
+      await new Promise(r=>setTimeout(r,500)); // CPM 側の登録完了を待つ
       try{
-        await cpmPut(`/bv/cpm/v1alpha1/sites/${site}/contents/setting`,{content:{
-          content_id:cpmContentId,content_type:'CONTENT_TYPE_VOD',
-          title:vodName,visibility:'CONTENT_VISIBILITY_DRAFT',
-          labels:[],part_numbers:[],
-          schedule:{start_time:null,end_time:null},
-          license_setting:{license:'CONTENT_LICENSE_LICENSE_ONLY',custom_url_resource:''},
-          note:'',form_type:null
-        }});
+        await fetch(`${BASE()}/bv/cpm/v1alpha1/sites/${site}/vods/${cpmContentId}`,{
+          method:'PUT', headers:{...HDR(),'Content-Type':'application/json'},
+          body:JSON.stringify({vod:{title:vodName}})
+        });
       }catch(e2){ console.warn('[addVodToCpm] title update failed:', e2.message); }
     }
     toast(`✅ CPM に追加（${esc(vodName)}）`,'success');
