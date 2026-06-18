@@ -151,7 +151,7 @@ tr:last-child td{border-bottom:none;}
         <button class="btn btn-secondary btn-sm" onclick="exportVodCsv()">⬇ CSV</button>
         <button class="btn btn-secondary btn-sm" onclick="document.getElementById('import-csv-input').click()">⬆ CSV改名</button>
         <input type="file" id="import-csv-input" accept=".csv" style="display:none" onchange="importRenameCsv(event)">
-        <button class="btn btn-secondary btn-sm" onclick="batchUpdateCpmTitles()" title="CPM の title を VOD name に一括更新">📝 CPM 名更新</button>
+
       </div>
     </div>
     <!-- 勾選時に表示 -->
@@ -2244,22 +2244,12 @@ function toggleAllCpmVods(checked){
 async function cpmVodUpdateTitle(contentId, vodName, visibility){
   const site=siteId();
   try{
-    await cpmPut(`/bv/cpm/v1alpha1/sites/${site}/contents/setting`,{content:{
-      content_id:contentId,content_type:'CONTENT_TYPE_VOD',
-      title:vodName,visibility:visibility||'CONTENT_VISIBILITY_DRAFT',
-      labels:[],part_numbers:[],
-      schedule:{start_time:null,end_time:null},
-      license_setting:{license:'CONTENT_LICENSE_LICENSE_ONLY',custom_url_resource:''},
-      note:'',form_type:null
-    }});
+    await updateOneCpmVodTitle(site, contentId, vodName, visibility);
     const v=cpmVodData.find(v=>v.content_id===contentId);
     if(v) v.title=vodName;
     renderCpmVodTable();
     toast(`✅ 更新（${esc(vodName)}）`,'success');
-  }catch(e){
-    if(e.message.includes('500')) toast(`⚠️ QA環境では /contents/setting が 500 になる場合があります（既知の問題）`,'error');
-    else toast('失敗: '+e.message,'error');
-  }
+  }catch(e){ toast('失敗: '+e.message,'error'); }
 }
 
 async function cpmVodSetVisibility(contentId, visibility, title){
@@ -2332,30 +2322,60 @@ async function cpmVodBatchDelete(){
 }
 
 // 一括 title 更新（VOD name → CPM title）
+// CPM VOD の title を1件更新する共通関数
+// 方法1: /contents/setting PUT → 500系なら 方法2: GET /vods/{id} して PUT /vods/{id} で title だけ差し替え
+async function updateOneCpmVodTitle(site, contentId, newTitle, visibility){
+  try{
+    await cpmPut(`/bv/cpm/v1alpha1/sites/${site}/contents/setting`,{content:{
+      content_id:contentId,content_type:'CONTENT_TYPE_VOD',
+      title:newTitle,visibility:visibility||'CONTENT_VISIBILITY_DRAFT',
+      labels:[],part_numbers:[],
+      schedule:{start_time:null,end_time:null},
+      license_setting:{license:'CONTENT_LICENSE_LICENSE_ONLY',custom_url_resource:''},
+      note:'',form_type:null
+    }});
+    return {ok:true, method:1};
+  }catch(e1){
+    if(!e1.message.includes('500')&&!e1.message.includes('501')) throw e1;
+  }
+  // 方法2: GET して既存データを保持したまま PUT /vods/{content_id}
+  try{
+    const current=await fetch(`${BASE()}/bv/cpm/v1alpha1/sites/${site}/vods/${contentId}`,{headers:HDR()});
+    if(!current.ok) throw new Error(`GET /vods/${contentId} failed: ${current.status}`);
+    const cd=await current.json();
+    const vod=cd.vod||cd;
+    const putBody={vod:{...vod, title:newTitle}};
+    ['create_time','update_time','content_id','site_id','vod_id','media_id'].forEach(k=>{ delete putBody.vod[k]; });
+    const putRes=await fetch(`${BASE()}/bv/cpm/v1alpha1/sites/${site}/vods/${contentId}`,{
+      method:'PUT', headers:{...HDR(),'Content-Type':'application/json'},
+      body:JSON.stringify(putBody)
+    });
+    if(!putRes.ok){ const errText=await putRes.text(); throw new Error(`${putRes.status}: ${errText}`); }
+    return {ok:true, method:2};
+  }catch(e2){
+    throw new Error(`方法1(contents/setting)・方法2(PUT vods)ともに失敗: ${e2.message}`);
+  }
+}
+
 async function batchUpdateCpmTitlesFromTable(){
   const site=siteId();
   const log=makeLog('cpm-vod-log','cpm-vod-log-card');
   const targets=cpmVodData.filter(v=>v.vod_name && v.vod_name!==v.title);
+  if(!targets.length){ log('更新が必要な項目はありません（CPM title = VOD name が一致）'); return; }
   log(`▶ CPM title 一括更新：${targets.length}件`);
-  let ok=0,fail=0;
+  let ok=0,fail=0,m1=0,m2=0;
   for(const v of targets){
     try{
-      await cpmPut(`/bv/cpm/v1alpha1/sites/${site}/contents/setting`,{content:{
-        content_id:v.content_id,content_type:'CONTENT_TYPE_VOD',
-        title:v.vod_name,visibility:v.visibility||'CONTENT_VISIBILITY_DRAFT',
-        labels:[],part_numbers:[],
-        schedule:{start_time:null,end_time:null},
-        license_setting:{license:'CONTENT_LICENSE_LICENSE_ONLY',custom_url_resource:''},
-        note:'',form_type:null
-      }});
-      v.title=v.vod_name;
-      ok++;
-    }catch(e){ fail++; }
-    await new Promise(r=>setTimeout(r,100));
+      const res=await updateOneCpmVodTitle(site, v.content_id, v.vod_name, v.visibility);
+      v.title=v.vod_name; ok++;
+      if(res.method===1) m1++; else m2++;
+      log(`  ✅ ${v.vod_name}（方法${res.method}）`,'done');
+    }catch(e){ fail++; log(`  ❌ ${v.vod_name}: ${e.message}`,'error'); }
+    await new Promise(r=>setTimeout(r,150));
   }
   renderCpmVodTable();
-  log(`🏁 完了：更新${ok}件 / 失敗${fail}件`,'done');
-  toast(`title 更新完了：${ok}件`,'success');
+  log(`🏁 完了：成功${ok}件（/contents/setting:${m1}件 / PUT vods:${m2}件）/ 失敗${fail}件`, ok>0?'done':'error');
+  if(ok>0) toast(`title 更新完了：${ok}件`,'success');
 }
 // ════ CPM VOD 管理 終 ══════════════════════════════════
 
@@ -3061,28 +3081,48 @@ async function runProgramImport(){
           curModule={type:'PROGRAM_ARRANGEMENT_ITEM_TYPE_MODULE',sequence:0,module:{name:c.name,items:[]}};
           (curSection?curSection.section.items:arrangement).push(curModule);
         } else if(c.type==='content'&&(c.content_title||c.content_id)){
-          const searchName=(c.content_title||'').replace(/\.(mp4|mov|mkv|avi)$/i,'');
-          let contentId=c.content_id||''; // content_id が直接指定されていれば優先
+          // 拡張子を除去・trim
+          const rawTitle=(c.content_title||'').trim();
+          const searchName=rawTitle.replace(/\.(mp4|mov|mkv|avi|m4v|wmv)$/i,'').trim();
+          let contentId=c.content_id||'';
+          let contentType='CONTENT_TYPE_VOD';
 
           if(!contentId && searchName){
-            // まず vodsData から直接検索
-            const directHit=vodsData.find(v=>v.name===searchName)
-              ||vodsData.find(v=>v.name?.startsWith(searchName))
-              ||vodsData.find(v=>searchName && v.name?.includes(searchName));
-            if(directHit){
-              contentId=directHit.id;
-            } else {
-              // fallback: API 検索
+            // ① vodsData の name で前缀一致（表示名が数字のみの場合も考慮）
+            const prefixLen=Math.max(4, Math.min(searchName.length, 20));
+            const prefix=searchName.substring(0, prefixLen);
+            let directHit=vodsData.find(v=>(v.name||'')===searchName)
+              ||vodsData.find(v=>(v.name||'').startsWith(searchName))
+              ||vodsData.find(v=>searchName.startsWith((v.name||'').substring(0,prefixLen)&&(v.name||'').length>=4?(v.name||'').substring(0,prefixLen):'__NOMATCH__'));
+            if(directHit){ contentId=directHit.id; contentType='CONTENT_TYPE_VOD'; }
+
+            // ② API で VOD を前缀検索（元ファイル名 = filter.name の前缀でヒットする）
+            if(!contentId){
               try{
-                const cands=[searchName,searchName.match(/^(\d+[._]\d+)/)?.[1]].filter(Boolean);
-                for(const q of cands){
-                  const r=await fetch(`${BASE()}/bv/cms/v1/vods?current_page=1&items_per_page=5&filter.name=${encodeURIComponent(q)}`,{headers:HDR()});
-                  const d=await r.json(); const hits=d.vods||[];
-                  if(hits.length){
-                    const exact=hits.find(h=>h.name===searchName);
-                    contentId=(exact||hits[0]).id||'';
-                    break;
-                  }
+                // prefix が数字のみの場合は searchName 全体を使う（短い数字prefix は誤マッチしやすい）
+                const apiQuery=(/^\d+$/.test(prefix)?searchName:prefix);
+                const r=await fetch(`${BASE()}/bv/cms/v1/vods?current_page=1&items_per_page=10&filter.name=${encodeURIComponent(apiQuery)}`,{headers:HDR()});
+                const d=await r.json();
+                const hits=d.vods||[];
+                // 前缀一致優先：hit.name が searchName で始まる or searchName が hit.name で始まる
+                const hit=hits.find(h=>(h.name||'').startsWith(searchName))
+                  ||hits.find(h=>searchName.startsWith((h.name||'').substring(0,Math.min((h.name||'').length,prefixLen))))
+                  ||hits[0];
+                if(hit){ contentId=hit.id; contentType='CONTENT_TYPE_VOD'; }
+              }catch{}
+            }
+
+            // ③ FORM を検索（VOD で見つからなかった場合のみ）
+            if(!contentId){
+              try{
+                const site=siteId();
+                if(site){
+                  const fr=await fetch(`${BASE()}/bv/cpm/v1alpha1/sites/${site}/contents?current_page=1&items_per_page=10&filter.content_types=CONTENT_TYPE_FORM&filter.title=${encodeURIComponent(searchName)}`,{headers:HDR()});
+                  const fd=await fr.json();
+                  const fhits=fd.contents||[];
+                  const fhit=fhits.find(h=>(h.title||'').startsWith(searchName)||searchName.startsWith((h.title||'').substring(0,prefixLen)))
+                    ||fhits[0];
+                  if(fhit){ contentId=fhit.content_id; contentType='CONTENT_TYPE_FORM'; }
                 }
               }catch{}
             }
@@ -3096,7 +3136,7 @@ async function runProgramImport(){
           }
 
           const displayName=searchName||contentId;
-          const item={type:'PROGRAM_ARRANGEMENT_ITEM_TYPE_CONTENT',sequence:0,content:{type:'CONTENT_TYPE_VOD',name:displayName,vod:{id:contentId}}};
+          const item={type:'PROGRAM_ARRANGEMENT_ITEM_TYPE_CONTENT',sequence:0,content:{type:contentType,name:displayName,vod:{id:contentId}}};
           if(curModule) curModule.module.items.push(item);
           else if(curSection) curSection.section.items.push(item);
           else arrangement.push(item);
