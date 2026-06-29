@@ -757,13 +757,16 @@ async function fetchAllPrograms(base, hdr, site){
   return all;
 }
 
-async function fetchProgramArrangement(base, hdr, site, contentId){
+async function fetchProgramArrangement(base, hdr, site, contentId, debug=false){
   try{
     const r=await fetch(`${base}/bv/cpm/v1alpha1/sites/${site}/programs/${contentId}?action=GET_FORM_REQUEST_ACTION_CURRENT&mode=FORM_MODE_EDIT`,{headers:hdr});
     if(!r.ok) return [];
     const d=await r.json();
-    return d.program?.arrangements||d.arrangements||[];
-  }catch{ return []; }
+    if(debug) console.log('[fetchProgramArrangement] keys:', Object.keys(d), 'sample:', JSON.stringify(d).substring(0,400));
+    // 様々なレスポンス構造に対応
+    const arr=d.program?.arrangements||d.program?.arrangement||d.arrangements||d.arrangement||d.program?.sections||d.sections||[];
+    return arr;
+  }catch(e){ if(debug) console.warn('[fetchProgramArrangement] error:', e.message); return []; }
 }
 
 // Outline の全 content を再帰的に取得して {space_name, content_id, content_name, content_type} のリストを返す
@@ -1074,13 +1077,18 @@ async function runSyncArrangement(){
     let syncOk=0, syncSkip=0, syncFail=0;
     let totalAdded=0, totalSkipped=0, totalMissing=0;
 
+    let firstDebug=true;
     // ④ 各 Program を処理
     for(const prog of prodPrograms){
       const qaProgId=qaProgMap[prog.title];
-      if(!qaProgId){ syncSkip++; continue; } // QA に Program なし → スキップ
+      if(!qaProgId){ syncSkip++; continue; }
 
-      // Prod の Arrangement を取得
-      const prodArrangements=await fetchProgramArrangement(PROD_BASE, prodHdr(), prodSiteId, prog.content_id);
+      // Prod の Arrangement を取得（最初の1件はデバッグログ付き）
+      const prodArrangements=await fetchProgramArrangement(PROD_BASE, prodHdr(), prodSiteId, prog.content_id, firstDebug);
+      if(firstDebug){
+        log(`  🔍 DEBUG: ${prog.title} → arrangements: ${prodArrangements.length}件`);
+        firstDebug=false;
+      }
       if(!prodArrangements.length){ syncSkip++; continue; }
 
       // Prod の QA current Arrangement も取得（上書きではなく merge するため）
