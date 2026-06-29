@@ -762,11 +762,17 @@ async function fetchProgramArrangement(base, hdr, site, contentId, debug=false){
     const r=await fetch(`${base}/bv/cpm/v1alpha1/sites/${site}/programs/${contentId}?action=GET_FORM_REQUEST_ACTION_CURRENT&mode=FORM_MODE_EDIT`,{headers:hdr});
     if(!r.ok) return [];
     const d=await r.json();
-    if(debug) console.log('[fetchProgramArrangement] keys:', Object.keys(d), 'sample:', JSON.stringify(d).substring(0,400));
-    // 様々なレスポンス構造に対応
-    const arr=d.program?.arrangements||d.program?.arrangement||d.arrangements||d.arrangement||d.program?.sections||d.sections||[];
-    return arr;
-  }catch(e){ if(debug) console.warn('[fetchProgramArrangement] error:', e.message); return []; }
+    const prog=d.program||d;
+    // arrangement（単数）の items を配列として返す
+    // arrangement.items が存在する場合は [{title:'', items:[...]}] 形式に正規化
+    if(prog.arrangement?.items?.length){
+      return [{title: prog.arrangement.title||'', items: prog.arrangement.items}];
+    }
+    // arrangements（複数）形式にも対応
+    if(prog.arrangements?.length) return prog.arrangements;
+    if(d.arrangements?.length) return d.arrangements;
+    return [];
+  }catch(e){ if(debug) console.warn('[fetchProgramArrangement]', e.message); return []; }
 }
 
 // Outline の全 content を再帰的に取得して {space_name, content_id, content_name, content_type} のリストを返す
@@ -1168,12 +1174,23 @@ async function runSyncArrangement(){
 
       if(progAdded===0 && progMissing===0){ syncSkip++; continue; }
 
-      // ⑤ QA Program に PUT
+      // ⑤ QA Program に PUT（arrangement 単数・items 形式）
       try{
+        // QA の既存 arrangement から items を取得してマージ
+        const existingItems=(qaArrangements[0]?.items||[]);
+        const mergedItems=[...existingItems, ...newArrangements.flatMap(a=>a.items||[])];
+        // sequence を振り直し、重複除去
+        const seenIds=new Set();
+        const dedupedItems=mergedItems.filter(it=>{
+          const id=it.content?.id||'';
+          if(!id||seenIds.has(id)) return false;
+          seenIds.add(id); return true;
+        }).map((it,i)=>({...it,sequence:i}));
+
         const putRes=await fetch(`${BASE()}/bv/cpm/v1alpha1/sites/${qaSiteId}/programs/${qaProgId}`,{
           method:'PUT',
           headers:{...HDR(),'Content-Type':'application/json'},
-          body:JSON.stringify({program:{arrangements:newArrangements}})
+          body:JSON.stringify({program:{arrangement:{items:dedupedItems}}})
         });
         if(!putRes.ok){
           const err=await putRes.text();
