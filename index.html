@@ -95,6 +95,7 @@ tr:last-child td{border-bottom:none;}
   <div class="nav-item" onclick="showPage('vods')">🎬 <span data-i18n="nav_vods">動画管理</span></div>
   <div class="nav-item" onclick="showPage('subtitles')">📄 <span data-i18n="nav_subtitles">字幕管理</span></div>
   <div class="nav-item" onclick="showPage('cpm')">📝 <span data-i18n="nav_cpm">CPM 管理</span></div>
+  <div class="nav-item" onclick="showPage('compare')">🔍 Prod vs QA</div>
   <div style="margin-top:auto;padding:16px 18px;display:flex;gap:6px;">
     <button class="btn btn-xs" id="lang-zh" onclick="setLang('zh')" style="flex:1;">繁中</button>
     <button class="btn btn-xs btn-secondary" id="lang-ja" onclick="setLang('ja')" style="flex:1;">日本語</button>
@@ -107,7 +108,7 @@ tr:last-child td{border-bottom:none;}
 <div id="page-settings" class="page active">
   <div class="page-title" id="page-title-settings">⚙️ 設定</div>
   <div class="card">
-    <div class="card-title" data-i18n="api_title">API 認証情報</div>
+    <div class="card-title" data-i18n="api_title">API 認証情報（QA / 現在の接続先）</div>
     <div class="form-grid">
       <div class="form-group full"><label data-i18n="token_label">BV API Token</label><input type="password" id="s-token" placeholder="eyJhbGc...（Bearer不要）"></div>
       <div class="form-group"><label data-i18n="org_label">Org ID</label><input type="text" id="s-org-id" placeholder="xxxxxxxx-xxxx-..."></div>
@@ -124,6 +125,20 @@ tr:last-child td{border-bottom:none;}
     </div>
   </div>
   <div class="card">
+    <div class="card-title">🔄 Prod 接続情報（Prod vs QA 比較用）</div>
+    <p style="font-size:11px;color:var(--muted);margin-bottom:12px;">上の設定は QA 用。こちらに Prod の Token と Site ID を入力すると「Prod vs QA 比較」ページが使えます。</p>
+    <div class="form-grid">
+      <div class="form-group full"><label>Prod API Token</label><input type="password" id="s-prod-token" placeholder="Prod の eyJhbGc..."></div>
+      <div class="form-group"><label>Prod Org ID</label><input type="text" id="s-prod-org-id" placeholder="xxxxxxxx-xxxx-..."></div>
+      <div class="form-group"><label>Prod CPM Site ID</label><input type="text" id="s-prod-site-id" placeholder="xxxxxxxx-xxxx-..."></div>
+    </div>
+    <div class="btn-row" style="margin-top:16px;">
+      <button class="btn btn-primary" onclick="saveSettings()">💾 保存</button>
+      <button class="btn btn-secondary" onclick="testProdConnection()">🔗 Prod 接続テスト</button>
+      <span id="prod-conn-status" style="font-size:12px;color:var(--muted);"></span>
+    </div>
+  </div>
+  <div class="card">
     <div class="card-title" data-i18n="batch_title">バッチ設定</div>
     <div class="form-grid">
       <div class="form-group"><label data-i18n="sum_format_label">要約フォーマット</label><select id="s-sum-format"><option value="paragraph">段落</option><option value="bullet">箇条書き</option></select></div>
@@ -135,7 +150,41 @@ tr:last-child td{border-bottom:none;}
   </div>
 </div>
 
-<!-- ══ 動画管理 ══ -->
+<!-- ══ Prod vs QA 比較 ══ -->
+<div id="page-compare" class="page">
+  <div class="page-title">🔍 Prod vs QA 比較</div>
+  <div class="card">
+    <div class="card-title">📚 Program 比較</div>
+    <p style="font-size:11px;color:var(--muted);margin-bottom:12px;">Prod と QA の Program を取得して差分を表示します。設定ページで Prod Token を先に入力してください。</p>
+    <div class="btn-row" style="margin-bottom:12px;">
+      <button class="btn btn-primary" id="compare-btn" onclick="runCompare()">🔍 比較実行</button>
+      <button class="btn btn-secondary" id="compare-csv-btn" onclick="exportCompareCsv()" style="display:none">📥 差分 CSV</button>
+      <span id="compare-status" style="font-size:11px;color:var(--muted);"></span>
+    </div>
+    <div id="compare-summary" style="display:none;margin-bottom:12px;padding:12px;background:var(--surface2);border-radius:6px;font-size:12px;line-height:1.8;"></div>
+    <div id="compare-filter-row" style="display:none;" class="btn-row" style="margin-bottom:8px;">
+      <button class="filter-btn active" onclick="setCompareFilter('all')">全件</button>
+      <button class="filter-btn" onclick="setCompareFilter('missing')">⚠️ QA に未存在</button>
+      <button class="filter-btn" onclick="setCompareFilter('ok')">✅ 両方あり</button>
+    </div>
+    <div class="table-wrap">
+      <table id="compare-table" style="display:none;">
+        <thead><tr>
+          <th>状態</th>
+          <th>Program 名</th>
+          <th>Prod ID</th>
+          <th>QA ID</th>
+          <th>Prod Arrangement数</th>
+        </tr></thead>
+        <tbody id="compare-tbody"></tbody>
+      </table>
+    </div>
+  </div>
+  <div id="compare-log-card" style="display:none;" class="card">
+    <div class="card-title">ログ</div>
+    <div id="compare-log" style="font-family:var(--mono);font-size:11px;max-height:200px;overflow-y:auto;"></div>
+  </div>
+</div>
 <div id="page-vods" class="page">
   <div class="page-title" id="page-title-vods">🎬 動画管理</div>
   <div class="card">
@@ -631,8 +680,8 @@ const HDR = () => ({ 'Content-Type':'application/json', 'Authorization':`Bearer 
 function cfg(k){ return localStorage.getItem('bv_'+k)||''; }
 function setCfg(k,v){ localStorage.setItem('bv_'+k,v); }
 
-const SETTINGS_KEYS = ['token','org_id','site_id','lang','base_url','sum_format','sum_type','sum_length'];
-const SETTINGS_IDS  = ['s-token','s-org-id','s-site-id','s-lang','s-base-url','s-sum-format','s-sum-type','s-sum-length'];
+const SETTINGS_KEYS = ['token','org_id','site_id','lang','base_url','sum_format','sum_type','sum_length','prod_token','prod_org_id','prod_site_id'];
+const SETTINGS_IDS  = ['s-token','s-org-id','s-site-id','s-lang','s-base-url','s-sum-format','s-sum-type','s-sum-length','s-prod-token','s-prod-org-id','s-prod-site-id'];
 
 function saveSettings(){
   SETTINGS_KEYS.forEach((k,i)=>{ const el=document.getElementById(SETTINGS_IDS[i]); if(el) setCfg(k,el.value.trim()); });
@@ -647,6 +696,139 @@ async function testConnection(){
   try{ await bvGet('/bv/cms/v1/vods?page_size=1'); el.textContent='✅ 接続成功'; el.style.color='var(--green)'; }
   catch(e){ el.textContent='❌ '+e.message.substring(0,60); el.style.color='var(--red)'; }
 }
+async function testProdConnection(){
+  const el=document.getElementById('prod-conn-status');
+  el.textContent='接続中...'; el.style.color='var(--muted)';
+  try{
+    const r=await fetch('https://api.one.blendvision.com/bv/cpm/v1alpha1/sites/'+cfg('prod_site_id')+'/contents?current_page=1&items_per_page=1&filter.content_types=CONTENT_TYPE_PROGRAM',{
+      headers:{'Content-Type':'application/json','Authorization':`Bearer ${cfg('prod_token')}`,'x-bv-org-id':cfg('prod_org_id')}
+    });
+    if(!r.ok) throw new Error(r.status);
+    el.textContent='✅ Prod 接続成功'; el.style.color='var(--green)';
+  }catch(e){ el.textContent='❌ '+e.message.substring(0,60); el.style.color='var(--red)'; }
+}
+
+// ════ Prod vs QA 比較 ════════════════════════════════════
+const PROD_BASE='https://api.one.blendvision.com';
+const prodHdr=()=>({'Content-Type':'application/json','Authorization':`Bearer ${cfg('prod_token')}`,'x-bv-org-id':cfg('prod_org_id')});
+let compareData=[];
+
+async function fetchAllPrograms(base, hdr, site){
+  const all=[]; let page=1;
+  while(true){
+    const r=await fetch(`${base}/bv/cpm/v1alpha1/sites/${site}/contents?current_page=${page}&items_per_page=100&filter.content_types=CONTENT_TYPE_PROGRAM`,{headers:hdr});
+    if(!r.ok) throw new Error(`${r.status}: ${await r.text()}`);
+    const d=await r.json();
+    const items=d.contents||[];
+    all.push(...items);
+    if(items.length<100) break;
+    page++;
+  }
+  return all;
+}
+
+async function runCompare(){
+  const btn=document.getElementById('compare-btn');
+  const status=document.getElementById('compare-status');
+  const log=makeLog('compare-log','compare-log-card');
+
+  const prodToken=cfg('prod_token'), prodOrgId=cfg('prod_org_id'), prodSiteId=cfg('prod_site_id');
+  const qaSiteId=cfg('site_id');
+  if(!prodToken||!prodSiteId){ toast('設定ページで Prod Token と Prod Site ID を入力してください','error'); return; }
+  if(!qaSiteId){ toast('設定ページで QA Site ID を入力してください','error'); return; }
+
+  btn.disabled=true; btn.textContent='🔍 取得中...';
+  document.getElementById('compare-table').style.display='none';
+  document.getElementById('compare-summary').style.display='none';
+  document.getElementById('compare-filter-row').style.display='none';
+  document.getElementById('compare-csv-btn').style.display='none';
+
+  try{
+    log('▶ Prod Program 取得中...');
+    status.textContent='Prod 取得中...';
+    const prodPrograms=await fetchAllPrograms(PROD_BASE, prodHdr(), prodSiteId);
+    log(`  ✅ Prod: ${prodPrograms.length}件`,'done');
+
+    log('▶ QA Program 取得中...');
+    status.textContent='QA 取得中...';
+    const qaPrograms=await fetchAllPrograms(BASE(), HDR(), qaSiteId);
+    log(`  ✅ QA: ${qaPrograms.length}件`,'done');
+
+    // QA の title → content_id マップ
+    const qaTitleMap={};
+    qaPrograms.forEach(p=>{ qaTitleMap[p.title]=(qaTitleMap[p.title]||[]); qaTitleMap[p.title].push(p.content_id); });
+
+    // 差分計算
+    compareData=prodPrograms.map(p=>{
+      const qaMatches=qaTitleMap[p.title]||[];
+      return {
+        prod_id: p.content_id,
+        name: p.title,
+        qa_id: qaMatches[0]||'',
+        qa_count: qaMatches.length,
+        status: qaMatches.length>0?'ok':'missing',
+      };
+    });
+
+    const missing=compareData.filter(r=>r.status==='missing').length;
+    const ok=compareData.filter(r=>r.status==='ok').length;
+
+    document.getElementById('compare-summary').style.display='block';
+    document.getElementById('compare-summary').innerHTML=`
+      <b>Prod:</b> ${prodPrograms.length}件　<b>QA:</b> ${qaPrograms.length}件<br>
+      <span style="color:var(--green)">✅ 両方あり: ${ok}件</span>　
+      <span style="color:var(--red)">⚠️ QA に未存在: ${missing}件</span>
+    `;
+
+    renderCompareTable(compareData);
+    document.getElementById('compare-filter-row').style.display='flex';
+    document.getElementById('compare-table').style.display='table';
+    document.getElementById('compare-csv-btn').style.display='';
+    status.textContent=`完了 (QA未存在: ${missing}件)`;
+    log(`🏁 比較完了：OK ${ok}件 / 未存在 ${missing}件`,'done');
+  }catch(e){
+    log(`❌ ${e.message}`,'error');
+    toast('比較失敗: '+e.message,'error');
+  }finally{
+    btn.disabled=false; btn.textContent='🔍 比較実行';
+  }
+}
+
+let compareFilter='all';
+function setCompareFilter(f){
+  compareFilter=f;
+  document.querySelectorAll('#page-compare .filter-btn').forEach(b=>b.classList.remove('active'));
+  event.target.classList.add('active');
+  renderCompareTable(compareData);
+}
+
+function renderCompareTable(data){
+  const filtered=compareFilter==='all'?data:data.filter(r=>r.status===compareFilter);
+  const tbody=document.getElementById('compare-tbody');
+  tbody.innerHTML=filtered.map(r=>`
+    <tr>
+      <td>${r.status==='ok'
+        ?'<span class="badge" style="background:rgba(52,211,153,.15);color:var(--green)">✅ あり</span>'
+        :'<span class="badge" style="background:rgba(248,113,113,.15);color:var(--red)">⚠️ 未存在</span>'}</td>
+      <td style="max-width:320px;overflow:hidden;text-overflow:ellipsis;white-space:nowrap;" title="${esc(r.name)}">${esc(r.name)}</td>
+      <td style="font-family:var(--mono);font-size:10px;color:var(--muted)">${r.prod_id.substring(0,16)}...</td>
+      <td style="font-family:var(--mono);font-size:10px;color:${r.qa_id?'var(--muted)':'var(--red)'}">${r.qa_id?r.qa_id.substring(0,16)+'...':'—'}</td>
+      <td>—</td>
+    </tr>
+  `).join('');
+}
+
+function exportCompareCsv(){
+  if(!compareData.length){ toast('先に比較を実行してください','error'); return; }
+  const rows=[['status','program_name','prod_program_id','qa_program_id']];
+  compareData.forEach(r=>rows.push([r.status, r.name, r.prod_id, r.qa_id]));
+  const csv=rows.map(r=>r.map(c=>`"${(c||'').replace(/"/g,'""')}"`).join(',')).join('\n');
+  const a=document.createElement('a');
+  a.href='data:text/csv;charset=utf-8,\uFEFF'+encodeURIComponent(csv);
+  a.download='prod_vs_qa_programs.csv'; a.click();
+  toast('CSV ダウンロード完了','success');
+}
+// ════ Prod vs QA 比較 終 ════════════════════════════════
 
 // ════ API ════════════════════════════════════════════════
 async function bvReq(method,path,body){
