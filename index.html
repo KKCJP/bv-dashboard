@@ -3,7 +3,7 @@
 <head>
 <meta charset="UTF-8">
 <meta name="viewport" content="width=device-width, initial-scale=1.0">
-<title>BV Dashboard</title>
+<title>BV Dashboard v3</title>
 <script src="https://cdnjs.cloudflare.com/ajax/libs/jszip/3.10.1/jszip.min.js"></script>
 <style>
 :root {
@@ -154,27 +154,33 @@ tr:last-child td{border-bottom:none;}
 <div id="page-compare" class="page">
   <div class="page-title">🔍 Prod vs QA 比較</div>
   <div class="card">
-    <div class="card-title">📚 Program 比較</div>
-    <p style="font-size:11px;color:var(--muted);margin-bottom:12px;">Prod と QA の Program を取得して差分を表示します。設定ページで Prod Token を先に入力してください。</p>
+    <div class="card-title">📚 Program / Outline → Content 比較</div>
+    <p style="font-size:11px;color:var(--muted);margin-bottom:12px;">Prod と QA の Program（Arrangement）と Outline（カテゴリー階層）の Content を比較します。設定ページで Prod Token を先に入力してください。<br>※ API 呼び出し数が多いため数分かかる場合があります。</p>
     <div class="btn-row" style="margin-bottom:12px;">
       <button class="btn btn-primary" id="compare-btn" onclick="runCompare()">🔍 比較実行</button>
       <button class="btn btn-secondary" id="compare-csv-btn" onclick="exportCompareCsv()" style="display:none">📥 差分 CSV</button>
+      <button class="btn btn-secondary" id="compare-missing-csv-btn" onclick="exportMissingOnlyCsv()" style="display:none">📥 未存在のみ CSV</button>
       <span id="compare-status" style="font-size:11px;color:var(--muted);"></span>
     </div>
     <div id="compare-summary" style="display:none;margin-bottom:12px;padding:12px;background:var(--surface2);border-radius:6px;font-size:12px;line-height:1.8;"></div>
     <div id="compare-filter-row" style="display:none;" class="btn-row" style="margin-bottom:8px;">
       <button class="filter-btn active" onclick="setCompareFilter('all')">全件</button>
-      <button class="filter-btn" onclick="setCompareFilter('missing')">⚠️ QA に未存在</button>
-      <button class="filter-btn" onclick="setCompareFilter('ok')">✅ 両方あり</button>
+      <button class="filter-btn" onclick="setCompareFilter('missing_content')">⚠️ Content 未存在</button>
+      <button class="filter-btn" onclick="setCompareFilter('missing_arrangement')">❌ Arr 未登録</button>
+      <button class="filter-btn" onclick="setCompareFilter('ok')">✅ 正常</button>
+      <button class="filter-btn" onclick="setCompareFilter('outline')">🗂 Outline のみ</button>
+      <button class="filter-btn" onclick="setCompareFilter('program')">📚 Program のみ</button>
     </div>
     <div class="table-wrap">
       <table id="compare-table" style="display:none;">
         <thead><tr>
           <th>状態</th>
-          <th>Program 名</th>
-          <th>Prod ID</th>
-          <th>QA ID</th>
-          <th>Prod Arrangement数</th>
+          <th>種別</th>
+          <th>Program / Outline 名</th>
+          <th>Arrangement / Space</th>
+          <th>Content 名</th>
+          <th>Prod content_id</th>
+          <th>QA content_id</th>
         </tr></thead>
         <tbody id="compare-tbody"></tbody>
       </table>
@@ -711,7 +717,7 @@ async function testProdConnection(){
 // ════ Prod vs QA 比較 ════════════════════════════════════
 const PROD_BASE='https://api.one.blendvision.com';
 const prodHdr=()=>({'Content-Type':'application/json','Authorization':`Bearer ${cfg('prod_token')}`,'x-bv-org-id':cfg('prod_org_id')});
-let compareData=[];
+let compareData=[];  // {program_name, arrangement_title, content_name, prod_content_id, qa_content_id, status}
 
 async function fetchAllPrograms(base, hdr, site){
   const all=[]; let page=1;
@@ -727,65 +733,198 @@ async function fetchAllPrograms(base, hdr, site){
   return all;
 }
 
+async function fetchProgramArrangement(base, hdr, site, contentId){
+  try{
+    const r=await fetch(`${base}/bv/cpm/v1alpha1/sites/${site}/programs/${contentId}?action=GET_FORM_REQUEST_ACTION_CURRENT&mode=FORM_MODE_EDIT`,{headers:hdr});
+    if(!r.ok) return [];
+    const d=await r.json();
+    return d.program?.arrangements||d.arrangements||[];
+  }catch{ return []; }
+}
+
+// Outline の全 content を再帰的に取得して {space_name, content_id, content_name, content_type} のリストを返す
+function extractOutlineContents(categories, result=[], l1='', l2=''){
+  for(const cat of categories||[]){
+    const name=cat.name||cat.title||'';
+    if(cat.type==='CATEGORY_TYPE_SPACE'||cat.space_id){
+      // Space: contents を取り出す
+      for(const c of cat.contents||[]){
+        result.push({space_name:`${l1}${l1&&l2?' > ':''}${l2}${l2?' > ':''}${name}`, content_id:c.id||'', content_name:c.name||c.title||'', content_type:c.type||''});
+      }
+    } else {
+      // Category: 再帰
+      extractOutlineContents(cat.sub_categories||cat.categories||[], result, l1||name, l1?name:'');
+    }
+  }
+  return result;
+}
+
+async function fetchOutline(base, hdr, site){
+  try{
+    const r=await fetch(`${base}/bv/cpm/marketplace/v1alpha1/sites/${site}/outlines:query-for-licensing`,{headers:hdr});
+    if(!r.ok) return {id:'', contents:[]};
+    const d=await r.json();
+    const outline=d.outline||d;
+    const contents=extractOutlineContents(outline.categories||[]);
+    return {id:outline.id||'', contents};
+  }catch(e){ return {id:'', contents:[]}; }
+}
+
 async function runCompare(){
   const btn=document.getElementById('compare-btn');
   const status=document.getElementById('compare-status');
   const log=makeLog('compare-log','compare-log-card');
 
-  const prodToken=cfg('prod_token'), prodOrgId=cfg('prod_org_id'), prodSiteId=cfg('prod_site_id');
-  const qaSiteId=cfg('site_id');
-  if(!prodToken||!prodSiteId){ toast('設定ページで Prod Token と Prod Site ID を入力してください','error'); return; }
+  const prodSiteId=cfg('prod_site_id'), qaSiteId=cfg('site_id');
+  if(!cfg('prod_token')||!prodSiteId){ toast('設定ページで Prod Token と Prod Site ID を入力してください','error'); return; }
   if(!qaSiteId){ toast('設定ページで QA Site ID を入力してください','error'); return; }
 
   btn.disabled=true; btn.textContent='🔍 取得中...';
+  compareData=[];
   document.getElementById('compare-table').style.display='none';
   document.getElementById('compare-summary').style.display='none';
   document.getElementById('compare-filter-row').style.display='none';
   document.getElementById('compare-csv-btn').style.display='none';
+  document.getElementById('compare-missing-csv-btn').style.display='none';
 
   try{
-    log('▶ Prod Program 取得中...');
-    status.textContent='Prod 取得中...';
+    // ① 両環境の Program 一覧取得
+    log('▶ Prod Program 一覧 取得中...');
+    status.textContent='Prod Program 取得中...';
     const prodPrograms=await fetchAllPrograms(PROD_BASE, prodHdr(), prodSiteId);
     log(`  ✅ Prod: ${prodPrograms.length}件`,'done');
 
-    log('▶ QA Program 取得中...');
-    status.textContent='QA 取得中...';
+    log('▶ QA Program 一覧 取得中...');
+    status.textContent='QA Program 取得中...';
     const qaPrograms=await fetchAllPrograms(BASE(), HDR(), qaSiteId);
     log(`  ✅ QA: ${qaPrograms.length}件`,'done');
 
-    // QA の title → content_id マップ
-    const qaTitleMap={};
-    qaPrograms.forEach(p=>{ qaTitleMap[p.title]=(qaTitleMap[p.title]||[]); qaTitleMap[p.title].push(p.content_id); });
+    // QA: title → content_id マップ
+    const qaProgramMap={};
+    qaPrograms.forEach(p=>{ qaProgramMap[p.title]=p.content_id; });
 
-    // 差分計算
-    compareData=prodPrograms.map(p=>{
-      const qaMatches=qaTitleMap[p.title]||[];
-      return {
-        prod_id: p.content_id,
-        name: p.title,
-        qa_id: qaMatches[0]||'',
-        qa_count: qaMatches.length,
-        status: qaMatches.length>0?'ok':'missing',
-      };
-    });
+    // QA: VOD/Form content title → content_id マップ（照合用）
+    log('▶ QA Content 一覧 取得中...');
+    const qaContentMap={};  // title → content_id
+    for(const ct of ['CONTENT_TYPE_VOD','CONTENT_TYPE_FORM']){
+      let page=1;
+      while(true){
+        const r=await fetch(`${BASE()}/bv/cpm/v1alpha1/sites/${qaSiteId}/contents?current_page=${page}&items_per_page=100&filter.content_types=${ct}`,{headers:HDR()});
+        const d=await r.json();
+        (d.contents||[]).forEach(c=>{ if(c.title) qaContentMap[c.title]=c.content_id; });
+        if((d.contents||[]).length<100) break;
+        page++;
+      }
+    }
+    log(`  ✅ QA Content: ${Object.keys(qaContentMap).length}件`,'done');
 
-    const missing=compareData.filter(r=>r.status==='missing').length;
-    const ok=compareData.filter(r=>r.status==='ok').length;
+    // ② 各 Prod Program の Arrangement を取得して比較
+    log(`▶ Prod Arrangement 取得・比較中（${prodPrograms.length}件）...`);
+    let done=0;
+    for(const prog of prodPrograms){
+      status.textContent=`Arrangement 取得中 ${done}/${prodPrograms.length}...`;
+      const arrangements=await fetchProgramArrangement(PROD_BASE, prodHdr(), prodSiteId, prog.content_id);
+      const qaProgId=qaProgramMap[prog.title]||'';
+
+      if(!arrangements.length){
+        compareData.push({
+          source: 'program',
+          program_name: prog.title,
+          arrangement_title: '（Arrangement なし）',
+          content_name: '—',
+          prod_content_id: '',
+          qa_content_id: '',
+          status: 'no_arrangement'
+        });
+      } else {
+        for(const arr of arrangements){
+          const arrTitle=arr.title||arr.name||'';
+          const items=arr.items||arr.contents||[];
+          if(!items.length){
+            compareData.push({
+              source: 'program',
+              program_name: prog.title,
+              arrangement_title: arrTitle,
+              content_name: '（Content なし）',
+              prod_content_id: '',
+              qa_content_id: '',
+              status: 'missing_arrangement'
+            });
+            continue;
+          }
+          for(const item of items){
+            const contentName=item.content?.name||item.name||item.title||'';
+            const prodContentId=item.content?.id||item.content_id||'';
+            // QA で同名 content を検索
+            const qaContentId=qaContentMap[contentName]||'';
+            const st=qaContentId?'ok':'missing_content';
+            compareData.push({
+              source: 'program',
+              program_name: prog.title,
+              arrangement_title: arrTitle,
+              content_name: contentName,
+              prod_content_id: prodContentId,
+              qa_content_id: qaContentId,
+              status: st
+            });
+          }
+        }
+      }
+      done++;
+      if(done%10===0) log(`  📋 ${done}/${prodPrograms.length} 完了`);
+      await new Promise(r=>setTimeout(r,80));
+    }
+
+    // ③ Outline 比較
+    log('▶ Prod Outline 取得中...');
+    status.textContent='Prod Outline 取得中...';
+    const prodOutline=await fetchOutline(PROD_BASE, prodHdr(), prodSiteId);
+    log(`  ✅ Prod Outline: ${prodOutline.contents.length}件`,'done');
+
+    log('▶ QA Outline 取得中...');
+    const qaOutline=await fetchOutline(BASE(), HDR(), qaSiteId);
+    log(`  ✅ QA Outline: ${qaOutline.contents.length}件`,'done');
+
+    // QA Outline の content_name → content_id マップ
+    const qaOutlineContentMap={};
+    qaOutline.contents.forEach(c=>{ if(c.content_name) qaOutlineContentMap[c.content_name]=c.content_id; });
+
+    // Prod Outline の各 content を QA と照合
+    for(const c of prodOutline.contents){
+      const qaId=qaOutlineContentMap[c.content_name]||qaContentMap[c.content_name]||'';
+      compareData.push({
+        source: 'outline',
+        program_name: c.space_name,
+        arrangement_title: '',
+        content_name: c.content_name,
+        prod_content_id: c.content_id,
+        qa_content_id: qaId,
+        status: qaId?'ok':'missing_content'
+      });
+    }
+
+    // ④ 集計
+    const total=compareData.length;
+    const okCount=compareData.filter(r=>r.status==='ok').length;
+    const missingContent=compareData.filter(r=>r.status==='missing_content').length;
+    const missingArr=compareData.filter(r=>r.status==='missing_arrangement').length;
+    const outlineMissing=compareData.filter(r=>r.source==='outline'&&r.status==='missing_content').length;
+    const programMissing=compareData.filter(r=>r.source!=='outline'&&r.status==='missing_content').length;
 
     document.getElementById('compare-summary').style.display='block';
     document.getElementById('compare-summary').innerHTML=`
-      <b>Prod:</b> ${prodPrograms.length}件　<b>QA:</b> ${qaPrograms.length}件<br>
-      <span style="color:var(--green)">✅ 両方あり: ${ok}件</span>　
-      <span style="color:var(--red)">⚠️ QA に未存在: ${missing}件</span>
+      <b>Prod Program:</b> ${prodPrograms.length}件　<b>QA Program:</b> ${qaPrograms.length}件　<b>Prod Outline Content:</b> ${prodOutline.contents.length}件<br>
+      <b>合計 Content 行:</b> ${total}件　<span style="color:var(--green)">✅ 存在: ${okCount}件</span><br>
+      <span style="color:var(--red)">⚠️ Program 未存在: ${programMissing}件　Outline 未存在: ${outlineMissing}件</span>　
+      <span style="color:var(--yellow)">❌ Arr 未登録: ${missingArr}件</span>
     `;
-
     renderCompareTable(compareData);
     document.getElementById('compare-filter-row').style.display='flex';
     document.getElementById('compare-table').style.display='table';
     document.getElementById('compare-csv-btn').style.display='';
-    status.textContent=`完了 (QA未存在: ${missing}件)`;
-    log(`🏁 比較完了：OK ${ok}件 / 未存在 ${missing}件`,'done');
+    document.getElementById('compare-missing-csv-btn').style.display='';
+    status.textContent=`完了 (未存在: ${missingContent}件)`;
+    log(`🏁 比較完了：OK ${okCount}件 / Content未存在 ${missingContent}件 / Arrangement未登録 ${missingArr}件`,'done');
   }catch(e){
     log(`❌ ${e.message}`,'error');
     toast('比較失敗: '+e.message,'error');
@@ -802,31 +941,54 @@ function setCompareFilter(f){
   renderCompareTable(compareData);
 }
 
+function statusBadge(s){
+  if(s==='ok') return '<span class="badge" style="background:rgba(52,211,153,.15);color:var(--green)">✅ あり</span>';
+  if(s==='missing_content') return '<span class="badge" style="background:rgba(248,113,113,.15);color:var(--red)">⚠️ Content 未存在</span>';
+  if(s==='missing_arrangement') return '<span class="badge" style="background:rgba(251,191,36,.15);color:var(--yellow)">❌ Arr 未登録</span>';
+  return '<span class="badge" style="background:var(--surface2);color:var(--muted)">— Arr なし</span>';
+}
+
 function renderCompareTable(data){
-  const filtered=compareFilter==='all'?data:data.filter(r=>r.status===compareFilter);
+  const filtered=compareFilter==='all'?data
+    :compareFilter==='outline'?data.filter(r=>r.source==='outline')
+    :compareFilter==='program'?data.filter(r=>r.source==='program')
+    :data.filter(r=>r.status===compareFilter);
   const tbody=document.getElementById('compare-tbody');
   tbody.innerHTML=filtered.map(r=>`
     <tr>
-      <td>${r.status==='ok'
-        ?'<span class="badge" style="background:rgba(52,211,153,.15);color:var(--green)">✅ あり</span>'
-        :'<span class="badge" style="background:rgba(248,113,113,.15);color:var(--red)">⚠️ 未存在</span>'}</td>
-      <td style="max-width:320px;overflow:hidden;text-overflow:ellipsis;white-space:nowrap;" title="${esc(r.name)}">${esc(r.name)}</td>
-      <td style="font-family:var(--mono);font-size:10px;color:var(--muted)">${r.prod_id.substring(0,16)}...</td>
-      <td style="font-family:var(--mono);font-size:10px;color:${r.qa_id?'var(--muted)':'var(--red)'}">${r.qa_id?r.qa_id.substring(0,16)+'...':'—'}</td>
-      <td>—</td>
+      <td>${statusBadge(r.status)}</td>
+      <td><span class="badge" style="background:var(--surface2);color:var(--muted)">${r.source==='outline'?'🗂 Outline':'📚 Program'}</span></td>
+      <td style="max-width:160px;overflow:hidden;text-overflow:ellipsis;white-space:nowrap;" title="${esc(r.program_name)}">${esc(r.program_name)}</td>
+      <td style="max-width:120px;overflow:hidden;text-overflow:ellipsis;white-space:nowrap;color:var(--muted);font-size:11px;">${esc(r.arrangement_title)}</td>
+      <td style="max-width:180px;overflow:hidden;text-overflow:ellipsis;white-space:nowrap;" title="${esc(r.content_name)}">${esc(r.content_name)}</td>
+      <td style="font-family:var(--mono);font-size:10px;color:var(--muted)">${r.prod_content_id?r.prod_content_id.substring(0,14)+'...':'—'}</td>
+      <td style="font-family:var(--mono);font-size:10px;color:${r.qa_content_id?'var(--muted)':'var(--red)'}">${r.qa_content_id?r.qa_content_id.substring(0,14)+'...':'—'}</td>
     </tr>
   `).join('');
 }
 
 function exportCompareCsv(){
   if(!compareData.length){ toast('先に比較を実行してください','error'); return; }
-  const rows=[['status','program_name','prod_program_id','qa_program_id']];
-  compareData.forEach(r=>rows.push([r.status, r.name, r.prod_id, r.qa_id]));
+  const rows=[['status','program_name','arrangement_title','content_name','prod_content_id','qa_content_id']];
+  compareData.forEach(r=>rows.push([r.status,r.program_name,r.arrangement_title,r.content_name,r.prod_content_id,r.qa_content_id]));
   const csv=rows.map(r=>r.map(c=>`"${(c||'').replace(/"/g,'""')}"`).join(',')).join('\n');
   const a=document.createElement('a');
   a.href='data:text/csv;charset=utf-8,\uFEFF'+encodeURIComponent(csv);
-  a.download='prod_vs_qa_programs.csv'; a.click();
+  a.download='prod_vs_qa_contents.csv'; a.click();
   toast('CSV ダウンロード完了','success');
+}
+
+function exportMissingOnlyCsv(){
+  if(!compareData.length){ toast('先に比較を実行してください','error'); return; }
+  const missing=compareData.filter(r=>r.status==='missing_content'||r.status==='missing_arrangement');
+  if(!missing.length){ toast('未存在の Content はありません ✅','success'); return; }
+  const rows=[['status','program_name','arrangement_title','content_name','prod_content_id','qa_content_id']];
+  missing.forEach(r=>rows.push([r.status,r.program_name,r.arrangement_title,r.content_name,r.prod_content_id,r.qa_content_id]));
+  const csv=rows.map(r=>r.map(c=>`"${(c||'').replace(/"/g,'""')}"`).join(',')).join('\n');
+  const a=document.createElement('a');
+  a.href='data:text/csv;charset=utf-8,\uFEFF'+encodeURIComponent(csv);
+  a.download='missing_contents.csv'; a.click();
+  toast(`未存在 ${missing.length}件 CSV ダウンロード完了`,'success');
 }
 // ════ Prod vs QA 比較 終 ════════════════════════════════
 
