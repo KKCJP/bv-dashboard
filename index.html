@@ -161,6 +161,7 @@ tr:last-child td{border-bottom:none;}
       <button class="btn btn-secondary" id="compare-csv-btn" onclick="exportCompareCsv()" style="display:none">📥 差分 CSV</button>
       <button class="btn btn-secondary" id="compare-missing-csv-btn" onclick="exportMissingOnlyCsv()" style="display:none">📥 未存在のみ CSV</button>
       <button class="btn btn-secondary" id="vod-match-btn" onclick="runVodMatch()" style="display:none">🔎 VOD 照合</button>
+      <button class="btn btn-primary" id="sync-arrangement-btn" onclick="runSyncArrangement()" style="display:none">🔁 Arrangement 自動補完</button>
       <span id="compare-status" style="font-size:11px;color:var(--muted);"></span>
     </div>
     <div id="compare-summary" style="display:none;margin-bottom:12px;padding:12px;background:var(--surface2);border-radius:6px;font-size:12px;line-height:1.8;"></div>
@@ -810,6 +811,7 @@ async function runCompare(){
   document.getElementById('compare-csv-btn').style.display='none';
   document.getElementById('compare-missing-csv-btn').style.display='none';
   document.getElementById('vod-match-btn').style.display='none';
+  document.getElementById('sync-arrangement-btn').style.display='none';
   document.getElementById('vod-match-result').style.display='none';
 
   try{
@@ -949,6 +951,7 @@ async function runCompare(){
     document.getElementById('compare-csv-btn').style.display='';
     document.getElementById('compare-missing-csv-btn').style.display='';
     document.getElementById('vod-match-btn').style.display='';
+    document.getElementById('sync-arrangement-btn').style.display='';
     document.getElementById('vod-match-result').style.display='none';
     status.textContent=`完了 (未存在: ${missingContent}件)`;
     log(`🏁 比較完了：OK ${okCount}件 / Content未存在 ${missingContent}件 / Arrangement未登録 ${missingArr}件`,'done');
@@ -994,7 +997,202 @@ function renderCompareTable(data){
   `).join('');
 }
 
-// ── VOD 照合 ──────────────────────────────────────────
+// ── Arrangement 自動補完 ──────────────────────────────
+// Prod の Arrangement 構造を取得し、QA にある VOD/CPM content で補完して PUT する
+async function runSyncArrangement(){
+  const btn=document.getElementById('sync-arrangement-btn');
+  const status=document.getElementById('compare-status');
+  const log=makeLog('compare-log','compare-log-card');
+
+  const prodSiteId=cfg('prod_site_id'), qaSiteId=cfg('site_id');
+  if(!cfg('prod_token')||!prodSiteId||!qaSiteId){
+    toast('設定ページで Prod/QA の Token と Site ID を確認してください','error'); return;
+  }
+
+  btn.disabled=true; btn.textContent='🔁 処理中...';
+  log('▶ Arrangement 自動補完開始');
+
+  try{
+    // ① QA の CMS VOD 全件（name → vod_id）
+    log('  📋 QA CMS VOD 取得中...');
+    const qaVodMap={};
+    let page=1;
+    while(true){
+      const r=await fetch(`${BASE()}/bv/cms/v1/vods?current_page=${page}&items_per_page=50`,{headers:HDR()});
+      const d=await r.json();
+      (d.vods||[]).forEach(v=>{ if(v.name) qaVodMap[v.name]=v.id; });
+      if((d.vods||[]).length<50) break;
+      page++;
+    }
+    log(`  ✅ QA CMS VOD: ${Object.keys(qaVodMap).length}件`,'done');
+
+    // ② QA の CPM VOD（vod_id → content_id）
+    log('  📋 QA CPM VOD 取得中...');
+    const qaVodIdToCpmId={};   // cms vod_id → cpm content_id
+    const qaCpmTitleMap={};    // title → cpm content_id
+    page=1;
+    while(true){
+      const r=await fetch(`${BASE()}/bv/cpm/v1alpha1/sites/${qaSiteId}/contents?current_page=${page}&items_per_page=100&filter.content_types=CONTENT_TYPE_VOD`,{headers:HDR()});
+      const d=await r.json();
+      const items=d.contents||[];
+      // 各 content の vod_id を取得（GET /vods/{id} で source.vod.id）
+      for(const c of items){
+        qaCpmTitleMap[c.title||'']=c.content_id;
+        try{
+          const vr=await fetch(`${BASE()}/bv/cpm/v1alpha1/sites/${qaSiteId}/vods/${c.content_id}`,{headers:HDR()});
+          if(vr.ok){
+            const vd=await vr.json();
+            const srcId=vd.source?.vod?.id||'';
+            if(srcId) qaVodIdToCpmId[srcId]=c.content_id;
+          }
+        }catch{}
+      }
+      if(items.length<100) break;
+      page++;
+      await new Promise(r=>setTimeout(r,50));
+    }
+    log(`  ✅ QA CPM VOD: ${Object.keys(qaVodIdToCpmId).length}件`,'done');
+
+    // VOD name の前缀マッチ関数
+    const findQaVodId=(name)=>{
+      if(!name) return '';
+      if(qaVodMap[name]) return qaVodMap[name];
+      const prefix=name.substring(0,Math.min(name.length,25));
+      const entry=Object.entries(qaVodMap).find(([k])=>k===name||k.startsWith(prefix)||name.startsWith(k.substring(0,Math.min(k.length,25))));
+      return entry?entry[1]:'';
+    };
+
+    // ③ Prod の Program 一覧を取得
+    log('  📋 Prod Program 一覧 取得中...');
+    const prodPrograms=await fetchAllPrograms(PROD_BASE, prodHdr(), prodSiteId);
+    // QA Program の title → content_id
+    const qaPrograms=await fetchAllPrograms(BASE(), HDR(), qaSiteId);
+    const qaProgMap={};
+    qaPrograms.forEach(p=>{ qaProgMap[p.title]=p.content_id; });
+    log(`  ✅ Prod: ${prodPrograms.length}件 / QA: ${qaPrograms.length}件`,'done');
+
+    let syncOk=0, syncSkip=0, syncFail=0;
+    let totalAdded=0, totalSkipped=0, totalMissing=0;
+
+    // ④ 各 Program を処理
+    for(const prog of prodPrograms){
+      const qaProgId=qaProgMap[prog.title];
+      if(!qaProgId){ syncSkip++; continue; } // QA に Program なし → スキップ
+
+      // Prod の Arrangement を取得
+      const prodArrangements=await fetchProgramArrangement(PROD_BASE, prodHdr(), prodSiteId, prog.content_id);
+      if(!prodArrangements.length){ syncSkip++; continue; }
+
+      // Prod の QA current Arrangement も取得（上書きではなく merge するため）
+      const qaArrangements=await fetchProgramArrangement(BASE(), HDR(), qaSiteId, qaProgId);
+      // QA にすでに入っている content_id のセット
+      const qaExistingIds=new Set();
+      (qaArrangements||[]).forEach(arr=>(arr.items||arr.contents||[]).forEach(item=>{
+        const id=item.content?.id||item.content_id||'';
+        if(id) qaExistingIds.add(id);
+      }));
+
+      // Prod Arrangement の構造を QA 用に変換
+      const newArrangements=[];
+      let progAdded=0, progSkipped=0, progMissing=0;
+
+      for(const arr of prodArrangements){
+        const newItems=[];
+        for(const item of arr.items||arr.contents||[]){
+          const contentName=item.content?.name||item.name||item.title||'';
+          const prodVodId=item.content?.id||item.content_id||'';
+
+          // 1) QA CPM title で検索
+          let qaCpmId=qaCpmTitleMap[contentName]||'';
+
+          // 2) QA CMS VOD name で検索 → CPM に追加
+          if(!qaCpmId){
+            const qaVodId=findQaVodId(contentName);
+            if(qaVodId){
+              // CPM vod_id → content_id で確認
+              qaCpmId=qaVodIdToCpmId[qaVodId]||'';
+              if(!qaCpmId){
+                // CPM 未登録 → 追加
+                try{
+                  log(`    ＋CPM追加: ${contentName}`);
+                  await addVodToCpm(qaVodId, contentName);
+                  await new Promise(r=>setTimeout(r,600));
+                  // 追加後に content_id を取得
+                  const cr=await fetch(`${BASE()}/bv/cpm/v1alpha1/sites/${qaSiteId}/contents?current_page=1&items_per_page=10&filter.content_types=CONTENT_TYPE_VOD&filter.title=${encodeURIComponent(contentName)}`,{headers:HDR()});
+                  const cd=await cr.json();
+                  const hit=(cd.contents||[]).find(c=>c.title===contentName)||(cd.contents||[])[0];
+                  if(hit){
+                    qaCpmId=hit.content_id;
+                    qaVodIdToCpmId[qaVodId]=qaCpmId;
+                    qaCpmTitleMap[contentName]=qaCpmId;
+                  }
+                }catch(e){ log(`    ❌ CPM追加失敗: ${contentName}: ${e.message}`,'error'); }
+              }
+            }
+          }
+
+          if(qaCpmId){
+            if(!qaExistingIds.has(qaCpmId)){
+              newItems.push({type:'PROGRAM_ARRANGEMENT_ITEM_TYPE_CONTENT',sequence:newItems.length,content:{type:'CONTENT_TYPE_VOD',id:qaCpmId,name:contentName}});
+              qaExistingIds.add(qaCpmId);
+              progAdded++;
+            } else {
+              progSkipped++; // 既に入っている
+            }
+          } else {
+            progMissing++;
+            totalMissing++;
+          }
+        }
+
+        if(newItems.length>0||qaExistingIds.size>0){
+          // 既存 items + 新規 items をマージ
+          const existingItems=(qaArrangements.find(a=>a.title===arr.title)||{}).items||(qaArrangements.find(a=>a.title===arr.title)||{}).contents||[];
+          newArrangements.push({
+            title: arr.title||arr.name||'',
+            items: [...existingItems, ...newItems].map((it,i)=>({...it,sequence:i}))
+          });
+        }
+      }
+
+      totalAdded+=progAdded;
+      totalSkipped+=progSkipped;
+
+      if(progAdded===0 && progMissing===0){ syncSkip++; continue; }
+
+      // ⑤ QA Program に PUT
+      try{
+        const putRes=await fetch(`${BASE()}/bv/cpm/v1alpha1/sites/${qaSiteId}/programs/${qaProgId}`,{
+          method:'PUT',
+          headers:{...HDR(),'Content-Type':'application/json'},
+          body:JSON.stringify({program:{arrangements:newArrangements}})
+        });
+        if(!putRes.ok){
+          const err=await putRes.text();
+          throw new Error(`${putRes.status}: ${err.substring(0,150)}`);
+        }
+        syncOk++;
+        log(`  ✅ ${prog.title}（+${progAdded}件追加 / ${progSkipped}件スキップ / ${progMissing}件なし）`,'done');
+      }catch(e){
+        syncFail++;
+        log(`  ❌ ${prog.title}: ${e.message}`,'error');
+      }
+      await new Promise(r=>setTimeout(r,200));
+    }
+
+    log(`🏁 完了：Program ${syncOk}件更新 / ${syncSkip}件スキップ / ${syncFail}件失敗`,'done');
+    log(`   Content: +${totalAdded}件追加 / ${totalSkipped}件スキップ / ${totalMissing}件 QA になし`);
+    toast(`Arrangement 補完完了：${syncOk}件`, syncOk>0?'success':'error');
+    status.textContent=`補完完了 (+${totalAdded}件)`;
+
+  }catch(e){
+    log(`❌ ${e.message}`,'error');
+    toast('失敗: '+e.message,'error');
+  }finally{
+    btn.disabled=false; btn.textContent='🔁 Arrangement 自動補完';
+  }
+}
+// ── Arrangement 自動補完 終 ──────────────────────────
 let vodMatchNoVod=[];    // QA に VOD が存在しない
 let vodMatchNeedCpm=[];  // QA に VOD あり、CPM 未登録
 
