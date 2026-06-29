@@ -160,9 +160,32 @@ tr:last-child td{border-bottom:none;}
       <button class="btn btn-primary" id="compare-btn" onclick="runCompare()">🔍 比較実行</button>
       <button class="btn btn-secondary" id="compare-csv-btn" onclick="exportCompareCsv()" style="display:none">📥 差分 CSV</button>
       <button class="btn btn-secondary" id="compare-missing-csv-btn" onclick="exportMissingOnlyCsv()" style="display:none">📥 未存在のみ CSV</button>
+      <button class="btn btn-secondary" id="vod-match-btn" onclick="runVodMatch()" style="display:none">🔎 VOD 照合</button>
       <span id="compare-status" style="font-size:11px;color:var(--muted);"></span>
     </div>
     <div id="compare-summary" style="display:none;margin-bottom:12px;padding:12px;background:var(--surface2);border-radius:6px;font-size:12px;line-height:1.8;"></div>
+
+    <!-- VOD 照合結果 -->
+    <div id="vod-match-result" style="display:none;">
+      <div style="display:grid;grid-template-columns:1fr 1fr;gap:12px;margin-bottom:12px;">
+        <!-- QA に VOD なし -->
+        <div style="background:rgba(248,113,113,.08);border:1px solid rgba(248,113,113,.3);border-radius:8px;padding:14px;">
+          <div style="font-size:12px;font-weight:600;color:var(--red);margin-bottom:8px;">🚫 VOD が QA に存在しない <span id="no-vod-count" style="font-size:11px;font-weight:400;"></span></div>
+          <p style="font-size:10.5px;color:var(--muted);margin-bottom:8px;">まず VOD を QA にアップロードする必要があります</p>
+          <button class="btn btn-sm btn-secondary" onclick="exportNoVodCsv()">📥 CSV</button>
+          <div id="no-vod-list" style="margin-top:8px;max-height:200px;overflow-y:auto;font-size:11px;"></div>
+        </div>
+        <!-- QA に VOD あり → CPM 追加が必要 -->
+        <div style="background:rgba(251,191,36,.08);border:1px solid rgba(251,191,36,.3);border-radius:8px;padding:14px;">
+          <div style="font-size:12px;font-weight:600;color:var(--yellow);margin-bottom:8px;">⚠️ VOD はあるが CPM 未登録 <span id="need-cpm-count" style="font-size:11px;font-weight:400;"></span></div>
+          <p style="font-size:10.5px;color:var(--muted);margin-bottom:8px;">VOD は QA にあります。CPM に追加してから Arrangement に紐付けてください</p>
+          <button class="btn btn-sm btn-secondary" onclick="exportNeedCpmCsv()">📥 CSV</button>
+          <button class="btn btn-sm btn-primary" id="batch-add-cpm-btn" onclick="batchAddMissingToCpm()" style="margin-left:4px;">＋ CPM 一括追加</button>
+          <div id="need-cpm-list" style="margin-top:8px;max-height:200px;overflow-y:auto;font-size:11px;"></div>
+        </div>
+      </div>
+    </div>
+
     <div id="compare-filter-row" style="display:none;" class="btn-row" style="margin-bottom:8px;">
       <button class="filter-btn active" onclick="setCompareFilter('all')">全件</button>
       <button class="filter-btn" onclick="setCompareFilter('missing_content')">⚠️ Content 未存在</button>
@@ -786,6 +809,8 @@ async function runCompare(){
   document.getElementById('compare-filter-row').style.display='none';
   document.getElementById('compare-csv-btn').style.display='none';
   document.getElementById('compare-missing-csv-btn').style.display='none';
+  document.getElementById('vod-match-btn').style.display='none';
+  document.getElementById('vod-match-result').style.display='none';
 
   try{
     // ① 両環境の Program 一覧取得
@@ -923,6 +948,8 @@ async function runCompare(){
     document.getElementById('compare-table').style.display='table';
     document.getElementById('compare-csv-btn').style.display='';
     document.getElementById('compare-missing-csv-btn').style.display='';
+    document.getElementById('vod-match-btn').style.display='';
+    document.getElementById('vod-match-result').style.display='none';
     status.textContent=`完了 (未存在: ${missingContent}件)`;
     log(`🏁 比較完了：OK ${okCount}件 / Content未存在 ${missingContent}件 / Arrangement未登録 ${missingArr}件`,'done');
   }catch(e){
@@ -966,6 +993,145 @@ function renderCompareTable(data){
     </tr>
   `).join('');
 }
+
+// ── VOD 照合 ──────────────────────────────────────────
+let vodMatchNoVod=[];    // QA に VOD が存在しない
+let vodMatchNeedCpm=[];  // QA に VOD あり、CPM 未登録
+
+async function runVodMatch(){
+  const btn=document.getElementById('vod-match-btn');
+  btn.disabled=true; btn.textContent='🔎 照合中...';
+
+  const missing=compareData.filter(r=>r.status==='missing_content' && r.content_name && r.content_name!=='—');
+  if(!missing.length){ toast('missing content がありません','success'); btn.disabled=false; btn.textContent='🔎 VOD 照合'; return; }
+
+  const status=document.getElementById('compare-status');
+  status.textContent='QA VOD 一覧 取得中...';
+
+  // QA の全 VOD を取得（name → vod_id マップ）
+  const qaVodMap={};   // name → vod_id（CMS VOD）
+  const qaCpmMap={};   // name → content_id（CPM 登録済み VOD）
+  try{
+    // CMS VOD
+    let page=1;
+    while(true){
+      const r=await fetch(`${BASE()}/bv/cms/v1/vods?current_page=${page}&items_per_page=50`,{headers:HDR()});
+      const d=await r.json();
+      (d.vods||[]).forEach(v=>{ if(v.name) qaVodMap[v.name]=v.id; });
+      if((d.vods||[]).length<50) break;
+      page++;
+    }
+    // CPM 登録済み VOD（title マップ）
+    const site=cfg('site_id');
+    if(site){
+      page=1;
+      while(true){
+        const r=await fetch(`${BASE()}/bv/cpm/v1alpha1/sites/${site}/contents?current_page=${page}&items_per_page=100&filter.content_types=CONTENT_TYPE_VOD`,{headers:HDR()});
+        const d=await r.json();
+        (d.contents||[]).forEach(c=>{ if(c.title) qaCpmMap[c.title]=c.content_id; });
+        if((d.contents||[]).length<100) break;
+        page++;
+      }
+    }
+  }catch(e){ toast('QA VOD 取得失敗: '+e.message,'error'); btn.disabled=false; btn.textContent='🔎 VOD 照合'; return; }
+
+  status.textContent=`QA VOD: ${Object.keys(qaVodMap).length}件 / CPM: ${Object.keys(qaCpmMap).length}件`;
+
+  vodMatchNoVod=[];
+  vodMatchNeedCpm=[];
+
+  // content_name で前缀マッチ
+  const findVod=(name)=>{
+    if(!name) return null;
+    // 完全一致
+    if(qaVodMap[name]) return {vod_id:qaVodMap[name], vod_name:name};
+    // 前缀一致（VOD name が content_name で始まる or 逆）
+    const entry=Object.entries(qaVodMap).find(([k])=>k.startsWith(name.substring(0,Math.min(name.length,20)))||name.startsWith(k.substring(0,Math.min(k.length,20))));
+    return entry?{vod_id:entry[1], vod_name:entry[0]}:null;
+  };
+
+  // 重複排除（同じ content_name は1回だけ）
+  const seen=new Set();
+  for(const row of missing){
+    const key=row.content_name;
+    if(seen.has(key)) continue;
+    seen.add(key);
+
+    const vodHit=findVod(row.content_name);
+    if(!vodHit){
+      // QA に VOD 自体がない
+      vodMatchNoVod.push({...row});
+    } else {
+      // VOD はある → CPM 登録済みか確認
+      const cpmHit=qaCpmMap[vodHit.vod_name]||Object.entries(qaCpmMap).find(([k])=>k.startsWith(vodHit.vod_name.substring(0,20)))?.[1]||'';
+      vodMatchNeedCpm.push({...row, qa_vod_id:vodHit.vod_id, qa_vod_name:vodHit.vod_name, qa_cpm_content_id:cpmHit});
+    }
+  }
+
+  // 結果表示
+  document.getElementById('vod-match-result').style.display='block';
+  document.getElementById('no-vod-count').textContent=`(${vodMatchNoVod.length}件)`;
+  document.getElementById('need-cpm-count').textContent=`(${vodMatchNeedCpm.length}件)`;
+
+  document.getElementById('no-vod-list').innerHTML=vodMatchNoVod.slice(0,50).map(r=>
+    `<div style="padding:3px 0;border-bottom:1px solid var(--border);color:var(--red)">📛 ${esc(r.content_name)}<br><span style="color:var(--muted);font-size:10px;">${esc(r.program_name)}</span></div>`
+  ).join('')+(vodMatchNoVod.length>50?`<div style="color:var(--muted);padding:4px 0;">...他 ${vodMatchNoVod.length-50}件</div>`:'');
+
+  document.getElementById('need-cpm-list').innerHTML=vodMatchNeedCpm.slice(0,50).map(r=>
+    `<div style="padding:3px 0;border-bottom:1px solid var(--border);">
+      ${r.qa_cpm_content_id?'✅':'⚠️'} ${esc(r.qa_vod_name)}
+      ${r.qa_cpm_content_id?'<span style="color:var(--green);font-size:10px;">CPM登録済</span>':'<span style="color:var(--yellow);font-size:10px;">CPM未登録</span>'}
+      <br><span style="color:var(--muted);font-size:10px;">${esc(r.program_name)}</span>
+    </div>`
+  ).join('')+(vodMatchNeedCpm.length>50?`<div style="color:var(--muted);padding:4px 0;">...他 ${vodMatchNeedCpm.length-50}件</div>`:'');
+
+  status.textContent=`照合完了 (VOD なし:${vodMatchNoVod.length}件 / CPM未登録:${vodMatchNeedCpm.filter(r=>!r.qa_cpm_content_id).length}件)`;
+  btn.disabled=false; btn.textContent='🔎 VOD 照合';
+}
+
+function exportNoVodCsv(){
+  if(!vodMatchNoVod.length){ toast('該当なし','success'); return; }
+  const rows=[['program_name','arrangement_title','content_name','prod_content_id']];
+  vodMatchNoVod.forEach(r=>rows.push([r.program_name,r.arrangement_title,r.content_name,r.prod_content_id]));
+  const csv=rows.map(r=>r.map(c=>`"${(c||'').replace(/"/g,'""')}"`).join(',')).join('\n');
+  const a=document.createElement('a');
+  a.href='data:text/csv;charset=utf-8,\uFEFF'+encodeURIComponent(csv);
+  a.download='need_vod_upload.csv'; a.click();
+}
+
+function exportNeedCpmCsv(){
+  if(!vodMatchNeedCpm.length){ toast('該当なし','success'); return; }
+  const rows=[['program_name','arrangement_title','content_name','qa_vod_id','qa_cpm_content_id','cpm_status']];
+  vodMatchNeedCpm.forEach(r=>rows.push([r.program_name,r.arrangement_title,r.content_name,r.qa_vod_id,r.qa_cpm_content_id,r.qa_cpm_content_id?'CPM登録済':'CPM未登録']));
+  const csv=rows.map(r=>r.map(c=>`"${(c||'').replace(/"/g,'""')}"`).join(',')).join('\n');
+  const a=document.createElement('a');
+  a.href='data:text/csv;charset=utf-8,\uFEFF'+encodeURIComponent(csv);
+  a.download='need_cpm_add.csv'; a.click();
+}
+
+async function batchAddMissingToCpm(){
+  const site=cfg('site_id');
+  if(!site){ toast('Site ID が設定されていません','error'); return; }
+  const targets=vodMatchNeedCpm.filter(r=>!r.qa_cpm_content_id);
+  if(!targets.length){ toast('CPM 未登録の VOD はありません','success'); return; }
+  if(!confirm(`CPM 未登録の ${targets.length}件 を CPM に追加します。よろしいですか？`)) return;
+
+  const btn=document.getElementById('batch-add-cpm-btn');
+  btn.disabled=true; btn.textContent='追加中...';
+  let ok=0, fail=0;
+  for(const row of targets){
+    try{
+      await addVodToCpm(row.qa_vod_id, row.qa_vod_name);
+      ok++;
+    }catch(e){ fail++; }
+    await new Promise(r=>setTimeout(r,300));
+  }
+  btn.disabled=false; btn.textContent='＋ CPM 一括追加';
+  toast(`CPM 追加完了：${ok}件 / 失敗:${fail}件`, ok>0?'success':'error');
+  // 照合を再実行
+  await runVodMatch();
+}
+// ── VOD 照合 終 ───────────────────────────────────────
 
 function exportCompareCsv(){
   if(!compareData.length){ toast('先に比較を実行してください','error'); return; }
