@@ -156,12 +156,23 @@ tr:last-child td{border-bottom:none;}
   <div class="card">
     <div class="card-title">📚 Program / Outline → Content 比較</div>
     <p style="font-size:11px;color:var(--muted);margin-bottom:12px;">Prod と QA の Program（Arrangement）と Outline（カテゴリー階層）の Content を比較します。設定ページで Prod Token を先に入力してください。<br>※ API 呼び出し数が多いため数分かかる場合があります。</p>
+
+    <!-- 全同期ボタン（メイン） -->
+    <div style="padding:14px;background:rgba(99,102,241,.08);border:1px solid rgba(99,102,241,.3);border-radius:8px;margin-bottom:14px;">
+      <div style="font-size:13px;font-weight:600;color:#818cf8;margin-bottom:6px;">🚀 Prod → QA 全同期</div>
+      <p style="font-size:11px;color:var(--muted);margin-bottom:10px;">VOD が QA CMS にアップロード済みであることを確認してから実行してください。<br>② CPM VOD 追加 → ③ Program 作成 → ④ Arrangement 補完 → ⑤ Outline 同期 を自動実行します。</p>
+      <div class="btn-row">
+        <button class="btn btn-primary" id="full-sync-btn" onclick="runFullSync()" style="background:linear-gradient(135deg,#6366f1,#8b5cf6);">🚀 全同期実行</button>
+        <span id="full-sync-status" style="font-size:11px;color:var(--muted);"></span>
+      </div>
+    </div>
+
     <div class="btn-row" style="margin-bottom:12px;">
       <button class="btn btn-primary" id="compare-btn" onclick="runCompare()">🔍 比較実行</button>
       <button class="btn btn-secondary" id="compare-csv-btn" onclick="exportCompareCsv()" style="display:none">📥 差分 CSV</button>
       <button class="btn btn-secondary" id="compare-missing-csv-btn" onclick="exportMissingOnlyCsv()" style="display:none">📥 未存在のみ CSV</button>
       <button class="btn btn-secondary" id="vod-match-btn" onclick="runVodMatch()" style="display:none">🔎 VOD 照合</button>
-      <button class="btn btn-primary" id="sync-arrangement-btn" onclick="runSyncArrangement()" style="display:none">🔁 Arrangement 自動補完</button>
+      <button class="btn btn-secondary" id="sync-arrangement-btn" onclick="runSyncArrangement()" style="display:none">🔁 Arrangement 補完のみ</button>
       <span id="compare-status" style="font-size:11px;color:var(--muted);"></span>
     </div>
     <div id="compare-summary" style="display:none;margin-bottom:12px;padding:12px;background:var(--surface2);border-radius:6px;font-size:12px;line-height:1.8;"></div>
@@ -209,6 +220,10 @@ tr:last-child td{border-bottom:none;}
         <tbody id="compare-tbody"></tbody>
       </table>
     </div>
+  </div>
+  <div id="full-sync-log-card" style="display:none;" class="card">
+    <div class="card-title">🚀 全同期ログ</div>
+    <div id="full-sync-log" style="font-family:var(--mono);font-size:11px;max-height:400px;overflow-y:auto;"></div>
   </div>
   <div id="compare-log-card" style="display:none;" class="card">
     <div class="card-title">ログ</div>
@@ -1006,7 +1021,253 @@ function renderCompareTable(data){
   `).join('');
 }
 
-// ── Arrangement 自動補完 ──────────────────────────────
+// ════ Prod → QA 全同期 ════════════════════════════════
+async function runFullSync(){
+  const btn=document.getElementById('full-sync-btn');
+  const statusEl=document.getElementById('full-sync-status');
+  const log=makeLog('full-sync-log','full-sync-log-card');
+
+  const prodSiteId=cfg('prod_site_id'), qaSiteId=cfg('site_id');
+  const prodToken=cfg('prod_token'), prodOrgId=cfg('prod_org_id');
+  if(!prodToken||!prodSiteId||!qaSiteId){
+    toast('設定ページで Prod/QA の Token と Site ID を確認してください','error'); return;
+  }
+  if(!confirm('Prod → QA 全同期を実行します。\n② CPM VOD追加 → ③ Program作成 → ④ Arrangement補完 → ⑤ Outline同期\nよろしいですか？')) return;
+
+  btn.disabled=true; btn.textContent='🚀 実行中...';
+  const setStatus=t=>{ statusEl.textContent=t; };
+
+  try{
+    // ════ STEP 1: QA CMS VOD 全件取得（name → vod_id）════
+    log('━━ STEP 1: QA CMS VOD 取得 ━━');
+    setStatus('STEP 1: QA CMS VOD 取得中...');
+    const qaVodMap={};  // name → vod_id
+    let page=1;
+    while(true){
+      const r=await fetch(`${BASE()}/bv/cms/v1/vods?current_page=${page}&items_per_page=50`,{headers:HDR()});
+      const d=await r.json();
+      (d.vods||[]).forEach(v=>{ if(v.name) qaVodMap[v.name]=v.id; });
+      if((d.vods||[]).length<50) break;
+      page++;
+    }
+    log(`✅ QA CMS VOD: ${Object.keys(qaVodMap).length}件`,'done');
+
+    // name の前缀マッチ
+    const findQaVodByName=(name)=>{
+      if(!name) return null;
+      if(qaVodMap[name]) return {id:qaVodMap[name],name};
+      const prefix=name.substring(0,Math.min(name.length,20));
+      const entry=Object.entries(qaVodMap).find(([k])=>
+        k===name || k.startsWith(prefix) || name.startsWith(k.substring(0,Math.min(k.length,20)))
+      );
+      return entry?{id:entry[1],name:entry[0]}:null;
+    };
+
+    // ════ STEP 2: Prod CPM VOD 一覧取得 → QA CPM に追加 ════
+    log('━━ STEP 2: VOD → CPM 追加 ━━');
+    setStatus('STEP 2: Prod CPM VOD 取得中...');
+    const prodCpmVods=[];
+    page=1;
+    while(true){
+      const r=await fetch(`${PROD_BASE}/bv/cpm/v1alpha1/sites/${prodSiteId}/contents?current_page=${page}&items_per_page=100&filter.content_types=CONTENT_TYPE_VOD`,{headers:prodHdr()});
+      const d=await r.json();
+      (d.contents||[]).forEach(c=>prodCpmVods.push(c));
+      if((d.contents||[]).length<100) break;
+      page++;
+    }
+    log(`  Prod CPM VOD: ${prodCpmVods.length}件`);
+
+    // QA CPM VOD 既存（title → content_id）
+    const qaCpmMap={};   // title → content_id
+    const qaVodIdToCpmId={};  // cms_vod_id → cpm_content_id
+    page=1;
+    while(true){
+      const r=await fetch(`${BASE()}/bv/cpm/v1alpha1/sites/${qaSiteId}/contents?current_page=${page}&items_per_page=100&filter.content_types=CONTENT_TYPE_VOD`,{headers:HDR()});
+      const d=await r.json();
+      (d.contents||[]).forEach(c=>{ qaCpmMap[c.title||'']=c.content_id; });
+      if((d.contents||[]).length<100) break;
+      page++;
+    }
+    // vod_id → content_id マップも構築
+    for(const title of Object.keys(qaCpmMap)){
+      const contentId=qaCpmMap[title];
+      try{
+        const vr=await fetch(`${BASE()}/bv/cpm/v1alpha1/sites/${qaSiteId}/vods/${contentId}`,{headers:HDR()});
+        if(vr.ok){ const vd=await vr.json(); const sid=vd.source?.vod?.id||''; if(sid) qaVodIdToCpmId[sid]=contentId; }
+      }catch{}
+    }
+    log(`  QA CPM VOD 既存: ${Object.keys(qaCpmMap).length}件`);
+
+    // Prod CPM VOD の title で QA CMS VOD を照合 → 未登録なら CPM 追加
+    let cpmAdded=0, cpmSkip=0, cpmMissing=0;
+    for(const pv of prodCpmVods){
+      const prodTitle=pv.title||'';
+      if(qaCpmMap[prodTitle]){ cpmSkip++; continue; }  // 既に QA CPM にある
+
+      // QA CMS VOD を name で検索
+      const qaVod=findQaVodByName(prodTitle);
+      if(!qaVod){ cpmMissing++; continue; }  // QA に VOD 自体がない
+
+      // CPM に追加
+      try{
+        await addVodToCpm(qaVod.id, prodTitle);
+        qaCpmMap[prodTitle]='pending';  // 後で再取得
+        cpmAdded++;
+        await new Promise(r=>setTimeout(r,400));
+      }catch(e){ log(`  ❌ CPM追加失敗: ${prodTitle}: ${e.message}`,'error'); }
+    }
+    log(`✅ CPM追加: +${cpmAdded}件 / スキップ:${cpmSkip}件 / QAになし:${cpmMissing}件`,'done');
+
+    // CPM 追加後に qaCpmMap を再構築
+    if(cpmAdded>0){
+      await new Promise(r=>setTimeout(r,1000));
+      page=1;
+      while(true){
+        const r=await fetch(`${BASE()}/bv/cpm/v1alpha1/sites/${qaSiteId}/contents?current_page=${page}&items_per_page=100&filter.content_types=CONTENT_TYPE_VOD`,{headers:HDR()});
+        const d=await r.json();
+        (d.contents||[]).forEach(c=>{ qaCpmMap[c.title||'']=c.content_id; });
+        if((d.contents||[]).length<100) break;
+        page++;
+      }
+    }
+
+    // ════ STEP 3: Program 殼を同期 ════
+    log('━━ STEP 3: Program 殼 同期 ━━');
+    setStatus('STEP 3: Program 作成中...');
+    const prodPrograms=await fetchAllPrograms(PROD_BASE, prodHdr(), prodSiteId);
+    const qaPrograms=await fetchAllPrograms(BASE(), HDR(), qaSiteId);
+    const qaProgMap={};  // title → content_id
+    qaPrograms.forEach(p=>{ qaProgMap[p.title]=p.content_id; });
+
+    let progCreated=0, progSkip=0;
+    for(const pp of prodPrograms){
+      if(qaProgMap[pp.title]){ progSkip++; continue; }
+      // QA に Program がない → 作成
+      try{
+        const r=await fetch(`${BASE()}/bv/cpm/v1alpha1/sites/${qaSiteId}/programs`,{
+          method:'POST', headers:{...HDR(),'Content-Type':'application/json'},
+          body:JSON.stringify({program:{title:pp.title}})
+        });
+        if(r.ok){
+          const d=await r.json();
+          const newId=d.program?.id||d.content_id||'';
+          if(newId) qaProgMap[pp.title]=newId;
+          progCreated++;
+        }
+      }catch(e){ log(`  ❌ Program作成失敗: ${pp.title}: ${e.message}`,'error'); }
+      await new Promise(r=>setTimeout(r,200));
+    }
+    log(`✅ Program: +${progCreated}件作成 / ${progSkip}件スキップ`,'done');
+
+    // ════ STEP 4: Arrangement 補完 ════
+    log('━━ STEP 4: Arrangement 補完 ━━');
+    setStatus('STEP 4: Arrangement 補完中...');
+    let arrOk=0, arrSkip=0, arrFail=0, totalAdded=0;
+
+    for(const pp of prodPrograms){
+      const qaProgId=qaProgMap[pp.title];
+      if(!qaProgId){ arrSkip++; continue; }
+
+      const prodArrs=await fetchProgramArrangement(PROD_BASE, prodHdr(), prodSiteId, pp.content_id);
+      if(!prodArrs.length){ arrSkip++; continue; }
+
+      // Prod の items を QA の content_id に変換
+      const prodItems=prodArrs[0]?.items||[];
+      if(!prodItems.length){ arrSkip++; continue; }
+
+      // QA 既存 items を取得
+      const qaArrs=await fetchProgramArrangement(BASE(), HDR(), qaSiteId, qaProgId);
+      const qaExistingIds=new Set((qaArrs[0]?.items||[]).map(it=>it.content?.id||it.id||'').filter(Boolean));
+
+      const newItems=[];
+      for(const item of prodItems){
+        const contentName=item.content?.name||item.name||item.title||'';
+        // QA CPM で title 照合
+        let qaCpmId=qaCpmMap[contentName]||'';
+        if(!qaCpmId){
+          // 前缀マッチ
+          const entry=Object.entries(qaCpmMap).find(([k])=>k===contentName||k.startsWith(contentName.substring(0,20))||contentName.startsWith(k.substring(0,20)));
+          qaCpmId=entry?entry[1]:'';
+        }
+        if(qaCpmId && !qaExistingIds.has(qaCpmId)){
+          newItems.push({type:'PROGRAM_ARRANGEMENT_ITEM_TYPE_CONTENT',sequence:newItems.length+(qaArrs[0]?.items||[]).length,content:{type:'CONTENT_TYPE_VOD',id:qaCpmId,name:contentName}});
+          qaExistingIds.add(qaCpmId);
+        }
+      }
+
+      if(!newItems.length){ arrSkip++; continue; }
+
+      // PUT
+      try{
+        const existingItems=(qaArrs[0]?.items||[]);
+        const allItems=[...existingItems,...newItems].map((it,i)=>({...it,sequence:i}));
+        const pr=await fetch(`${BASE()}/bv/cpm/v1alpha1/sites/${qaSiteId}/programs/${qaProgId}`,{
+          method:'PUT', headers:{...HDR(),'Content-Type':'application/json'},
+          body:JSON.stringify({program:{arrangement:{items:allItems}}})
+        });
+        if(!pr.ok) throw new Error(`${pr.status}: ${(await pr.text()).substring(0,100)}`);
+        arrOk++; totalAdded+=newItems.length;
+        log(`  ✅ ${pp.title} (+${newItems.length}件)`,'done');
+      }catch(e){ arrFail++; log(`  ❌ ${pp.title}: ${e.message}`,'error'); }
+      await new Promise(r=>setTimeout(r,150));
+    }
+    log(`✅ Arrangement: ${arrOk}件更新 / ${arrSkip}件スキップ / ${arrFail}件失敗 / +${totalAdded}件追加`,'done');
+
+    // ════ STEP 5: Outline 同期 ════
+    log('━━ STEP 5: Outline 同期 ━━');
+    setStatus('STEP 5: Outline 同期中...');
+    const prodOutline=await fetchOutline(PROD_BASE, prodHdr(), prodSiteId);
+    const qaOutline=await fetchOutline(BASE(), HDR(), qaSiteId);
+
+    if(!prodOutline.id && !qaOutline.id){
+      log('  ⚠️ Outline が見つかりません（スキップ）');
+    } else {
+      // Prod Outline の categories 構造を QA 用に変換（content_id を QA CPM の ID に差し替え）
+      const remapContents=(categories)=>{
+        return (categories||[]).map(cat=>{
+          const newCat={...cat};
+          if(cat.contents?.length){
+            newCat.contents=cat.contents.map(c=>{
+              const name=c.name||c.title||'';
+              const qaId=qaCpmMap[name]||Object.entries(qaCpmMap).find(([k])=>k===name||k.startsWith(name.substring(0,20)))?.[1]||'';
+              return qaId?{id:qaId,type:c.type||'CONTENT_TYPE_PROGRAM'}:null;
+            }).filter(Boolean);
+          }
+          if(cat.sub_categories?.length) newCat.sub_categories=remapContents(cat.sub_categories);
+          if(cat.categories?.length) newCat.categories=remapContents(cat.categories);
+          return newCat;
+        });
+      };
+
+      const remappedCategories=remapContents(prodOutline.categories||[]);
+      const outlineId=qaOutline.id||prodOutline.id;
+      try{
+        const or=await fetch(`${BASE()}/bv/cpm/marketplace/v1alpha1/sites/${qaSiteId}/outlines/${outlineId}`,{
+          method:'PUT', headers:{...HDR(),'Content-Type':'application/json'},
+          body:JSON.stringify({categories:remappedCategories})
+        });
+        if(!or.ok) throw new Error(`${or.status}: ${(await or.text()).substring(0,100)}`);
+        log('✅ Outline 同期完了','done');
+      }catch(e){ log(`❌ Outline PUT 失敗: ${e.message}`,'error'); }
+    }
+
+    // ════ 完了 ════
+    log('━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━','done');
+    log(`🎉 全同期完了！`,'done');
+    log(`  CPM VOD追加: +${cpmAdded}件`,'done');
+    log(`  Program作成: +${progCreated}件`,'done');
+    log(`  Arrangement追加: +${totalAdded}件`,'done');
+    setStatus(`完了！ CPM+${cpmAdded} / Program+${progCreated} / Arr+${totalAdded}`);
+    toast('🎉 Prod → QA 全同期完了！','success');
+
+  }catch(e){
+    log(`❌ エラー: ${e.message}`,'error');
+    toast('全同期失敗: '+e.message,'error');
+  }finally{
+    btn.disabled=false; btn.textContent='🚀 全同期実行';
+  }
+}
+// ════ Prod → QA 全同期 終 ════════════════════════════
 // Prod の Arrangement 構造を取得し、QA にある VOD/CPM content で補完して PUT する
 async function runSyncArrangement(){
   const btn=document.getElementById('sync-arrangement-btn');
