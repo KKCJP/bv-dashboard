@@ -1197,13 +1197,13 @@ async function runFullSync(){
 
       if(!newItems.length){ arrSkip++; continue; }
 
-      // PUT
+      // PUT（title は必須フィールドなので含める）
       try{
         const existingItems=(qaArrs[0]?.items||[]);
         const allItems=[...existingItems,...newItems].map((it,i)=>({...it,sequence:i}));
         const pr=await fetch(`${BASE()}/bv/cpm/v1alpha1/sites/${qaSiteId}/programs/${qaProgId}`,{
           method:'PUT', headers:{...HDR(),'Content-Type':'application/json'},
-          body:JSON.stringify({program:{arrangement:{items:allItems}}})
+          body:JSON.stringify({program:{title:pp.title, arrangement:{items:allItems}}})
         });
         if(!pr.ok) throw new Error(`${pr.status}: ${(await pr.text()).substring(0,100)}`);
         arrOk++; totalAdded+=newItems.length;
@@ -1451,7 +1451,7 @@ async function runSyncArrangement(){
         const putRes=await fetch(`${BASE()}/bv/cpm/v1alpha1/sites/${qaSiteId}/programs/${qaProgId}`,{
           method:'PUT',
           headers:{...HDR(),'Content-Type':'application/json'},
-          body:JSON.stringify({program:{arrangement:{items:dedupedItems}}})
+          body:JSON.stringify({program:{title:prog.title, arrangement:{items:dedupedItems}}})
         });
         if(!putRes.ok){
           const err=await putRes.text();
