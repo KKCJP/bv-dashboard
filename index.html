@@ -778,15 +778,9 @@ async function fetchProgramArrangement(base, hdr, site, contentId, debug=false){
     if(!r.ok) return [];
     const d=await r.json();
     const prog=d.program||d;
-    // arrangement（単数）の items を配列として返す
-    // arrangement.items が存在する場合は [{title:'', items:[...]}] 形式に正規化
-    if(prog.arrangement?.items?.length){
-      return [{title: prog.arrangement.title||'', items: prog.arrangement.items}];
-    }
-    // arrangements（複数）形式にも対応
-    if(prog.arrangements?.length) return prog.arrangements;
-    if(d.arrangements?.length) return d.arrangements;
-    return [];
+    // arrangement.items を返す（section 構造ごと）
+    const items=prog.arrangement?.items||prog.arrangements?.[0]?.items||[];
+    return items;
   }catch(e){ if(debug) console.warn('[fetchProgramArrangement]', e.message); return []; }
 }
 
@@ -1164,57 +1158,102 @@ async function runFullSync(){
     setStatus('STEP 4: Arrangement 補完中...');
     let arrOk=0, arrSkip=0, arrFail=0, totalAdded=0;
 
+    // Prod の CPM content_id → QA の CPM content_id に変換する関数
+    // content.vod.id = Prod の CPM content_id → title で QA CPM と照合
+    const resolveQaCpmId=(prodItem)=>{
+      // content.vod.id は Prod CPM の content_id（QA では使えない）
+      // content の name または vod.title で QA CPM title と照合
+      const vodTitle=prodItem.content?.vod?.title||'';
+      const contentName=prodItem.content?.name||'';
+      // QA CPM title マップから照合（vod.title 優先）
+      for(const key of [vodTitle, contentName]){
+        if(!key) continue;
+        if(qaCpmMap[key]) return {id:qaCpmMap[key], name:key};
+        // 前缀マッチ（20文字）
+        const prefix=key.substring(0,Math.min(key.length,20));
+        const entry=Object.entries(qaCpmMap).find(([k])=>
+          k===key || k.startsWith(prefix) || key.startsWith(k.substring(0,Math.min(k.length,20)))
+        );
+        if(entry) return {id:entry[1], name:entry[0]};
+      }
+      return null;
+    };
+
     for(const pp of prodPrograms){
       const qaProgId=qaProgMap[pp.title];
       if(!qaProgId){ arrSkip++; continue; }
 
-      const prodArrs=await fetchProgramArrangement(PROD_BASE, prodHdr(), prodSiteId, pp.content_id);
-      if(!prodArrs.length){ arrSkip++; continue; }
-
-      // Prod の items を QA の content_id に変換
-      const prodItems=prodArrs[0]?.items||[];
+      // Prod の arrangement items（section 構造ごと）を取得
+      const prodItems=await fetchProgramArrangement(PROD_BASE, prodHdr(), prodSiteId, pp.content_id);
       if(!prodItems.length){ arrSkip++; continue; }
 
-      // QA 既存 items を取得
-      const qaArrs=await fetchProgramArrangement(BASE(), HDR(), qaSiteId, qaProgId);
-      const qaExistingIds=new Set((qaArrs[0]?.items||[]).map(it=>it.content?.id||it.id||'').filter(Boolean));
-
-      const newItems=[];
-      for(const item of prodItems){
-        const contentName=item.content?.name||item.name||item.title||'';
-        // QA CPM で title 照合
-        let qaCpmId=qaCpmMap[contentName]||'';
-        if(!qaCpmId){
-          // 前缀マッチ
-          const entry=Object.entries(qaCpmMap).find(([k])=>k===contentName||k.startsWith(contentName.substring(0,20))||contentName.startsWith(k.substring(0,20)));
-          qaCpmId=entry?entry[1]:'';
-        }
-        if(qaCpmId && !qaExistingIds.has(qaCpmId)){
-          newItems.push({content:{type:'CONTENT_TYPE_VOD',id:qaCpmId,name:contentName}});
-          qaExistingIds.add(qaCpmId);
+      // QA 既存 content_id セット（重複防止）
+      const qaExistingItems=await fetchProgramArrangement(BASE(), HDR(), qaSiteId, qaProgId);
+      const qaExistingIds=new Set();
+      for(const it of qaExistingItems){
+        if(it.type==='PROGRAM_ARRANGEMENT_ITEM_TYPE_SECTION'){
+          (it.section?.items||[]).forEach(si=>{ const id=si.content?.vod?.id||''; if(id) qaExistingIds.add(id); });
+        } else {
+          const id=it.content?.vod?.id||''; if(id) qaExistingIds.add(id);
         }
       }
 
-      if(!newItems.length){ arrSkip++; continue; }
+      // Prod の section 構造を QA の content_id に変換して再構築
+      const newTopItems=[];
+      let sectionSeq=1, addedCount=0;
 
-      // PUT（sequence は明示的に 0 始まりの整数、不要フィールドを除去してクリーンに送る）
-      try{
-        const cleanItems=newItems.map((it,i)=>({
-          type: 'PROGRAM_ARRANGEMENT_ITEM_TYPE_CONTENT',
-          sequence: i,
-          content: {
-            type: it.content?.type||'CONTENT_TYPE_VOD',
-            id: it.content?.id||'',
-            name: it.content?.name||''
+      for(const topItem of prodItems){
+        if(topItem.type==='PROGRAM_ARRANGEMENT_ITEM_TYPE_SECTION'){
+          // Section → 中の items を変換
+          const sectionItems=topItem.section?.items||[];
+          const newSectionItems=[];
+          let contentSeq=1;
+          for(const si of sectionItems){
+            const resolved=resolveQaCpmId(si);
+            if(!resolved||qaExistingIds.has(resolved.id)) continue;
+            newSectionItems.push({
+              type:'PROGRAM_ARRANGEMENT_ITEM_TYPE_CONTENT',
+              sequence:contentSeq++,
+              section:null, module:null,
+              content:{type:si.content?.type||'CONTENT_TYPE_VOD', name:'', vod:{id:resolved.id}, form:null, file:null, aod:null, article:null}
+            });
+            qaExistingIds.add(resolved.id);
+            addedCount++;
           }
-        }));
+          if(newSectionItems.length){
+            newTopItems.push({
+              type:'PROGRAM_ARRANGEMENT_ITEM_TYPE_SECTION',
+              sequence:sectionSeq++,
+              section:{name:topItem.section?.name||'', items:newSectionItems},
+              module:null, content:null
+            });
+          }
+        } else if(topItem.type==='PROGRAM_ARRANGEMENT_ITEM_TYPE_CONTENT'){
+          // Content が直接トップにある場合
+          const resolved=resolveQaCpmId(topItem);
+          if(!resolved||qaExistingIds.has(resolved.id)) continue;
+          newTopItems.push({
+            type:'PROGRAM_ARRANGEMENT_ITEM_TYPE_CONTENT',
+            sequence:sectionSeq++,
+            section:null, module:null,
+            content:{type:topItem.content?.type||'CONTENT_TYPE_VOD', name:'', vod:{id:resolved.id}, form:null, file:null, aod:null, article:null}
+          });
+          qaExistingIds.add(resolved.id);
+          addedCount++;
+        }
+      }
+
+      if(!newTopItems.length){ arrSkip++; continue; }
+
+      // PUT
+      try{
         const pr=await fetch(`${BASE()}/bv/cpm/v1alpha1/sites/${qaSiteId}/programs/${qaProgId}`,{
           method:'PUT', headers:{...HDR(),'Content-Type':'application/json'},
-          body:JSON.stringify({program:{title:pp.title, arrangement:{items:cleanItems}}})
+          body:JSON.stringify({program:{title:pp.title, arrangement:{items:newTopItems}}})
         });
-        if(!pr.ok) throw new Error(`${pr.status}: ${(await pr.text()).substring(0,100)}`);
-        arrOk++; totalAdded+=newItems.length;
-        log(`  ✅ ${pp.title} (+${newItems.length}件)`,'done');
+        if(!pr.ok) throw new Error(`${pr.status}: ${(await pr.text()).substring(0,150)}`);
+        arrOk++; totalAdded+=addedCount;
+        log(`  ✅ ${pp.title} (+${addedCount}件)`,'done');
       }catch(e){ arrFail++; log(`  ❌ ${pp.title}: ${e.message}`,'error'); }
       await new Promise(r=>setTimeout(r,150));
     }
