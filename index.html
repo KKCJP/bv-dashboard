@@ -1190,20 +1190,27 @@ async function runFullSync(){
           qaCpmId=entry?entry[1]:'';
         }
         if(qaCpmId && !qaExistingIds.has(qaCpmId)){
-          newItems.push({type:'PROGRAM_ARRANGEMENT_ITEM_TYPE_CONTENT',sequence:newItems.length+(qaArrs[0]?.items||[]).length,content:{type:'CONTENT_TYPE_VOD',id:qaCpmId,name:contentName}});
+          newItems.push({content:{type:'CONTENT_TYPE_VOD',id:qaCpmId,name:contentName}});
           qaExistingIds.add(qaCpmId);
         }
       }
 
       if(!newItems.length){ arrSkip++; continue; }
 
-      // PUT（title は必須フィールドなので含める）
+      // PUT（sequence は明示的に 0 始まりの整数、不要フィールドを除去してクリーンに送る）
       try{
-        const existingItems=(qaArrs[0]?.items||[]);
-        const allItems=[...existingItems,...newItems].map((it,i)=>({...it,sequence:i}));
+        const cleanItems=newItems.map((it,i)=>({
+          type: 'PROGRAM_ARRANGEMENT_ITEM_TYPE_CONTENT',
+          sequence: i,
+          content: {
+            type: it.content?.type||'CONTENT_TYPE_VOD',
+            id: it.content?.id||'',
+            name: it.content?.name||''
+          }
+        }));
         const pr=await fetch(`${BASE()}/bv/cpm/v1alpha1/sites/${qaSiteId}/programs/${qaProgId}`,{
           method:'PUT', headers:{...HDR(),'Content-Type':'application/json'},
-          body:JSON.stringify({program:{title:pp.title, arrangement:{items:allItems}}})
+          body:JSON.stringify({program:{title:pp.title, arrangement:{items:cleanItems}}})
         });
         if(!pr.ok) throw new Error(`${pr.status}: ${(await pr.text()).substring(0,100)}`);
         arrOk++; totalAdded+=newItems.length;
