@@ -3410,15 +3410,36 @@ async function runOutlineImport(){
             if(c.id){
               resolved.push(c);
             } else if(c._search_name){
-              const searchName=c._search_name;
+              const searchName=c._search_name.trim();
               try{
-                // 完全一致のみ（前缀マッチは誤マッチの原因になるため除外）
-                const cpmEntry=cpmContentTitleMap[searchName];
+                // 1) cpmContentTitleMap から完全一致（VOD・Program・Form すべて対象）
+                let cpmEntry=cpmContentTitleMap[searchName];
+
+                // 2) 前缀マッチ
+                if(!cpmEntry){
+                  const prefixKey=Object.keys(cpmContentTitleMap).find(k=>
+                    k===searchName || k.startsWith(searchName) || searchName.startsWith(k)
+                  );
+                  if(prefixKey) cpmEntry=cpmContentTitleMap[prefixKey];
+                }
+
+                // 3) QA Program 一覧から直接 API 検索（cpmContentTitleMap に含まれない場合）
+                if(!cpmEntry){
+                  try{
+                    const pr=await fetch(`${BASE()}/bv/cpm/v1alpha1/sites/${site}/contents?current_page=1&items_per_page=10&filter.content_types=CONTENT_TYPE_PROGRAM&filter.title=${encodeURIComponent(searchName)}`,{headers:HDR()});
+                    if(pr.ok){
+                      const pd=await pr.json();
+                      const hit=(pd.contents||[]).find(p=>p.title===searchName)||(pd.contents||[])[0];
+                      if(hit) cpmEntry={id:hit.content_id, type:'CONTENT_TYPE_PROGRAM'};
+                    }
+                  }catch{}
+                }
+
                 if(cpmEntry){
                   resolved.push({id:cpmEntry.id,type:c.type||cpmEntry.type||'CONTENT_TYPE_PROGRAM'});
-                  continue;
+                } else {
+                  missing.push(searchName);
                 }
-                missing.push(searchName);
               }catch{ missing.push(c._search_name); }
             }
           }
