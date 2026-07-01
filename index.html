@@ -1440,7 +1440,7 @@ async function runFullSync(){
         if(!uploadRes.ok) throw new Error(`upload init 失敗: ${uploadRes.status}`);
         const uploadData=await uploadRes.json();
         const fileId=uploadData.file?.id||'';
-        const s3Url=uploadData.upload_data?.parts?.[0]?.url||'';
+        const s3Url=uploadData.upload_data?.parts?.[0]?.presigned_url||uploadData.upload_data?.parts?.[0]?.url||'';
         const uploadId=uploadData.upload_data?.id||'';
         if(!fileId||!s3Url) throw new Error('upload_data が不正');
 
@@ -1739,7 +1739,7 @@ async function runStep6Only(){
         if(!uploadRes.ok) throw new Error(`upload init 失敗: ${uploadRes.status}`);
         const uploadData=await uploadRes.json();
         const fileId=uploadData.file?.id||'';
-        const s3Url=uploadData.upload_data?.parts?.[0]?.url||'';
+        const s3Url=uploadData.upload_data?.parts?.[0]?.presigned_url||uploadData.upload_data?.parts?.[0]?.url||'';
         const uploadId=uploadData.upload_data?.id||'';
         if(!fileId||!s3Url) throw new Error('upload_data が不正');
         const s3Res=await fetch(s3Url,{method:'PUT',headers:{'Content-Type':contentType},body:imgBlob});
