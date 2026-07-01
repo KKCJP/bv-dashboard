@@ -1366,13 +1366,13 @@ async function runFullSync(){
               const name=c.name||c.title||'';
               const contentType=c.type||'CONTENT_TYPE_PROGRAM';
               let qaId=contentType==='CONTENT_TYPE_PROGRAM'?
-                qaProgramTitleMap[name]||Object.entries(qaProgramTitleMap).find(([k])=>k===name||k.startsWith(name.substring(0,20))||name.startsWith(k.substring(0,20)))?.[1]||'':
-                qaCpmMap[name]||Object.entries(qaCpmMap).find(([k])=>k===name||k.startsWith(name.substring(0,20)))?.[1]||'';
-              if(!qaId) qaId=qaProgramTitleMap[name]||qaCpmMap[name]||'';
+                qaProgramTitleMap[name]||'':
+                qaCpmMap[name]||'';
+              // 完全一致のみ（前缀マッチは誤マッチの原因になるため除外）
               if(qaId) resolved.push({id:qaId,type:contentType});
               else missing.push(name);
             });
-            if(missing.length) log(`  ⚠️ Outline 未解決: ${missing.join('、')}`,'error');
+            if(missing.length) log(`  ⚠️ Outline 未解決（QAに存在しないためスキップ）: ${missing.join('、')}`,'error');
             newCat.contents=resolved;
           }
           if(cat.sub_categories?.length) newCat.sub_categories=remapContents(cat.sub_categories);
@@ -1675,9 +1675,9 @@ async function runStep5Only(){
             const name=c.name||c.title||'';
             const contentType=c.type||'CONTENT_TYPE_PROGRAM';
             let qaId=contentType==='CONTENT_TYPE_PROGRAM'?
-              qaProgramTitleMap[name]||Object.entries(qaProgramTitleMap).find(([k])=>k===name||k.startsWith(name.substring(0,20))||name.startsWith(k.substring(0,20)))?.[1]||'':
-              qaCpmMap[name]||Object.entries(qaCpmMap).find(([k])=>k===name||k.startsWith(name.substring(0,20)))?.[1]||'';
-            if(!qaId) qaId=qaProgramTitleMap[name]||qaCpmMap[name]||'';
+              qaProgramTitleMap[name]||'':
+              qaCpmMap[name]||'';
+              // 完全一致のみ
             if(qaId) resolved.push({id:qaId,type:contentType});
             else missing.push(name);
           });
@@ -3412,48 +3412,19 @@ async function runOutlineImport(){
             } else if(c._search_name){
               const searchName=c._search_name;
               try{
-                // 1) CPM title マップから完全一致で検索（最優先）
-                let cpmEntry=cpmContentTitleMap[searchName];
-                if(!cpmEntry){
-                  // 部分一致でも試みる
-                  const matchedKey=Object.keys(cpmContentTitleMap).find(k=>k===searchName||k.startsWith(searchName)||searchName.startsWith(k.substring(0,10)));
-                  cpmEntry=matchedKey?cpmContentTitleMap[matchedKey]:null;
-                }
+                // 完全一致のみ（前缀マッチは誤マッチの原因になるため除外）
+                const cpmEntry=cpmContentTitleMap[searchName];
                 if(cpmEntry){
                   resolved.push({id:cpmEntry.id,type:c.type||cpmEntry.type||'CONTENT_TYPE_PROGRAM'});
                   continue;
                 }
-                // 2) vodsData から検索して VOD id を取得後 CPM content_id に変換
-                let vodFound=vodsData.find(v=>v.name===searchName)
-                  ||vodsData.find(v=>v.name?.startsWith(searchName))
-                  ||vodsData.find(v=>searchName && v.name?.includes(searchName));
-                if(!vodFound){
-                  const r=await fetch(`${BASE()}/bv/cms/v1/vods?current_page=1&items_per_page=5&filter.name=${encodeURIComponent(searchName)}`,{headers:HDR()});
-                  const d=await r.json();
-                  const hits=d.vods||[];
-                  vodFound=hits.find(h=>h.name===searchName)||hits[0]||null;
-                }
-                if(vodFound){
-                  // VOD id を CPM content_id に変換（/contents?filter.title= で再検索）
-                  const cr=await fetch(`${BASE()}/bv/cpm/v1alpha1/sites/${site}/contents?current_page=1&items_per_page=5&filter.content_types=CONTENT_TYPE_VOD&filter.title=${encodeURIComponent(vodFound.name||searchName)}`,{headers:HDR()});
-                  const cd=await cr.json();
-                  const chit=(cd.contents||[]).find(h=>h.title===vodFound.name)||(cd.contents||[])[0];
-                  if(chit?.content_id){
-                    resolved.push({id:chit.content_id,type:c.type||'CONTENT_TYPE_VOD'});
-                    continue;
-                  }
-                  // CPM未登録 → VOD id をそのまま使用（フォールバック）
-                  resolved.push({id:vodFound.id,type:c.type||'CONTENT_TYPE_VOD'});
-                } else {
-                  missing.push(searchName);
-                }
+                missing.push(searchName);
               }catch{ missing.push(c._search_name); }
             }
           }
           child.contents=resolved;
           if(missing.length) log(`  ⚠️ content 未找到（PUT から除外）：${missing.join('、')}`,'error');
         }
-        // 再帰（全階層を処理）
         await resolveContentNames(child);
       }
     };
