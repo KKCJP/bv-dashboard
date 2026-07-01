@@ -1368,13 +1368,93 @@ async function runFullSync(){
       }catch(e){ log(`❌ Outline PUT 失敗: ${e.message}`,'error'); }
     }
 
+    // ════ STEP 6: Thumbnail 同期 ════
+    log('━━ STEP 6: Thumbnail 同期 ━━');
+    setStatus('STEP 6: Thumbnail 同期中...');
+    let thumbOk=0, thumbSkip=0, thumbFail=0;
+
+    for(const pp of prodPrograms){
+      const qaProgId=qaProgMap[pp.title];
+      if(!qaProgId){ thumbSkip++; continue; }
+
+      try{
+        // Prod の Program 詳細から background.image URL を取得
+        const pr=await fetch(`${PROD_BASE}/bv/cpm/v1alpha1/sites/${prodSiteId}/programs/${pp.content_id}?action=GET_FORM_REQUEST_ACTION_CURRENT&mode=FORM_MODE_EDIT`,{headers:prodHdr()});
+        if(!pr.ok){ thumbSkip++; continue; }
+        const pd=await pr.json();
+        const bg=pd.program?.background;
+        if(bg?.type!=='PROGRAM_BACKGROUND_TYPE_IMAGE'||!bg?.image){ thumbSkip++; continue; }
+
+        // image URL を取得（uri または url フィールド）
+        const imgUrl=bg.image.uri||bg.image.url||'';
+        if(!imgUrl){ thumbSkip++; continue; }
+
+        // QA の Program の background が既に設定済みか確認
+        const qpr=await fetch(`${BASE()}/bv/cpm/v1alpha1/sites/${qaSiteId}/programs/${qaProgId}?action=GET_FORM_REQUEST_ACTION_CURRENT&mode=FORM_MODE_EDIT`,{headers:HDR()});
+        if(qpr.ok){
+          const qpd=await qpr.json();
+          if(qpd.program?.background?.type==='PROGRAM_BACKGROUND_TYPE_IMAGE'&&qpd.program?.background?.image){
+            thumbSkip++; continue; // 既に設定済み
+          }
+        }
+
+        // 画像を fetch（Prod CDN から）
+        const imgRes=await fetch(imgUrl);
+        if(!imgRes.ok) throw new Error(`画像取得失敗: ${imgRes.status}`);
+        const imgBlob=await imgRes.blob();
+        const imgSize=imgBlob.size;
+        const contentType=imgBlob.type||'image/jpeg';
+        const ext=imgUrl.split('.').pop().split('?')[0]||'jpg';
+        const fileName=`${pp.title.substring(0,30)}.${ext}`;
+
+        // QA library にアップロード開始
+        const uploadRes=await fetch(`${BASE()}/bv/cms/v1/library/files:upload`,{
+          method:'POST', headers:{...HDR(),'Content-Type':'application/json'},
+          body:JSON.stringify({file:{name:fileName, size:String(imgSize), type:'FILE_TYPE_IMAGE', source:'FILE_SOURCE_UNSPECIFIED', attrs:{'content-type':contentType}}})
+        });
+        if(!uploadRes.ok) throw new Error(`upload init 失敗: ${uploadRes.status}`);
+        const uploadData=await uploadRes.json();
+        const fileId=uploadData.file?.id||'';
+        const s3Url=uploadData.upload_data?.parts?.[0]?.url||'';
+        const uploadId=uploadData.upload_data?.id||'';
+        if(!fileId||!s3Url) throw new Error('upload_data が不正');
+
+        // S3 に PUT
+        const s3Res=await fetch(s3Url,{method:'PUT', headers:{'Content-Type':contentType}, body:imgBlob});
+        if(!s3Res.ok) throw new Error(`S3 PUT 失敗: ${s3Res.status}`);
+        const etag=s3Res.headers.get('ETag')||'';
+
+        // アップロード完了通知
+        await fetch(`${BASE()}/bv/cms/v1/library/files/${fileId}:complete-upload`,{
+          method:'POST', headers:{...HDR(),'Content-Type':'application/json'},
+          body:JSON.stringify({id:uploadId, parts:[{part_number:1, etag}]})
+        });
+
+        // QA Program の background に設定
+        const setRes=await fetch(`${BASE()}/bv/cpm/v1alpha1/sites/${qaSiteId}/programs/${qaProgId}`,{
+          method:'PUT', headers:{...HDR(),'Content-Type':'application/json'},
+          body:JSON.stringify({program:{title:pp.title, background:{type:'PROGRAM_BACKGROUND_TYPE_IMAGE', image:{id:fileId}}}})
+        });
+        if(!setRes.ok) throw new Error(`Program PUT 失敗: ${setRes.status}`);
+
+        thumbOk++;
+        log(`  ✅ ${pp.title}`,'done');
+      }catch(e){
+        thumbFail++;
+        log(`  ❌ ${pp.title}: ${e.message}`,'error');
+      }
+      await new Promise(r=>setTimeout(r,300));
+    }
+    log(`✅ Thumbnail: ${thumbOk}件完了 / ${thumbSkip}件スキップ / ${thumbFail}件失敗`,'done');
+
     // ════ 完了 ════
     log('━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━','done');
     log(`🎉 全同期完了！`,'done');
     log(`  CPM VOD追加: +${cpmAdded}件`,'done');
     log(`  Program作成: +${progCreated}件`,'done');
     log(`  Arrangement追加: +${totalAdded}件`,'done');
-    setStatus(`完了！ CPM+${cpmAdded} / Program+${progCreated} / Arr+${totalAdded}`);
+    log(`  Thumbnail: +${thumbOk}件`,'done');
+    setStatus(`完了！ CPM+${cpmAdded} / Program+${progCreated} / Arr+${totalAdded} / Thumb+${thumbOk}`);
     toast('🎉 Prod → QA 全同期完了！','success');
 
   }catch(e){
