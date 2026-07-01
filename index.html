@@ -1105,25 +1105,26 @@ async function runFullSync(){
       // CPM に追加
       try{
         await addVodToCpm(qaVod.id, prodTitle);
-        qaCpmMap[prodTitle]='pending';  // 後で再取得
         cpmAdded++;
         await new Promise(r=>setTimeout(r,400));
       }catch(e){ log(`  ❌ CPM追加失敗: ${prodTitle}: ${e.message}`,'error'); }
     }
     log(`✅ CPM追加: +${cpmAdded}件 / スキップ:${cpmSkip}件 / QAになし:${cpmMissing}件`,'done');
 
-    // CPM 追加後に qaCpmMap を再構築
-    if(cpmAdded>0){
-      await new Promise(r=>setTimeout(r,1000));
-      page=1;
-      while(true){
-        const r=await fetch(`${BASE()}/bv/cpm/v1alpha1/sites/${qaSiteId}/contents?current_page=${page}&items_per_page=100&filter.content_types=CONTENT_TYPE_VOD`,{headers:HDR()});
-        const d=await r.json();
-        (d.contents||[]).forEach(c=>{ qaCpmMap[c.title||'']=c.content_id; });
-        if((d.contents||[]).length<100) break;
-        page++;
-      }
+    // CPM 追加後に qaCpmMap を完全再構築（pending を除去して正しい content_id に差し替え）
+    log('  📋 QA CPM VOD マップ再構築中...');
+    // pending を含む古いエントリを全削除
+    Object.keys(qaCpmMap).forEach(k=>{ if(qaCpmMap[k]==='pending') delete qaCpmMap[k]; });
+    await new Promise(r=>setTimeout(r,2000)); // CPM 登録完了を待つ
+    page=1;
+    while(true){
+      const r=await fetch(`${BASE()}/bv/cpm/v1alpha1/sites/${qaSiteId}/contents?current_page=${page}&items_per_page=100&filter.content_types=CONTENT_TYPE_VOD`,{headers:HDR()});
+      const d=await r.json();
+      (d.contents||[]).forEach(c=>{ if(c.title&&c.content_id) qaCpmMap[c.title]=c.content_id; });
+      if((d.contents||[]).length<100) break;
+      page++;
     }
+    log(`  ✅ QA CPM VOD マップ: ${Object.keys(qaCpmMap).length}件`,'done');
 
     // ════ STEP 3: Program 殼を同期 ════
     log('━━ STEP 3: Program 殼 同期 ━━');
