@@ -1339,15 +1339,31 @@ async function runFullSync(){
     if(!prodOutline.id && !qaOutline.id){
       log('  ⚠️ Outline が見つかりません（スキップ）');
     } else {
-      // Prod Outline の categories 構造を QA 用に変換（content_id を QA CPM の ID に差し替え）
+      // QA Program title → content_id マップ（Outline は Program の ID が必要）
+      const qaProgramTitleMap={};
+      qaPrograms.forEach(p=>{ qaProgramTitleMap[p.title]=p.content_id; });
+
+      // Prod Outline の categories 構造を QA 用に変換
+      // contents の id は QA の Program content_id に差し替え
       const remapContents=(categories)=>{
         return (categories||[]).map(cat=>{
           const newCat={...cat};
           if(cat.contents?.length){
             newCat.contents=cat.contents.map(c=>{
               const name=c.name||c.title||'';
-              const qaId=qaCpmMap[name]||Object.entries(qaCpmMap).find(([k])=>k===name||k.startsWith(name.substring(0,20)))?.[1]||'';
-              return qaId?{id:qaId,type:c.type||'CONTENT_TYPE_PROGRAM'}:null;
+              const contentType=c.type||'CONTENT_TYPE_PROGRAM';
+              // Program の場合は qaProgMap（title → content_id）から検索
+              let qaId='';
+              if(contentType==='CONTENT_TYPE_PROGRAM'||!contentType){
+                qaId=qaProgramTitleMap[name]||
+                  Object.entries(qaProgramTitleMap).find(([k])=>k===name||k.startsWith(name.substring(0,20))||name.startsWith(k.substring(0,20)))?.[1]||'';
+              }
+              // VOD/Form の場合は qaCpmMap から検索
+              if(!qaId){
+                qaId=qaCpmMap[name]||
+                  Object.entries(qaCpmMap).find(([k])=>k===name||k.startsWith(name.substring(0,20)))?.[1]||'';
+              }
+              return qaId?{id:qaId,type:contentType}:null;
             }).filter(Boolean);
           }
           if(cat.sub_categories?.length) newCat.sub_categories=remapContents(cat.sub_categories);
