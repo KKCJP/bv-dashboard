@@ -160,11 +160,23 @@ tr:last-child td{border-bottom:none;}
     <!-- 全同期ボタン（メイン） -->
     <div style="padding:14px;background:rgba(99,102,241,.08);border:1px solid rgba(99,102,241,.3);border-radius:8px;margin-bottom:14px;">
       <div style="font-size:13px;font-weight:600;color:#818cf8;margin-bottom:6px;">🚀 Prod → QA 全同期</div>
-      <p style="font-size:11px;color:var(--muted);margin-bottom:10px;">VOD が QA CMS にアップロード済みであることを確認してから実行してください。<br>② CPM VOD 追加 → ③ Program 作成 → ④ Arrangement 補完 → ⑤ Outline 同期 を自動実行します。</p>
+      <p style="font-size:11px;color:var(--muted);margin-bottom:10px;">VOD が QA CMS にアップロード済みであることを確認してから実行してください。<br>② CPM VOD 追加 → ③ Program 作成 → ④ Arrangement 補完 → ⑤ Outline 同期 → ⑥ Thumbnail 同期 を自動実行します。</p>
       <div class="btn-row">
         <button class="btn btn-primary" id="full-sync-btn" onclick="runFullSync()" style="background:linear-gradient(135deg,#6366f1,#8b5cf6);">🚀 全同期実行</button>
         <span id="full-sync-status" style="font-size:11px;color:var(--muted);"></span>
       </div>
+    </div>
+
+    <!-- 個別ステップボタン -->
+    <div style="padding:14px;background:var(--surface2);border:1px solid var(--border);border-radius:8px;margin-bottom:14px;">
+      <div style="font-size:12px;font-weight:600;color:var(--muted);margin-bottom:10px;">個別実行（単独で実行可能）</div>
+      <div class="btn-row" style="flex-wrap:wrap;gap:8px;">
+        <button class="btn btn-secondary btn-sm" id="step2-btn" onclick="runStep2Only()">② VOD→CPM 追加</button>
+        <button class="btn btn-secondary btn-sm" id="step4-btn" onclick="runStep4Only()">④ Arrangement 補完</button>
+        <button class="btn btn-secondary btn-sm" id="step5-btn" onclick="runStep5Only()">⑤ Outline 同期</button>
+        <button class="btn btn-secondary btn-sm" id="step6-btn" onclick="runStep6Only()">🖼️ Thumbnail 同期（Prod→QA）</button>
+      </div>
+      <div id="step-individual-status" style="font-size:11px;color:var(--muted);margin-top:8px;"></div>
     </div>
 
     <div class="btn-row" style="margin-bottom:12px;">
@@ -1481,6 +1493,269 @@ async function runFullSync(){
   }
 }
 // ════ Prod → QA 全同期 終 ════════════════════════════
+
+// ── 共通ヘルパー：QA の基本データをまとめて取得 ──
+async function loadQaBaseData(){
+  const qaSiteId=cfg('site_id');
+  const prodSiteId=cfg('prod_site_id');
+  if(!cfg('prod_token')||!prodSiteId||!qaSiteId) throw new Error('設定ページで Prod/QA の Token と Site ID を確認してください');
+
+  // QA CMS VOD
+  const qaVodMap={};
+  let page=1;
+  while(true){
+    const r=await fetch(`${BASE()}/bv/cms/v1/vods?current_page=${page}&items_per_page=50`,{headers:HDR()});
+    const d=await r.json();
+    (d.vods||[]).forEach(v=>{ if(v.name) qaVodMap[v.name]=v.id; });
+    if((d.vods||[]).length<50) break;
+    page++;
+  }
+  // QA CPM VOD
+  const qaCpmMap={};
+  page=1;
+  while(true){
+    const r=await fetch(`${BASE()}/bv/cpm/v1alpha1/sites/${qaSiteId}/contents?current_page=${page}&items_per_page=100&filter.content_types=CONTENT_TYPE_VOD`,{headers:HDR()});
+    const d=await r.json();
+    (d.contents||[]).forEach(c=>{ if(c.title) qaCpmMap[c.title]=c.content_id; });
+    if((d.contents||[]).length<100) break;
+    page++;
+  }
+  // QA Program
+  const qaPrograms=await fetchAllPrograms(BASE(), HDR(), qaSiteId);
+  const qaProgMap={};
+  qaPrograms.forEach(p=>{ qaProgMap[p.title]=p.content_id; });
+
+  // Prod Program
+  const prodPrograms=await fetchAllPrograms(PROD_BASE, prodHdr(), prodSiteId);
+
+  return {qaSiteId, prodSiteId, qaVodMap, qaCpmMap, qaProgMap, qaPrograms, prodPrograms};
+}
+
+// ── ② VOD→CPM 追加のみ ──
+async function runStep2Only(){
+  const btn=document.getElementById('step2-btn');
+  const statusEl=document.getElementById('step-individual-status');
+  const log=makeLog('full-sync-log','full-sync-log-card');
+  btn.disabled=true; btn.textContent='② 実行中...';
+  try{
+    const {qaSiteId,prodSiteId,qaVodMap,qaCpmMap}=await loadQaBaseData();
+    const findQaVodByName=(name)=>{
+      if(!name) return null;
+      if(qaVodMap[name]) return {id:qaVodMap[name],name};
+      const prefix=name.substring(0,Math.min(name.length,20));
+      const entry=Object.entries(qaVodMap).find(([k])=>k===name||k.startsWith(prefix)||name.startsWith(k.substring(0,Math.min(k.length,20))));
+      return entry?{id:entry[1],name:entry[0]}:null;
+    };
+    const prodCpmVods=[];
+    let page=1;
+    while(true){
+      const r=await fetch(`${PROD_BASE}/bv/cpm/v1alpha1/sites/${prodSiteId}/contents?current_page=${page}&items_per_page=100&filter.content_types=CONTENT_TYPE_VOD`,{headers:prodHdr()});
+      const d=await r.json();
+      (d.contents||[]).forEach(c=>prodCpmVods.push(c));
+      if((d.contents||[]).length<100) break;
+      page++;
+    }
+    let cpmAdded=0,cpmSkip=0,cpmMissing=0;
+    for(const pv of prodCpmVods){
+      const prodTitle=pv.title||'';
+      if(qaCpmMap[prodTitle]){ cpmSkip++; continue; }
+      const qaVod=findQaVodByName(prodTitle);
+      if(!qaVod){ cpmMissing++; continue; }
+      try{ await addVodToCpm(qaVod.id,prodTitle); cpmAdded++; await new Promise(r=>setTimeout(r,400)); }
+      catch(e){ log(`  ❌ CPM追加失敗: ${prodTitle}: ${e.message}`,'error'); }
+    }
+    log(`✅ CPM追加完了: +${cpmAdded}件 / スキップ:${cpmSkip}件 / QAになし:${cpmMissing}件`,'done');
+    statusEl.textContent=`② 完了：+${cpmAdded}件追加`;
+    toast(`CPM追加完了：+${cpmAdded}件`,'success');
+  }catch(e){ log(`❌ ${e.message}`,'error'); toast('失敗: '+e.message,'error'); }
+  finally{ btn.disabled=false; btn.textContent='② VOD→CPM 追加'; }
+}
+
+// ── ④ Arrangement 補完のみ ──
+async function runStep4Only(){
+  const btn=document.getElementById('step4-btn');
+  const statusEl=document.getElementById('step-individual-status');
+  const log=makeLog('full-sync-log','full-sync-log-card');
+  btn.disabled=true; btn.textContent='④ 実行中...';
+  try{
+    const {qaSiteId,prodSiteId,qaCpmMap,qaProgMap,prodPrograms}=await loadQaBaseData();
+    const resolveQaCpmId=(prodItem)=>{
+      const vodTitle=prodItem.content?.vod?.title||'';
+      const contentName=prodItem.content?.name||'';
+      for(const key of [vodTitle,contentName]){
+        if(!key) continue;
+        if(qaCpmMap[key]) return {id:qaCpmMap[key],name:key};
+        const prefix=key.substring(0,Math.min(key.length,20));
+        const entry=Object.entries(qaCpmMap).find(([k])=>k===key||k.startsWith(prefix)||key.startsWith(k.substring(0,Math.min(k.length,20))));
+        if(entry) return {id:entry[1],name:entry[0]};
+      }
+      return null;
+    };
+    let arrOk=0,arrSkip=0,arrFail=0,totalAdded=0;
+    for(const pp of prodPrograms){
+      const qaProgId=qaProgMap[pp.title];
+      if(!qaProgId){ arrSkip++; continue; }
+      const prodItems=await fetchProgramArrangement(PROD_BASE,prodHdr(),prodSiteId,pp.content_id);
+      if(!prodItems.length){ arrSkip++; continue; }
+      const qaExistingItems=await fetchProgramArrangement(BASE(),HDR(),qaSiteId,qaProgId);
+      const qaExistingIds=new Set();
+      for(const it of qaExistingItems){
+        if(it.type==='PROGRAM_ARRANGEMENT_ITEM_TYPE_SECTION') (it.section?.items||[]).forEach(si=>{ const id=si.content?.vod?.id||''; if(id) qaExistingIds.add(id); });
+        else { const id=it.content?.vod?.id||''; if(id) qaExistingIds.add(id); }
+      }
+      const newTopItems=[]; let sectionSeq=1,addedCount=0;
+      for(const topItem of prodItems){
+        if(topItem.type==='PROGRAM_ARRANGEMENT_ITEM_TYPE_SECTION'){
+          const sectionItems=topItem.section?.items||[];
+          const newSectionItems=[]; let contentSeq=1;
+          for(const si of sectionItems){
+            const resolved=resolveQaCpmId(si);
+            if(!resolved||qaExistingIds.has(resolved.id)) continue;
+            newSectionItems.push({type:'PROGRAM_ARRANGEMENT_ITEM_TYPE_CONTENT',sequence:contentSeq++,section:null,module:null,content:{type:si.content?.type||'CONTENT_TYPE_VOD',name:'',vod:{id:resolved.id},form:null,file:null,aod:null,article:null}});
+            qaExistingIds.add(resolved.id); addedCount++;
+          }
+          if(newSectionItems.length){
+            newTopItems.push({type:'PROGRAM_ARRANGEMENT_ITEM_TYPE_SECTION',sequence:sectionSeq++,section:{name:topItem.section?.name||'',items:newSectionItems},module:null,content:null});
+          }
+        } else if(topItem.type==='PROGRAM_ARRANGEMENT_ITEM_TYPE_CONTENT'){
+          const resolved=resolveQaCpmId(topItem);
+          if(!resolved||qaExistingIds.has(resolved.id)) continue;
+          newTopItems.push({type:'PROGRAM_ARRANGEMENT_ITEM_TYPE_CONTENT',sequence:sectionSeq++,section:null,module:null,content:{type:topItem.content?.type||'CONTENT_TYPE_VOD',name:'',vod:{id:resolved.id},form:null,file:null,aod:null,article:null}});
+          qaExistingIds.add(resolved.id); addedCount++;
+        }
+      }
+      if(!newTopItems.length){ arrSkip++; continue; }
+      const mergedItems=[...qaExistingItems];
+      let mergeSeq=mergedItems.length+1;
+      for(const newSec of newTopItems){
+        if(newSec.type==='PROGRAM_ARRANGEMENT_ITEM_TYPE_SECTION'){
+          const existingSec=mergedItems.find(it=>it.type==='PROGRAM_ARRANGEMENT_ITEM_TYPE_SECTION'&&it.section?.name===newSec.section?.name);
+          if(existingSec){
+            const existingIds=new Set((existingSec.section?.items||[]).map(si=>si.content?.vod?.id||'').filter(Boolean));
+            const newSecItems=(newSec.section?.items||[]).filter(si=>!existingIds.has(si.content?.vod?.id||''));
+            if(newSecItems.length){
+              const startSeq=(existingSec.section?.items||[]).length+1;
+              existingSec.section.items=[...(existingSec.section?.items||[]),...newSecItems.map((si,i)=>({...si,sequence:startSeq+i}))];
+            }
+          } else { newSec.sequence=mergeSeq++; mergedItems.push(newSec); }
+        } else { newSec.sequence=mergeSeq++; mergedItems.push(newSec); }
+      }
+      try{
+        const pr=await fetch(`${BASE()}/bv/cpm/v1alpha1/sites/${qaSiteId}/programs/${qaProgId}`,{method:'PUT',headers:{...HDR(),'Content-Type':'application/json'},body:JSON.stringify({program:{title:pp.title,arrangement:{items:mergedItems}}})});
+        if(!pr.ok) throw new Error(`${pr.status}: ${(await pr.text()).substring(0,150)}`);
+        arrOk++; totalAdded+=addedCount;
+        log(`  ✅ ${pp.title} (+${addedCount}件)`,'done');
+      }catch(e){ arrFail++; log(`  ❌ ${pp.title}: ${e.message}`,'error'); }
+      await new Promise(r=>setTimeout(r,150));
+    }
+    log(`✅ Arrangement完了: ${arrOk}件更新 / ${arrSkip}件スキップ / ${arrFail}件失敗 / +${totalAdded}件追加`,'done');
+    statusEl.textContent=`④ 完了：+${totalAdded}件追加`;
+    toast(`Arrangement補完完了：+${totalAdded}件`,'success');
+  }catch(e){ log(`❌ ${e.message}`,'error'); toast('失敗: '+e.message,'error'); }
+  finally{ btn.disabled=false; btn.textContent='④ Arrangement 補完'; }
+}
+
+// ── ⑤ Outline 同期のみ ──
+async function runStep5Only(){
+  const btn=document.getElementById('step5-btn');
+  const statusEl=document.getElementById('step-individual-status');
+  const log=makeLog('full-sync-log','full-sync-log-card');
+  btn.disabled=true; btn.textContent='⑤ 実行中...';
+  try{
+    const {qaSiteId,prodSiteId,qaCpmMap,qaPrograms}=await loadQaBaseData();
+    const qaProgramTitleMap={};
+    qaPrograms.forEach(p=>{ qaProgramTitleMap[p.title]=p.content_id; });
+    const prodOutline=await fetchOutline(PROD_BASE,prodHdr(),prodSiteId);
+    const qaOutline=await fetchOutline(BASE(),HDR(),qaSiteId);
+    if(!prodOutline.id&&!qaOutline.id){ log('⚠️ Outline が見つかりません'); toast('Outline が見つかりません','error'); return; }
+    const remapContents=(categories)=>{
+      return (categories||[]).map(cat=>{
+        const newCat={...cat};
+        if(cat.contents?.length){
+          newCat.contents=cat.contents.map(c=>{
+            const name=c.name||c.title||'';
+            const contentType=c.type||'CONTENT_TYPE_PROGRAM';
+            let qaId=contentType==='CONTENT_TYPE_PROGRAM'?
+              qaProgramTitleMap[name]||Object.entries(qaProgramTitleMap).find(([k])=>k===name||k.startsWith(name.substring(0,20))||name.startsWith(k.substring(0,20)))?.[1]||'':
+              qaCpmMap[name]||Object.entries(qaCpmMap).find(([k])=>k===name||k.startsWith(name.substring(0,20)))?.[1]||'';
+            if(!qaId) qaId=qaProgramTitleMap[name]||qaCpmMap[name]||'';
+            return qaId?{id:qaId,type:contentType}:null;
+          }).filter(Boolean);
+        }
+        if(cat.sub_categories?.length) newCat.sub_categories=remapContents(cat.sub_categories);
+        if(cat.categories?.length) newCat.categories=remapContents(cat.categories);
+        return newCat;
+      });
+    };
+    const remappedCategories=remapContents(prodOutline.categories||[]);
+    const outlineId=qaOutline.id||prodOutline.id;
+    const or=await fetch(`${BASE()}/bv/cpm/marketplace/v1alpha1/sites/${qaSiteId}/outlines/${outlineId}`,{method:'PUT',headers:{...HDR(),'Content-Type':'application/json'},body:JSON.stringify({categories:remappedCategories})});
+    if(!or.ok) throw new Error(`${or.status}: ${(await or.text()).substring(0,100)}`);
+    log('✅ Outline 同期完了','done');
+    statusEl.textContent='⑤ Outline 同期完了';
+    toast('Outline 同期完了','success');
+  }catch(e){ log(`❌ ${e.message}`,'error'); toast('失敗: '+e.message,'error'); }
+  finally{ btn.disabled=false; btn.textContent='⑤ Outline 同期'; }
+}
+
+// ── ⑥ Thumbnail 同期のみ（Prod→QA） ──
+async function runStep6Only(){
+  const btn=document.getElementById('step6-btn');
+  const statusEl=document.getElementById('step-individual-status');
+  const log=makeLog('full-sync-log','full-sync-log-card');
+  btn.disabled=true; btn.textContent='🖼️ 実行中...';
+  try{
+    const {qaSiteId,prodSiteId,qaProgMap,prodPrograms}=await loadQaBaseData();
+    log(`▶ Thumbnail 同期開始（Prod ${prodPrograms.length}件）`);
+    let thumbOk=0,thumbSkip=0,thumbFail=0;
+    for(const pp of prodPrograms){
+      const qaProgId=qaProgMap[pp.title];
+      if(!qaProgId){ thumbSkip++; continue; }
+      try{
+        const pr=await fetch(`${PROD_BASE}/bv/cpm/v1alpha1/sites/${prodSiteId}/programs/${pp.content_id}?action=GET_FORM_REQUEST_ACTION_CURRENT&mode=FORM_MODE_EDIT`,{headers:prodHdr()});
+        if(!pr.ok){ thumbSkip++; continue; }
+        const pd=await pr.json();
+        const bg=pd.program?.background;
+        if(bg?.type!=='PROGRAM_BACKGROUND_TYPE_IMAGE'||!bg?.image){ thumbSkip++; continue; }
+        const imgUrl=bg.image.uri||bg.image.url||'';
+        if(!imgUrl){ thumbSkip++; continue; }
+        // QA が既に設定済みか確認
+        const qpr=await fetch(`${BASE()}/bv/cpm/v1alpha1/sites/${qaSiteId}/programs/${qaProgId}?action=GET_FORM_REQUEST_ACTION_CURRENT&mode=FORM_MODE_EDIT`,{headers:HDR()});
+        if(qpr.ok){
+          const qpd=await qpr.json();
+          if(qpd.program?.background?.type==='PROGRAM_BACKGROUND_TYPE_IMAGE'&&qpd.program?.background?.image){ thumbSkip++; continue; }
+        }
+        // 画像ダウンロード
+        const imgRes=await fetch(imgUrl);
+        if(!imgRes.ok) throw new Error(`画像取得失敗: ${imgRes.status}`);
+        const imgBlob=await imgRes.blob();
+        const contentType=imgBlob.type||'image/jpeg';
+        const ext=imgUrl.split('.').pop().split('?')[0]||'jpg';
+        const fileName=`${pp.title.substring(0,30)}.${ext}`;
+        // QA library アップロード
+        const uploadRes=await fetch(`${BASE()}/bv/cms/v1/library/files:upload`,{method:'POST',headers:{...HDR(),'Content-Type':'application/json'},body:JSON.stringify({file:{name:fileName,size:String(imgBlob.size),type:'FILE_TYPE_IMAGE',source:'FILE_SOURCE_UNSPECIFIED',attrs:{'content-type':contentType}}})});
+        if(!uploadRes.ok) throw new Error(`upload init 失敗: ${uploadRes.status}`);
+        const uploadData=await uploadRes.json();
+        const fileId=uploadData.file?.id||'';
+        const s3Url=uploadData.upload_data?.parts?.[0]?.url||'';
+        const uploadId=uploadData.upload_data?.id||'';
+        if(!fileId||!s3Url) throw new Error('upload_data が不正');
+        const s3Res=await fetch(s3Url,{method:'PUT',headers:{'Content-Type':contentType},body:imgBlob});
+        if(!s3Res.ok) throw new Error(`S3 PUT 失敗: ${s3Res.status}`);
+        const etag=s3Res.headers.get('ETag')||'';
+        await fetch(`${BASE()}/bv/cms/v1/library/files/${fileId}:complete-upload`,{method:'POST',headers:{...HDR(),'Content-Type':'application/json'},body:JSON.stringify({id:uploadId,parts:[{part_number:1,etag}]})});
+        const setRes=await fetch(`${BASE()}/bv/cpm/v1alpha1/sites/${qaSiteId}/programs/${qaProgId}`,{method:'PUT',headers:{...HDR(),'Content-Type':'application/json'},body:JSON.stringify({program:{title:pp.title,background:{type:'PROGRAM_BACKGROUND_TYPE_IMAGE',image:{id:fileId}}}})});
+        if(!setRes.ok) throw new Error(`Program PUT 失敗: ${setRes.status}`);
+        thumbOk++; log(`  ✅ ${pp.title}`,'done');
+      }catch(e){ thumbFail++; log(`  ❌ ${pp.title}: ${e.message}`,'error'); }
+      await new Promise(r=>setTimeout(r,300));
+    }
+    log(`✅ Thumbnail完了: ${thumbOk}件 / スキップ:${thumbSkip}件 / 失敗:${thumbFail}件`,'done');
+    statusEl.textContent=`🖼️ Thumbnail完了：${thumbOk}件`;
+    toast(`Thumbnail同期完了：${thumbOk}件`,'success');
+  }catch(e){ log(`❌ ${e.message}`,'error'); toast('失敗: '+e.message,'error'); }
+  finally{ btn.disabled=false; btn.textContent='🖼️ Thumbnail 同期（Prod→QA）'; }
+}
 // Prod の Arrangement 構造を取得し、QA にある VOD/CPM content で補完して PUT する
 async function runSyncArrangement(){
   const btn=document.getElementById('sync-arrangement-btn');
