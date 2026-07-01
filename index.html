@@ -1246,11 +1246,44 @@ async function runFullSync(){
 
       if(!newTopItems.length){ arrSkip++; continue; }
 
-      // PUT
+      // 既存 items と新規 items をマージ（既存を保持しつつ新規を追加）
+      // section 単位でマージ：同名 section があれば items を追記、なければ section ごと追加
+      const mergedItems=[...qaExistingItems];
+      let mergeSeq=mergedItems.length+1;
+      for(const newSec of newTopItems){
+        if(newSec.type==='PROGRAM_ARRANGEMENT_ITEM_TYPE_SECTION'){
+          // 同名 section が既存にあれば items を追記
+          const existingSec=mergedItems.find(it=>
+            it.type==='PROGRAM_ARRANGEMENT_ITEM_TYPE_SECTION' &&
+            it.section?.name===newSec.section?.name
+          );
+          if(existingSec){
+            const existingContentIds=new Set((existingSec.section?.items||[]).map(si=>si.content?.vod?.id||'').filter(Boolean));
+            const newSecItems=(newSec.section?.items||[]).filter(si=>!existingContentIds.has(si.content?.vod?.id||''));
+            if(newSecItems.length){
+              const startSeq=(existingSec.section?.items||[]).length+1;
+              existingSec.section.items=[
+                ...(existingSec.section?.items||[]),
+                ...newSecItems.map((si,i)=>({...si,sequence:startSeq+i}))
+              ];
+            }
+          } else {
+            // 新しい section を追加
+            newTopItems.find(s=>s===newSec).sequence=mergeSeq++;
+            mergedItems.push(newSec);
+          }
+        } else {
+          // CONTENT が直接トップレベルにある場合
+          newSec.sequence=mergeSeq++;
+          mergedItems.push(newSec);
+        }
+      }
+
+      // PUT（既存 + 新規マージ済み items）
       try{
         const pr=await fetch(`${BASE()}/bv/cpm/v1alpha1/sites/${qaSiteId}/programs/${qaProgId}`,{
           method:'PUT', headers:{...HDR(),'Content-Type':'application/json'},
-          body:JSON.stringify({program:{title:pp.title, arrangement:{items:newTopItems}}})
+          body:JSON.stringify({program:{title:pp.title, arrangement:{items:mergedItems}}})
         });
         if(!pr.ok) throw new Error(`${pr.status}: ${(await pr.text()).substring(0,150)}`);
         arrOk++; totalAdded+=addedCount;
