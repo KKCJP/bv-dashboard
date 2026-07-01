@@ -3430,8 +3430,13 @@ async function runOutlineImport(){
     };
     await resolveContentNames({sub_categories:categories});
 
-    // BV の PUT は {categories:[...]} 形式（outline でラップしない）
-    // 第1階層は id 必須（ないと毎回新規作成される）
+    // PUT 前にどの content_id を送るかログに出す
+    const allContentIds=[];
+    const collectIds=(cats)=>{ (cats||[]).forEach(cat=>{ (cat.contents||[]).forEach(c=>allContentIds.push({name:c.id,type:c.type})); collectIds(cat.sub_categories||cat.categories||[]); }); };
+    collectIds(categories);
+    log(`  📋 PUT に含まれる content: ${allContentIds.length}件`);
+    if(allContentIds.length>0) log(`  例: ${allContentIds.slice(0,3).map(c=>c.name?.substring(0,16)+'... ('+c.type+')').join('、')}`);
+
     const putBody={categories};
     log(`  🚀 Outline PUT 実行中...`);
     console.log('[outline PUT] body=', JSON.stringify(putBody).substring(0,500));
