@@ -1361,22 +1361,19 @@ async function runFullSync(){
         return (categories||[]).map(cat=>{
           const newCat={...cat};
           if(cat.contents?.length){
-            newCat.contents=cat.contents.map(c=>{
+            const resolved=[], missing=[];
+            cat.contents.forEach(c=>{
               const name=c.name||c.title||'';
               const contentType=c.type||'CONTENT_TYPE_PROGRAM';
-              // Program の場合は qaProgMap（title → content_id）から検索
-              let qaId='';
-              if(contentType==='CONTENT_TYPE_PROGRAM'||!contentType){
-                qaId=qaProgramTitleMap[name]||
-                  Object.entries(qaProgramTitleMap).find(([k])=>k===name||k.startsWith(name.substring(0,20))||name.startsWith(k.substring(0,20)))?.[1]||'';
-              }
-              // VOD/Form の場合は qaCpmMap から検索
-              if(!qaId){
-                qaId=qaCpmMap[name]||
-                  Object.entries(qaCpmMap).find(([k])=>k===name||k.startsWith(name.substring(0,20)))?.[1]||'';
-              }
-              return qaId?{id:qaId,type:contentType}:null;
-            }).filter(Boolean);
+              let qaId=contentType==='CONTENT_TYPE_PROGRAM'?
+                qaProgramTitleMap[name]||Object.entries(qaProgramTitleMap).find(([k])=>k===name||k.startsWith(name.substring(0,20))||name.startsWith(k.substring(0,20)))?.[1]||'':
+                qaCpmMap[name]||Object.entries(qaCpmMap).find(([k])=>k===name||k.startsWith(name.substring(0,20)))?.[1]||'';
+              if(!qaId) qaId=qaProgramTitleMap[name]||qaCpmMap[name]||'';
+              if(qaId) resolved.push({id:qaId,type:contentType});
+              else missing.push(name);
+            });
+            if(missing.length) log(`  ⚠️ Outline 未解決: ${missing.join('、')}`,'error');
+            newCat.contents=resolved;
           }
           if(cat.sub_categories?.length) newCat.sub_categories=remapContents(cat.sub_categories);
           if(cat.categories?.length) newCat.categories=remapContents(cat.categories);
@@ -1668,22 +1665,27 @@ async function runStep5Only(){
     const prodOutline=await fetchOutline(PROD_BASE,prodHdr(),prodSiteId);
     const qaOutline=await fetchOutline(BASE(),HDR(),qaSiteId);
     if(!prodOutline.id&&!qaOutline.id){ log('⚠️ Outline が見つかりません'); toast('Outline が見つかりません','error'); return; }
-    const remapContents=(categories)=>{
+    const remapContents=(categories,depth=0)=>{
       return (categories||[]).map(cat=>{
         const newCat={...cat};
         if(cat.contents?.length){
-          newCat.contents=cat.contents.map(c=>{
+          const resolved=[];
+          const missing=[];
+          cat.contents.forEach(c=>{
             const name=c.name||c.title||'';
             const contentType=c.type||'CONTENT_TYPE_PROGRAM';
             let qaId=contentType==='CONTENT_TYPE_PROGRAM'?
               qaProgramTitleMap[name]||Object.entries(qaProgramTitleMap).find(([k])=>k===name||k.startsWith(name.substring(0,20))||name.startsWith(k.substring(0,20)))?.[1]||'':
               qaCpmMap[name]||Object.entries(qaCpmMap).find(([k])=>k===name||k.startsWith(name.substring(0,20)))?.[1]||'';
             if(!qaId) qaId=qaProgramTitleMap[name]||qaCpmMap[name]||'';
-            return qaId?{id:qaId,type:contentType}:null;
-          }).filter(Boolean);
+            if(qaId) resolved.push({id:qaId,type:contentType});
+            else missing.push(name);
+          });
+          if(missing.length) log(`  ⚠️ 未解決 content（PUT から除外）: ${missing.join('、')}`,'error');
+          newCat.contents=resolved;
         }
-        if(cat.sub_categories?.length) newCat.sub_categories=remapContents(cat.sub_categories);
-        if(cat.categories?.length) newCat.categories=remapContents(cat.categories);
+        if(cat.sub_categories?.length) newCat.sub_categories=remapContents(cat.sub_categories,depth+1);
+        if(cat.categories?.length) newCat.categories=remapContents(cat.categories,depth+1);
         return newCat;
       });
     };
