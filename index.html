@@ -486,8 +486,45 @@ tr:last-child td{border-bottom:none;}
     </div>
   </div>
   <div id="cpm-tab-program" style="display:none;">
+    <!-- Program 一覧・バッチ削除 -->
     <div class="card">
-      <div class="card-title">📚 Program CSV インポート</div>
+      <div class="card-title">📋 Program 一覧・バッチ削除</div>
+      <div class="btn-row" style="margin-bottom:12px;">
+        <button class="btn btn-secondary btn-sm" id="load-prog-list-btn" onclick="loadProgramList()">🔄 読み込み</button>
+        <span id="prog-list-count" style="font-size:11px;color:var(--muted);"></span>
+      </div>
+      <!-- フィルター -->
+      <div id="prog-list-filter-row" style="display:none;margin-bottom:10px;" class="btn-row">
+        <button class="filter-btn active" onclick="setProgramListFilter('all')">全件</button>
+        <button class="filter-btn" onclick="setProgramListFilter('empty')">⚠️ content なし</button>
+        <button class="filter-btn" onclick="setProgramListFilter('has_content')">✅ content あり</button>
+        <button class="filter-btn" onclick="setProgramListFilter('duplicate')">🔴 重複タイトル</button>
+      </div>
+      <!-- バッチ操作 -->
+      <div id="prog-list-batch" style="display:none;background:var(--surface2);border-radius:6px;padding:8px 12px;margin-bottom:10px;font-size:12px;">
+        <span id="prog-list-selected-count" style="color:var(--accent);font-weight:600;margin-right:12px;"></span>
+        <button class="btn btn-danger btn-sm" onclick="batchDeletePrograms()" style="background:#e53935;color:#fff;border:none;">🗑 選択を削除</button>
+      </div>
+      <div style="overflow-x:auto;">
+        <table id="prog-list-table" style="display:none;">
+          <thead><tr>
+            <th><input type="checkbox" id="prog-list-check-all" onchange="toggleAllPrograms(this.checked)"></th>
+            <th>Program 名</th>
+            <th style="text-align:center;">Content数</th>
+            <th style="text-align:center;">状態</th>
+            <th>操作</th>
+          </tr></thead>
+          <tbody id="prog-list-tbody"></tbody>
+        </table>
+        <div id="prog-list-empty" style="color:var(--muted);font-size:12px;padding:20px;text-align:center;">「読み込み」を押してください</div>
+      </div>
+    </div>
+    <div class="card" id="prog-list-log-card" style="display:none;">
+      <div class="card-title">📋 削除ログ
+        <button class="btn btn-secondary btn-xs" style="margin-left:auto;" onclick="document.getElementById('prog-list-log-card').style.display='none'">✕</button>
+      </div>
+      <div class="log-box" id="prog-list-log"></div>
+    </div>
       <p style="color:var(--muted);font-size:12px;margin-bottom:16px;">テンプレートをダウンロード → 入力 → アップロードで自動作成</p>
       <div class="btn-row" style="margin-bottom:20px;">
         <button class="btn btn-secondary" onclick="downloadProgramTemplate()">⬇ テンプレートDL</button>
@@ -3443,7 +3480,168 @@ async function batchUpdateCpmTitlesFromTable(){
   log(`🏁 完了：成功${ok}件（/contents/setting:${m1}件 / PUT vods:${m2}件）/ 失敗${fail}件`, ok>0?'done':'error');
   if(ok>0) toast(`title 更新完了：${ok}件`,'success');
 }
-// ════ CPM VOD title CSV 上書きインポート ════════════════
+// ════ Program 一覧・バッチ削除 ════════════════════════
+let programListData=[];
+let programListFilter='all';
+let selectedProgramIds=new Set();
+
+async function loadProgramList(){
+  const btn=document.getElementById('load-prog-list-btn');
+  const countEl=document.getElementById('prog-list-count');
+  btn.disabled=true; btn.textContent='🔄 取得中...';
+  const site=cfg('site_id');
+  if(!site){ toast('Site ID が設定されていません','error'); btn.disabled=false; btn.textContent='🔄 読み込み'; return; }
+
+  try{
+    // Program 一覧取得
+    countEl.textContent='Program 取得中...';
+    const allPrograms=await fetchAllPrograms(BASE(), HDR(), site);
+    countEl.textContent=`${allPrograms.length}件取得、Arrangement 確認中...`;
+
+    // タイトルの重複チェック
+    const titleCount={};
+    allPrograms.forEach(p=>{ titleCount[p.title]=(titleCount[p.title]||0)+1; });
+
+    // 各 Program の arrangement（content 数）を取得
+    programListData=[];
+    let done=0;
+    for(const p of allPrograms){
+      const items=await fetchProgramArrangement(BASE(), HDR(), site, p.content_id);
+      // content 数を数える（section の中の items も含む）
+      let contentCount=0;
+      for(const item of items){
+        if(item.type==='PROGRAM_ARRANGEMENT_ITEM_TYPE_SECTION'){
+          contentCount+=(item.section?.items||[]).filter(si=>si.type==='PROGRAM_ARRANGEMENT_ITEM_TYPE_CONTENT').length;
+        } else if(item.type==='PROGRAM_ARRANGEMENT_ITEM_TYPE_CONTENT'){
+          contentCount++;
+        }
+      }
+      programListData.push({
+        id: p.content_id,
+        title: p.title||'',
+        contentCount,
+        isDuplicate: titleCount[p.title]>1,
+        isEmpty: contentCount===0,
+      });
+      done++;
+      if(done%10===0) countEl.textContent=`${done}/${allPrograms.length}件 確認中...`;
+      await new Promise(r=>setTimeout(r,80));
+    }
+
+    selectedProgramIds.clear();
+    renderProgramList();
+    document.getElementById('prog-list-table').style.display='table';
+    document.getElementById('prog-list-empty').style.display='none';
+    document.getElementById('prog-list-filter-row').style.display='flex';
+    countEl.textContent=`${programListData.length}件 / 空:${programListData.filter(p=>p.isEmpty).length}件 / 重複:${programListData.filter(p=>p.isDuplicate).length}件`;
+  }catch(e){ toast('取得失敗: '+e.message,'error'); }
+  finally{ btn.disabled=false; btn.textContent='🔄 読み込み'; }
+}
+
+function setProgramListFilter(f){
+  programListFilter=f;
+  document.querySelectorAll('#prog-list-filter-row .filter-btn').forEach(b=>b.classList.remove('active'));
+  event.target.classList.add('active');
+  selectedProgramIds.clear();
+  renderProgramList();
+}
+
+function renderProgramList(){
+  const filtered=programListData.filter(p=>{
+    if(programListFilter==='empty') return p.isEmpty;
+    if(programListFilter==='has_content') return !p.isEmpty;
+    if(programListFilter==='duplicate') return p.isDuplicate;
+    return true;
+  });
+  const tbody=document.getElementById('prog-list-tbody');
+  tbody.innerHTML=filtered.map(p=>`
+    <tr style="${p.isDuplicate?'background:rgba(248,113,113,.06)':''}">
+      <td><input type="checkbox" class="prog-list-check" value="${p.id}" ${selectedProgramIds.has(p.id)?'checked':''} onchange="toggleProgramSelect('${p.id}',this.checked)"></td>
+      <td style="max-width:320px;overflow:hidden;text-overflow:ellipsis;white-space:nowrap;" title="${esc(p.title)}">
+        ${p.isDuplicate?'<span style="color:var(--red);font-size:10px;margin-right:4px;">🔴重複</span>':''}${esc(p.title)}
+      </td>
+      <td style="text-align:center;font-weight:600;color:${p.isEmpty?'var(--red)':'var(--green)'};">${p.contentCount}</td>
+      <td style="text-align:center;">${p.isEmpty
+        ?'<span class="badge" style="background:rgba(248,113,113,.15);color:var(--red)">⚠️ 空</span>'
+        :'<span class="badge" style="background:rgba(52,211,153,.15);color:var(--green)">✅ あり</span>'}</td>
+      <td><button class="btn btn-danger btn-xs" onclick="deleteSingleProgram('${p.id}','${esc(p.title)}')" style="background:#e53935;color:#fff;border:none;font-size:10px;padding:2px 8px;">削除</button></td>
+    </tr>
+  `).join('');
+  updateProgramBatchBar();
+}
+
+function toggleProgramSelect(id, checked){
+  if(checked) selectedProgramIds.add(id);
+  else selectedProgramIds.delete(id);
+  updateProgramBatchBar();
+}
+
+function toggleAllPrograms(checked){
+  document.querySelectorAll('.prog-list-check').forEach(cb=>{
+    cb.checked=checked;
+    if(checked) selectedProgramIds.add(cb.value);
+    else selectedProgramIds.delete(cb.value);
+  });
+  updateProgramBatchBar();
+}
+
+function updateProgramBatchBar(){
+  const bar=document.getElementById('prog-list-batch');
+  const countEl=document.getElementById('prog-list-selected-count');
+  if(selectedProgramIds.size>0){
+    bar.style.display='block';
+    countEl.textContent=`${selectedProgramIds.size}件選択中`;
+  } else {
+    bar.style.display='none';
+  }
+}
+
+async function deleteSingleProgram(id, title){
+  if(!confirm(`「${title}」を削除しますか？`)) return;
+  const site=cfg('site_id');
+  try{
+    const r=await fetch(`${BASE()}/bv/cpm/v1alpha1/sites/${site}/programs/${id}`,{method:'DELETE',headers:HDR()});
+    if(!r.ok) throw new Error(`${r.status}: ${await r.text()}`);
+    programListData=programListData.filter(p=>p.id!==id);
+    selectedProgramIds.delete(id);
+    renderProgramList();
+    toast(`削除完了：${title}`,'success');
+  }catch(e){ toast('削除失敗: '+e.message,'error'); }
+}
+
+async function batchDeletePrograms(){
+  const ids=[...selectedProgramIds];
+  if(!ids.length){ toast('選択してください','error'); return; }
+  const targets=programListData.filter(p=>ids.includes(p.id));
+  if(!confirm(`${ids.length}件の Program を削除します。\n${targets.map(p=>p.title).slice(0,5).join('\n')}${targets.length>5?`\n...他${targets.length-5}件`:''}\n\nよろしいですか？`)) return;
+
+  const log=makeLog('prog-list-log','prog-list-log-card');
+  const site=cfg('site_id');
+  let ok=0, fail=0;
+  log(`▶ ${ids.length}件 削除開始`);
+
+  for(const p of targets){
+    try{
+      const r=await fetch(`${BASE()}/bv/cpm/v1alpha1/sites/${site}/programs/${p.id}`,{method:'DELETE',headers:HDR()});
+      if(!r.ok) throw new Error(`${r.status}: ${(await r.text()).substring(0,80)}`);
+      ok++;
+      log(`  ✅ ${p.title}`,'done');
+      programListData=programListData.filter(d=>d.id!==p.id);
+      selectedProgramIds.delete(p.id);
+    }catch(e){
+      fail++;
+      log(`  ❌ ${p.title}: ${e.message}`,'error');
+    }
+    await new Promise(r=>setTimeout(r,200));
+  }
+  renderProgramList();
+  log(`🏁 完了：削除${ok}件 / 失敗${fail}件`, ok>0?'done':'error');
+  toast(`削除完了：${ok}件`,'success');
+  // カウント更新
+  document.getElementById('prog-list-count').textContent=
+    `${programListData.length}件 / 空:${programListData.filter(p=>p.isEmpty).length}件 / 重複:${programListData.filter(p=>p.isDuplicate).length}件`;
+}
+// ════ Program 一覧・バッチ削除 終 ════════════════════
 async function importCpmTitleCsv(event){
   const file=event.target.files[0];
   event.target.value='';
