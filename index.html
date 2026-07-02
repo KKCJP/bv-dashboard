@@ -150,7 +150,44 @@ tr:last-child td{border-bottom:none;}
   </div>
 </div>
 
-<!-- ══ Prod vs QA 比較 ══ -->
+  <!-- 証明書設定モーダル -->
+  <div id="cert-modal" style="display:none;position:fixed;inset:0;background:rgba(0,0,0,.6);z-index:9999;align-items:center;justify-content:center;">
+    <div style="background:var(--surface1);border-radius:12px;padding:24px;width:480px;max-width:90vw;">
+      <div style="font-size:15px;font-weight:600;margin-bottom:16px;">🏆 証明書設定</div>
+      <div style="font-size:12px;color:var(--muted);margin-bottom:12px;" id="cert-modal-title"></div>
+      <div class="form-grid">
+        <div class="form-group full">
+          <label style="display:flex;align-items:center;gap:8px;cursor:pointer;">
+            <input type="checkbox" id="cert-enabled" style="width:16px;height:16px;">
+            <span>証明書を有効にする</span>
+          </label>
+        </div>
+        <div class="form-group full">
+          <label>Template ID</label>
+          <div style="display:flex;gap:8px;">
+            <input type="text" id="cert-template-id" placeholder="template_id">
+            <button class="btn btn-secondary btn-xs" onclick="document.getElementById('cert-template-id').value='1903a7d6-8311-4174-b072-9ffc8beeebef'" style="white-space:nowrap;">プリセット</button>
+          </div>
+        </div>
+        <div class="form-group full">
+          <label>Issuer ID</label>
+          <div style="display:flex;gap:8px;">
+            <input type="text" id="cert-issuer-id" placeholder="issuer_id">
+            <button class="btn btn-secondary btn-xs" onclick="document.getElementById('cert-issuer-id').value='772c8921-3ca3-426e-bc44-fb80cd30bd72'" style="white-space:nowrap;">プリセット</button>
+          </div>
+        </div>
+        <div class="form-group">
+          <label>合格閾値（%）</label>
+          <input type="number" id="cert-threshold" min="0" max="100" value="0">
+        </div>
+      </div>
+      <div class="btn-row" style="margin-top:16px;">
+        <button class="btn btn-primary" onclick="saveCertSetting()">💾 保存</button>
+        <button class="btn btn-secondary" onclick="closeCertModal()">キャンセル</button>
+        <span id="cert-modal-status" style="font-size:11px;color:var(--muted);"></span>
+      </div>
+    </div>
+  </div>
 <div id="page-compare" class="page">
   <div class="page-title">🔍 Prod vs QA 比較</div>
   <div class="card">
@@ -517,6 +554,8 @@ tr:last-child td{border-bottom:none;}
       <div id="prog-list-batch" style="display:none;background:var(--surface2);border-radius:6px;padding:8px 12px;margin-bottom:10px;font-size:12px;">
         <span id="prog-list-selected-count" style="color:var(--accent);font-weight:600;margin-right:12px;"></span>
         <button class="btn btn-danger btn-sm" onclick="batchDeletePrograms()" style="background:#e53935;color:#fff;border:none;">🗑 選択を削除</button>
+        <button class="btn btn-secondary btn-sm" onclick="batchCertUpdate(true)" style="margin-left:8px;">🏆 証明書 ON</button>
+        <button class="btn btn-secondary btn-sm" onclick="batchCertUpdate(false)">🏆 証明書 OFF</button>
       </div>
       <div style="overflow-x:auto;">
         <table id="prog-list-table" style="display:none;">
@@ -525,6 +564,7 @@ tr:last-child td{border-bottom:none;}
             <th>Program 名</th>
             <th style="text-align:center;">Content数</th>
             <th style="text-align:center;">状態</th>
+            <th style="text-align:center;">証明書</th>
             <th>操作</th>
           </tr></thead>
           <tbody id="prog-list-tbody"></tbody>
@@ -551,7 +591,8 @@ tr:last-child td{border-bottom:none;}
         <div id="prog-preview-list"></div>
         <div class="btn-row" style="margin-top:12px;">
           <button class="btn btn-secondary btn-sm" id="prod-arr-preview-btn" onclick="runProdArrangementPreview()">🔍 Prod Arrangement プレビュー（QA ID 変換）</button>
-        <button class="btn btn-primary" id="prog-import-btn" onclick="runProgramImport()">🚀 インポート開始</button>
+        <button class="btn btn-primary" id="prog-import-btn" onclick="runProgramImport('program_only')">📋 Program 情報のみ（新規作成あり）</button>
+        <button class="btn btn-secondary" id="arr-import-btn" onclick="runProgramImport('arrangement_only')">🎬 Arrangement のみ（新規作成なし）</button>
           <button class="btn btn-secondary" onclick="clearProgramPreview()">✕ クリア</button>
         </div>
       </div>
@@ -4057,12 +4098,15 @@ async function loadProgramList(){
     const titleCount={};
     allPrograms.forEach(p=>{ titleCount[p.title]=(titleCount[p.title]||0)+1; });
 
-    // 各 Program の arrangement（content 数）を取得
+    // 各 Program の arrangement（content 数）と証明書設定を取得
     programListData=[];
     let done=0;
     for(const p of allPrograms){
-      const items=await fetchProgramArrangement(BASE(), HDR(), site, p.content_id);
-      // content 数を数える（section の中の items も含む）
+      const detailRes=await fetch(`${BASE()}/bv/cpm/v1alpha1/sites/${site}/programs/${p.content_id}?action=GET_FORM_REQUEST_ACTION_CURRENT&mode=FORM_MODE_EDIT`,{headers:HDR()});
+      const detail=detailRes.ok?await detailRes.json():{};
+      const prog=detail.program||{};
+      const items=prog.arrangement?.items||[];
+      // content 数を数える
       let contentCount=0;
       for(const item of items){
         if(item.type==='PROGRAM_ARRANGEMENT_ITEM_TYPE_SECTION'){
@@ -4071,12 +4115,18 @@ async function loadProgramList(){
           contentCount++;
         }
       }
+      const cert=prog.certification?.setting||{};
       programListData.push({
         id: p.content_id,
         title: p.title||'',
         contentCount,
         isDuplicate: titleCount[p.title]>1,
         isEmpty: contentCount===0,
+        certEnabled: cert.enabled||false,
+        certTemplateId: cert.template_id||'',
+        certIssuerId: cert.issuer_id||'',
+        certThreshold: cert.passing_threshold||0,
+        arrangement: prog.arrangement||{displayable:true,items:[]},
       });
       done++;
       if(done%10===0) countEl.textContent=`${done}/${allPrograms.length}件 確認中...`;
@@ -4119,11 +4169,100 @@ function renderProgramList(){
       <td style="text-align:center;">${p.isEmpty
         ?'<span class="badge" style="background:rgba(248,113,113,.15);color:var(--red)">⚠️ 空</span>'
         :'<span class="badge" style="background:rgba(52,211,153,.15);color:var(--green)">✅ あり</span>'}</td>
+      <td style="text-align:center;">
+        <button class="btn btn-xs" onclick="openCertModal('${p.id}')" style="font-size:11px;padding:2px 8px;background:${p.certEnabled?'rgba(251,191,36,.2)':'var(--surface2)'};color:${p.certEnabled?'var(--yellow)':'var(--muted)'};border:1px solid ${p.certEnabled?'rgba(251,191,36,.4)':'var(--border)'};">
+          🏆 ${p.certEnabled?'ON':'OFF'}
+        </button>
+      </td>
       <td><button class="btn btn-danger btn-xs" onclick="deleteSingleProgram('${p.id}','${esc(p.title)}')" style="background:#e53935;color:#fff;border:none;font-size:10px;padding:2px 8px;">削除</button></td>
     </tr>
   `).join('');
   updateProgramBatchBar();
 }
+
+// ── 証明書設定 ──────────────────────────────────────
+let certCurrentId='';
+
+function openCertModal(id){
+  const p=programListData.find(p=>p.id===id);
+  if(!p) return;
+  certCurrentId=id;
+  document.getElementById('cert-modal-title').textContent=p.title;
+  document.getElementById('cert-enabled').checked=p.certEnabled;
+  document.getElementById('cert-template-id').value=p.certTemplateId||'';
+  document.getElementById('cert-issuer-id').value=p.certIssuerId||'';
+  document.getElementById('cert-threshold').value=p.certThreshold||0;
+  document.getElementById('cert-modal-status').textContent='';
+  document.getElementById('cert-modal').style.display='flex';
+}
+
+function closeCertModal(){
+  document.getElementById('cert-modal').style.display='none';
+  certCurrentId='';
+}
+
+async function saveCertSetting(){
+  const site=cfg('site_id');
+  const p=programListData.find(p=>p.id===certCurrentId);
+  if(!p) return;
+  const statusEl=document.getElementById('cert-modal-status');
+  statusEl.textContent='保存中...';
+  try{
+    const certSetting={
+      enabled: document.getElementById('cert-enabled').checked,
+      template_id: document.getElementById('cert-template-id').value.trim(),
+      issuer_id: document.getElementById('cert-issuer-id').value.trim(),
+      passing_threshold: parseInt(document.getElementById('cert-threshold').value)||0,
+    };
+    const r=await fetch(`${BASE()}/bv/cpm/v1alpha1/sites/${site}/programs/${certCurrentId}`,{
+      method:'PUT', headers:{...HDR(),'Content-Type':'application/json'},
+      body:JSON.stringify({program:{title:p.title, arrangement:p.arrangement, certification:{setting:certSetting}}})
+    });
+    if(!r.ok) throw new Error(`${r.status}: ${(await r.text()).substring(0,100)}`);
+    // ローカルデータ更新
+    p.certEnabled=certSetting.enabled;
+    p.certTemplateId=certSetting.template_id;
+    p.certIssuerId=certSetting.issuer_id;
+    p.certThreshold=certSetting.passing_threshold;
+    renderProgramList();
+    closeCertModal();
+    toast(`✅ ${p.title} 証明書設定を保存しました`,'success');
+  }catch(e){ statusEl.textContent='❌ '+e.message; statusEl.style.color='var(--red)'; }
+}
+
+async function batchCertUpdate(enabled){
+  const ids=[...selectedProgramIds];
+  if(!ids.length){ toast('選択してください','error'); return; }
+  const site=cfg('site_id');
+  const log=makeLog('prog-list-log','prog-list-log-card');
+  log(`▶ 証明書 ${enabled?'ON':'OFF'} 一括更新：${ids.length}件`);
+  let ok=0, fail=0;
+  for(const id of ids){
+    const p=programListData.find(p=>p.id===id);
+    if(!p) continue;
+    try{
+      const certSetting={
+        enabled,
+        template_id: p.certTemplateId||'',
+        issuer_id: p.certIssuerId||'',
+        passing_threshold: p.certThreshold||0,
+      };
+      const r=await fetch(`${BASE()}/bv/cpm/v1alpha1/sites/${site}/programs/${id}`,{
+        method:'PUT', headers:{...HDR(),'Content-Type':'application/json'},
+        body:JSON.stringify({program:{title:p.title, arrangement:p.arrangement, certification:{setting:certSetting}}})
+      });
+      if(!r.ok) throw new Error(`${r.status}`);
+      p.certEnabled=enabled;
+      ok++;
+      log(`  ✅ ${p.title}`,'done');
+    }catch(e){ fail++; log(`  ❌ ${p.title}: ${e.message}`,'error'); }
+    await new Promise(r=>setTimeout(r,200));
+  }
+  renderProgramList();
+  log(`🏁 完了：${ok}件成功 / ${fail}件失敗`,'done');
+  toast(`証明書${enabled?'ON':'OFF'}完了：${ok}件`,'success');
+}
+// ── 証明書設定 終 ────────────────────────────────────
 
 function toggleProgramSelect(id, checked){
   if(checked) selectedProgramIds.add(id);
@@ -4869,15 +5008,19 @@ function renderProgramPreview(){
 }
 function clearProgramPreview(){ programImportData=[]; document.getElementById('prog-preview').style.display='none'; }
 
-async function runProgramImport(){
+async function runProgramImport(mode='program_only'){
   if(!programImportData.length){ toast('データがありません','error'); return; }
   const importBtn=document.getElementById('prog-import-btn');
-  if(importBtn?.disabled) return;
-  if(importBtn){ importBtn.disabled=true; importBtn.textContent='⏳ 実行中...'; }
+  const arrBtn=document.getElementById('arr-import-btn');
+  const activeBtn=mode==='program_only'?importBtn:arrBtn;
+  if(activeBtn?.disabled) return;
+  if(importBtn){ importBtn.disabled=true; }
+  if(arrBtn){ arrBtn.disabled=true; }
   const site=siteId();
   const log=makeLog('prog-log','prog-log-card');
-  log(t('log_batch_start',programImportData.length));
-  const missingPrograms=[];
+  const isProgramOnly=mode==='program_only';
+  const isArrOnly=mode==='arrangement_only';
+  log(`▶ ${isProgramOnly?'Program 情報のみ匯入':'Arrangement のみ匯入'}：${programImportData.length}件`);
 
   // QA CPM の VOD・FORM 全件取得（content_id 変換用）
   log('  📋 QA CPM コンテンツ取得中...');
@@ -4972,8 +5115,27 @@ async function runProgramImport(){
       }
 
       if(!progId){
-        log(`  ⚠️ QA に Program が見つかりません → スキップ`,'error');
-        skipCount++; continue;
+        if(isArrOnly){
+          log(`  ⚠️ QA に Program が見つかりません → スキップ`,'error');
+          skipCount++; continue;
+        }
+        // program_only モード → 新規作成
+        log(`  ➕ QA に Program が見つかりません → 新規作成`);
+        try{
+          const r=await fetch(`${BASE()}/bv/cpm/v1alpha1/sites/${site}/programs`,{
+            method:'POST', headers:{...HDR(),'Content-Type':'application/json'},
+            body:JSON.stringify({program:{title:prog.title}})
+          });
+          if(r.ok){
+            const d=await r.json();
+            const newId=d.program?.id||d.content_id||'';
+            if(newId){
+              progId=newId;
+              existingProgs.push({content_id:newId,title:prog.title});
+              log(`  ✅ 新規作成完了（ID: ${newId.substring(0,16)}...）`,'done');
+            }
+          } else { throw new Error(`${r.status}: ${(await r.text()).substring(0,100)}`); }
+        }catch(e){ log(`  ❌ 新規作成失敗: ${e.message}`,'error'); skipCount++; continue; }
       }
       const arrangement=[];
       let curSection=null,curModule=null;
@@ -5084,20 +5246,41 @@ async function runProgramImport(){
           ? (isValidUUID(f.background_library_id)?{type:'PROGRAM_BACKGROUND_TYPE_IMAGE',image:{id:f.background_library_id}}:{type:'PROGRAM_BACKGROUND_TYPE_DEFAULT'})
           : (ep.background||{type:'PROGRAM_BACKGROUND_TYPE_DEFAULT'});
 
-        const putBody={
-          title: f.title||ep.title||'',
-          highlight:{displayable:true,texts:mergedHighlight},
-          about:{displayable:true,html_content:f.about_html!==undefined?f.about_html:(ep.about?.html_content||'')},
-          author_info:mergedAuthor,
-          label_info:{displayable:true,labels:(f.labels!==undefined?f.labels:(ep.label_info?.labels||[]).map(l=>typeof l==='object'?(l.name||l):l)).map(l=>({name:l}))},
-          arrangement:{displayable:true,items:hasContents?finalArrangement:(ep.arrangement?.items||[])},
-          clip:{displayable:true,clips:ep.clip?.clips||[]},
-          rating:{displayable:false},
-          level_info:ep.level_info||{displayable:false,level:'PROGRAM_LEVEL_BEGINNER'},
-          relation:{displayable:true,related_contents:ep.relation?.related_contents||[]},
-          certification:ep.certification||{setting:{enabled:false,template_id:'',issuer_id:'',passing_threshold:0}},
-          background:mergedBg,
-        };
+        let putBody;
+        if(isArrOnly){
+          // Arrangement のみ更新（メタ情報は既存を保持）
+          if(!hasContents){ log(`  ℹ️ arrangement 空のためスキップ`); skipCount++; continue; }
+          putBody={
+            title: ep.title||'',
+            arrangement:{displayable:true,items:finalArrangement},
+            highlight:ep.highlight||{displayable:true,texts:[]},
+            about:ep.about||{displayable:true,html_content:''},
+            author_info:ep.author_info||{displayable:true,name:'',title:'',description:'',avatar_library_id:'',avatar_url:''},
+            label_info:ep.label_info||{displayable:true,labels:[]},
+            clip:ep.clip||{displayable:true,clips:[]},
+            rating:ep.rating||{displayable:false},
+            level_info:ep.level_info||{displayable:false,level:'PROGRAM_LEVEL_BEGINNER'},
+            relation:ep.relation||{displayable:true,related_contents:[]},
+            certification:ep.certification||{setting:{enabled:false,template_id:'',issuer_id:'',passing_threshold:0}},
+            background:ep.background||{type:'PROGRAM_BACKGROUND_TYPE_DEFAULT'},
+          };
+        } else {
+          // Program 情報のみ更新（arrangement は既存を保持）
+          putBody={
+            title: f.title||ep.title||'',
+            highlight:{displayable:true,texts:mergedHighlight},
+            about:{displayable:true,html_content:f.about_html!==undefined?f.about_html:(ep.about?.html_content||'')},
+            author_info:mergedAuthor,
+            label_info:{displayable:true,labels:(f.labels!==undefined?f.labels:(ep.label_info?.labels||[]).map(l=>typeof l==='object'?(l.name||l):l)).map(l=>({name:l}))},
+            arrangement:ep.arrangement||{displayable:true,items:[]},
+            clip:{displayable:true,clips:ep.clip?.clips||[]},
+            rating:{displayable:false},
+            level_info:ep.level_info||{displayable:false,level:'PROGRAM_LEVEL_BEGINNER'},
+            relation:{displayable:true,related_contents:ep.relation?.related_contents||[]},
+            certification:ep.certification||{setting:{enabled:false,template_id:'',issuer_id:'',passing_threshold:0}},
+            background:mergedBg,
+          };
+        }
 
         for(let attempt=0;attempt<3;attempt++){
           try{ await cpmPut(`/bv/cpm/v1alpha1/sites/${site}/programs/${progId}`,{program:putBody}); break; }
@@ -5159,7 +5342,8 @@ async function runProgramImport(){
   }
 
   toast('Programインポート完了','success');
-  if(importBtn){ importBtn.disabled=false; importBtn.textContent='🚀 インポート開始'; }
+  if(importBtn){ importBtn.disabled=false; }
+  if(arrBtn){ arrBtn.disabled=false; }
 }
 
 // ════ Thumbnail ══════════════════════════════════════════
