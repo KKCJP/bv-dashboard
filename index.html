@@ -171,6 +171,7 @@ tr:last-child td{border-bottom:none;}
     <div style="padding:14px;background:var(--surface2);border:1px solid var(--border);border-radius:8px;margin-bottom:14px;">
       <div style="font-size:12px;font-weight:600;color:var(--muted);margin-bottom:10px;">個別実行（単独で実行可能）</div>
       <div class="btn-row" style="flex-wrap:wrap;gap:8px;">
+        <button class="btn btn-secondary btn-sm" id="step3-btn" onclick="runStep3Only()">③ Program 作成</button>
         <button class="btn btn-secondary btn-sm" id="step2-btn" onclick="runStep2Only()">② VOD→CPM 追加</button>
         <button class="btn btn-secondary btn-sm" id="step4-btn" onclick="runStep4Only()">④ Arrangement 補完</button>
         <button class="btn btn-secondary btn-sm" id="step5-btn" onclick="runStep5Only()">⑤ Outline 同期</button>
@@ -549,7 +550,8 @@ tr:last-child td{border-bottom:none;}
         <div style="font-weight:600;font-size:12px;margin-bottom:10px;">プレビュー</div>
         <div id="prog-preview-list"></div>
         <div class="btn-row" style="margin-top:12px;">
-          <button class="btn btn-primary" id="prog-import-btn" onclick="runProgramImport()">🚀 インポート開始</button>
+          <button class="btn btn-secondary btn-sm" id="prod-arr-preview-btn" onclick="runProdArrangementPreview()">🔍 Prod Arrangement プレビュー（QA ID 変換）</button>
+        <button class="btn btn-primary" id="prog-import-btn" onclick="runProgramImport()">🚀 インポート開始</button>
           <button class="btn btn-secondary" onclick="clearProgramPreview()">✕ クリア</button>
         </div>
       </div>
@@ -574,7 +576,27 @@ tr:last-child td{border-bottom:none;}
         </div>
       </div>
     </div>
-    <div class="card" id="prog-log-card" style="display:none;">
+    <!-- Prod Arrangement プレビュー -->
+  <div class="card" id="prod-arr-preview-card" style="display:none;">
+    <div class="card-title">🔍 Prod Arrangement → QA ID 変換プレビュー
+      <button class="btn btn-secondary btn-xs" style="margin-left:auto;" onclick="exportProdArrangementCsv()">📥 CSV ダウンロード</button>
+    </div>
+    <p style="font-size:11px;color:var(--muted);margin-bottom:10px;">Prod の Arrangement 構造を QA の program_id と content_id に変換したプレビューです。✅=マッチ / ⚠️=QAになし</p>
+    <div id="prod-arr-preview-summary" style="font-size:12px;margin-bottom:10px;"></div>
+    <div style="max-height:400px;overflow-y:auto;">
+      <table id="prod-arr-preview-table">
+        <thead><tr>
+          <th>Program 名</th>
+          <th>Section</th>
+          <th>Content 名</th>
+          <th>QA program_id</th>
+          <th>QA content_id</th>
+          <th>状態</th>
+        </tr></thead>
+        <tbody id="prod-arr-preview-tbody"></tbody>
+      </table>
+    </div>
+  </div>
       <div class="card-title">📋 実行ログ <button class="btn btn-secondary btn-xs" style="margin-left:auto;" onclick="document.getElementById('prog-log-card').style.display='none'">✕</button></div>
       <div class="log-box" id="prog-log"></div>
     </div>
@@ -1525,6 +1547,43 @@ async function loadQaBaseData(){
   const prodPrograms=await fetchAllPrograms(PROD_BASE, prodHdr(), prodSiteId);
 
   return {qaSiteId, prodSiteId, qaVodMap, qaCpmMap, qaProgMap, qaPrograms, prodPrograms};
+}
+
+// ── ③ Program 作成のみ ──
+async function runStep3Only(){
+  const btn=document.getElementById('step3-btn');
+  const statusEl=document.getElementById('step-individual-status');
+  const log=makeLog('full-sync-log','full-sync-log-card');
+  btn.disabled=true; btn.textContent='③ 実行中...';
+  try{
+    const {qaSiteId,prodSiteId,qaProgMap,prodPrograms}=await loadQaBaseData();
+    log(`▶ Program 作成開始（Prod: ${prodPrograms.length}件 / QA: ${Object.keys(qaProgMap).length}件）`);
+    let created=0, skip=0, fail=0;
+    for(const pp of prodPrograms){
+      if(qaProgMap[pp.title]){ skip++; continue; }
+      try{
+        const r=await fetch(`${BASE()}/bv/cpm/v1alpha1/sites/${qaSiteId}/programs`,{
+          method:'POST', headers:{...HDR(),'Content-Type':'application/json'},
+          body:JSON.stringify({program:{title:pp.title}})
+        });
+        if(r.ok){
+          const d=await r.json();
+          const newId=d.program?.id||d.content_id||'';
+          if(newId) qaProgMap[pp.title]=newId;
+          created++;
+          log(`  ✅ 作成: ${pp.title}`,'done');
+        } else {
+          const err=await r.text();
+          throw new Error(`${r.status}: ${err.substring(0,100)}`);
+        }
+      }catch(e){ fail++; log(`  ❌ ${pp.title}: ${e.message}`,'error'); }
+      await new Promise(r=>setTimeout(r,200));
+    }
+    log(`✅ Program作成完了: +${created}件 / スキップ:${skip}件 / 失敗:${fail}件`,'done');
+    statusEl.textContent=`③ 完了：+${created}件作成`;
+    toast(`Program作成完了：+${created}件`,'success');
+  }catch(e){ log(`❌ ${e.message}`,'error'); toast('失敗: '+e.message,'error'); }
+  finally{ btn.disabled=false; btn.textContent='③ Program 作成'; }
 }
 
 // ── ② VOD→CPM 追加のみ ──
@@ -3849,7 +3908,122 @@ async function batchUpdateCpmTitlesFromTable(){
   log(`🏁 完了：成功${ok}件（/contents/setting:${m1}件 / PUT vods:${m2}件）/ 失敗${fail}件`, ok>0?'done':'error');
   if(ok>0) toast(`title 更新完了：${ok}件`,'success');
 }
-// ════ Program 一覧・バッチ削除 ════════════════════════
+// ════ Prod Arrangement プレビュー（QA ID 変換）════════
+let prodArrPreviewData=[];
+
+async function runProdArrangementPreview(){
+  const btn=document.getElementById('prod-arr-preview-btn');
+  btn.disabled=true; btn.textContent='🔍 取得中...';
+  const log=makeLog('prog-log','prog-log-card');
+
+  const prodSiteId=cfg('prod_site_id'), qaSiteId=cfg('site_id');
+  if(!cfg('prod_token')||!prodSiteId||!qaSiteId){
+    toast('設定ページで Prod/QA の Token と Site ID を確認してください','error');
+    btn.disabled=false; btn.textContent='🔍 Prod Arrangement プレビュー（QA ID 変換）'; return;
+  }
+
+  try{
+    log('▶ Prod Arrangement プレビュー開始...');
+
+    // QA Program title → content_id
+    const qaPrograms=await fetchAllPrograms(BASE(), HDR(), qaSiteId);
+    const qaProgramMap={};
+    qaPrograms.forEach(p=>{ qaProgramMap[p.title]=p.content_id; });
+    log(`  ✅ QA Program: ${qaPrograms.length}件`,'done');
+
+    // QA CPM VOD/FORM title → content_id
+    const qaCpmMap={};
+    for(const ct of ['CONTENT_TYPE_VOD','CONTENT_TYPE_FORM']){
+      let page=1;
+      while(true){
+        const r=await fetch(`${BASE()}/bv/cpm/v1alpha1/sites/${qaSiteId}/contents?current_page=${page}&items_per_page=100&filter.content_types=${ct}`,{headers:HDR()});
+        const d=await r.json();
+        (d.contents||[]).forEach(c=>{ if(c.title&&c.content_id) qaCpmMap[c.title]={id:c.content_id,type:ct}; });
+        if((d.contents||[]).length<100) break;
+        page++;
+      }
+    }
+    log(`  ✅ QA CPM コンテンツ: ${Object.keys(qaCpmMap).length}件`,'done');
+
+    // Prod Program 一覧取得
+    const prodPrograms=await fetchAllPrograms(PROD_BASE, prodHdr(), prodSiteId);
+    log(`  ✅ Prod Program: ${prodPrograms.length}件`,'done');
+
+    // 各 Prod Program の Arrangement を取得して変換
+    prodArrPreviewData=[];
+    let totalOk=0, totalMissing=0;
+    let done=0;
+    for(const pp of prodPrograms){
+      const qaProgId=qaProgramMap[pp.title]||'';
+      const items=await fetchProgramArrangement(PROD_BASE, prodHdr(), prodSiteId, pp.content_id);
+
+      for(const topItem of items){
+        if(topItem.type==='PROGRAM_ARRANGEMENT_ITEM_TYPE_SECTION'){
+          const sectionName=topItem.section?.name||'';
+          for(const si of topItem.section?.items||[]){
+            const vodTitle=si.content?.vod?.title||si.content?.name||'';
+            const qaContent=qaCpmMap[vodTitle]||null;
+            const status=!qaProgId?'no_program':!qaContent?'missing_content':'ok';
+            prodArrPreviewData.push({
+              program_name:pp.title, qa_program_id:qaProgId,
+              section_name:sectionName, content_name:vodTitle,
+              qa_content_id:qaContent?.id||'', qa_content_type:qaContent?.type||'',
+              status
+            });
+            if(status==='ok') totalOk++; else totalMissing++;
+          }
+        } else if(topItem.type==='PROGRAM_ARRANGEMENT_ITEM_TYPE_CONTENT'){
+          const vodTitle=topItem.content?.vod?.title||topItem.content?.name||'';
+          const qaContent=qaCpmMap[vodTitle]||null;
+          const status=!qaProgId?'no_program':!qaContent?'missing_content':'ok';
+          prodArrPreviewData.push({
+            program_name:pp.title, qa_program_id:qaProgId,
+            section_name:'', content_name:vodTitle,
+            qa_content_id:qaContent?.id||'', qa_content_type:qaContent?.type||'',
+            status
+          });
+          if(status==='ok') totalOk++; else totalMissing++;
+        }
+      }
+      done++;
+      if(done%10===0) btn.textContent=`🔍 取得中 ${done}/${prodPrograms.length}...`;
+      await new Promise(r=>setTimeout(r,80));
+    }
+
+    // プレビュー表示
+    document.getElementById('prod-arr-preview-card').style.display='block';
+    document.getElementById('prod-arr-preview-summary').innerHTML=
+      `<span style="color:var(--green)">✅ マッチ: ${totalOk}件</span>　<span style="color:var(--red)">⚠️ QA になし: ${totalMissing}件</span>　合計: ${prodArrPreviewData.length}件`;
+
+    const tbody=document.getElementById('prod-arr-preview-tbody');
+    tbody.innerHTML=prodArrPreviewData.slice(0,200).map(r=>`
+      <tr style="font-size:11px;">
+        <td style="max-width:150px;overflow:hidden;text-overflow:ellipsis;white-space:nowrap;" title="${esc(r.program_name)}">${esc(r.program_name)}</td>
+        <td style="color:var(--muted);max-width:100px;overflow:hidden;text-overflow:ellipsis;white-space:nowrap;">${esc(r.section_name)}</td>
+        <td style="max-width:160px;overflow:hidden;text-overflow:ellipsis;white-space:nowrap;" title="${esc(r.content_name)}">${esc(r.content_name)}</td>
+        <td style="font-family:var(--mono);font-size:10px;color:${r.qa_program_id?'var(--muted)':'var(--red)'};">${r.qa_program_id?r.qa_program_id.substring(0,14)+'...':'❌ なし'}</td>
+        <td style="font-family:var(--mono);font-size:10px;color:${r.qa_content_id?'var(--muted)':'var(--red)'};">${r.qa_content_id?r.qa_content_id.substring(0,14)+'...':'—'}</td>
+        <td>${r.status==='ok'?'<span style="color:var(--green)">✅</span>':r.status==='no_program'?'<span style="color:var(--red)">❌ Program なし</span>':'<span style="color:var(--yellow)">⚠️ Content なし</span>'}</td>
+      </tr>
+    `).join('')+(prodArrPreviewData.length>200?`<tr><td colspan="6" style="color:var(--muted);text-align:center;">...他 ${prodArrPreviewData.length-200}件（CSV でダウンロード）</td></tr>`:'');
+
+    log(`✅ プレビュー完了：✅${totalOk}件 / ⚠️${totalMissing}件`,'done');
+    toast('プレビュー完了','success');
+  }catch(e){ log(`❌ ${e.message}`,'error'); toast('失敗: '+e.message,'error'); }
+  finally{ btn.disabled=false; btn.textContent='🔍 Prod Arrangement プレビュー（QA ID 変換）'; }
+}
+
+function exportProdArrangementCsv(){
+  if(!prodArrPreviewData.length){ toast('先にプレビューを実行してください','error'); return; }
+  const rows=[['program_name','qa_program_id','section_name','content_name','qa_content_id','qa_content_type','status']];
+  prodArrPreviewData.forEach(r=>rows.push([r.program_name,r.qa_program_id,r.section_name,r.content_name,r.qa_content_id,r.qa_content_type,r.status]));
+  const csv=rows.map(r=>r.map(c=>`"${(c||'').replace(/"/g,'""')}"`).join(',')).join('\n');
+  const a=document.createElement('a');
+  a.href='data:text/csv;charset=utf-8,\uFEFF'+encodeURIComponent(csv);
+  a.download='prod_arrangement_qa_ids.csv'; a.click();
+  toast('CSV ダウンロード完了','success');
+}
+// ════ Prod Arrangement プレビュー 終 ══════════════════
 let programListData=[];
 let programListFilter='all';
 let selectedProgramIds=new Set();
@@ -4686,12 +4860,35 @@ function clearProgramPreview(){ programImportData=[]; document.getElementById('p
 async function runProgramImport(){
   if(!programImportData.length){ toast('データがありません','error'); return; }
   const importBtn=document.getElementById('prog-import-btn');
-  if(importBtn?.disabled) return; // 二重実行防止
+  if(importBtn?.disabled) return;
   if(importBtn){ importBtn.disabled=true; importBtn.textContent='⏳ 実行中...'; }
   const site=siteId();
   const log=makeLog('prog-log','prog-log-card');
   log(t('log_batch_start',programImportData.length));
-  const missingPrograms=[]; // content が見つからなかった Program を記録
+  const missingPrograms=[];
+
+  // QA CPM の VOD・FORM 全件取得（content_id 変換用）
+  log('  📋 QA CPM コンテンツ取得中...');
+  const arrangementCpmMap={};
+  const arrangementCpmIds=new Set();
+  try{
+    for(const ct of ['CONTENT_TYPE_VOD','CONTENT_TYPE_FORM']){
+      let p=1;
+      while(true){
+        const r=await fetch(`${BASE()}/bv/cpm/v1alpha1/sites/${site}/contents?current_page=${p}&items_per_page=100&filter.content_types=${ct}`,{headers:HDR()});
+        const d=await r.json();
+        (d.contents||[]).forEach(c=>{
+          if(c.title&&c.content_id){
+            arrangementCpmMap[c.title]={id:c.content_id,type:ct};
+            arrangementCpmIds.add(c.content_id);
+          }
+        });
+        if((d.contents||[]).length<100) break;
+        p++;
+      }
+    }
+    log(`  ✅ QA CPM コンテンツ: ${Object.keys(arrangementCpmMap).length}件（VOD+FORM）`);
+  }catch(e){ log(`  ⚠️ QA CPM 取得失敗: ${e.message}`); }
 
   // vodsData が空なら VOD を全件取得（content name 検索のため）
   if(!vodsData.length){
@@ -4710,7 +4907,6 @@ async function runProgramImport(){
     }catch(e){ log(`  ⚠️ VOD 取得失敗: ${e.message}`); }
   }
 
-  try{
 
   // 既存 Program 一覧を取得（タイトルで照合）
   let existingProgs=[];
@@ -4787,43 +4983,19 @@ async function runProgramImport(){
           let contentType='CONTENT_TYPE_VOD';
 
           if(!contentId && searchName){
-            // ① vodsData の name で前缀一致（表示名が数字のみの場合も考慮）
-            const prefixLen=Math.max(4, Math.min(searchName.length, 20));
-            const prefix=searchName.substring(0, prefixLen);
-            let directHit=vodsData.find(v=>(v.name||'')===searchName)
-              ||vodsData.find(v=>(v.name||'').startsWith(searchName))
-              ||vodsData.find(v=>searchName.startsWith((v.name||'').substring(0,prefixLen)&&(v.name||'').length>=4?(v.name||'').substring(0,prefixLen):'__NOMATCH__'));
-            if(directHit){ contentId=directHit.id; contentType='CONTENT_TYPE_VOD'; }
-
-            // ② API で VOD を前缀検索（元ファイル名 = filter.name の前缀でヒットする）
-            if(!contentId){
-              try{
-                // prefix が数字のみの場合は searchName 全体を使う（短い数字prefix は誤マッチしやすい）
-                const apiQuery=(/^\d+$/.test(prefix)?searchName:prefix);
-                const r=await fetch(`${BASE()}/bv/cms/v1/vods?current_page=1&items_per_page=10&filter.name=${encodeURIComponent(apiQuery)}`,{headers:HDR()});
-                const d=await r.json();
-                const hits=d.vods||[];
-                // 前缀一致優先：hit.name が searchName で始まる or searchName が hit.name で始まる
-                const hit=hits.find(h=>(h.name||'').startsWith(searchName))
-                  ||hits.find(h=>searchName.startsWith((h.name||'').substring(0,Math.min((h.name||'').length,prefixLen))))
-                  ||hits[0];
-                if(hit){ contentId=hit.id; contentType='CONTENT_TYPE_VOD'; }
-              }catch{}
+            // QA CPM title で完全一致検索（VOD・FORM 両方対象）
+            if(arrangementCpmMap[searchName]){
+              contentId=arrangementCpmMap[searchName].id;
+              contentType=arrangementCpmMap[searchName].type;
             }
-
-            // ③ FORM を検索（VOD で見つからなかった場合のみ）
-            if(!contentId){
-              try{
-                const site=siteId();
-                if(site){
-                  const fr=await fetch(`${BASE()}/bv/cpm/v1alpha1/sites/${site}/contents?current_page=1&items_per_page=10&filter.content_types=CONTENT_TYPE_FORM&filter.title=${encodeURIComponent(searchName)}`,{headers:HDR()});
-                  const fd=await fr.json();
-                  const fhits=fd.contents||[];
-                  const fhit=fhits.find(h=>(h.title||'').startsWith(searchName)||searchName.startsWith((h.title||'').substring(0,prefixLen)))
-                    ||fhits[0];
-                  if(fhit){ contentId=fhit.content_id; contentType='CONTENT_TYPE_FORM'; }
-                }
-              }catch{}
+          }
+          // content_id が指定されているが QA CPM に存在しない場合は title で再検索
+          if(contentId && !arrangementCpmIds.has(contentId) && searchName){
+            if(arrangementCpmMap[searchName]){
+              contentId=arrangementCpmMap[searchName].id;
+              contentType=arrangementCpmMap[searchName].type;
+            } else {
+              contentId=''; // QA にない
             }
           }
 
@@ -4975,9 +5147,7 @@ async function runProgramImport(){
   }
 
   toast('Programインポート完了','success');
-  }finally{
-    if(importBtn){ importBtn.disabled=false; importBtn.textContent='🚀 インポート開始'; }
-  }
+  if(importBtn){ importBtn.disabled=false; importBtn.textContent='🚀 インポート開始'; }
 }
 
 // ════ Thumbnail ══════════════════════════════════════════
