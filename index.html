@@ -4727,6 +4727,7 @@ async function runProgramImport(){
     }
   }catch{}
 
+  let skipCount=0;
   for(let i=0;i<programImportData.length;i++){
     const prog=programImportData[i];
     log(`[${i+1}/${programImportData.length}] 📚 「${prog.title}」`);
@@ -4763,7 +4764,10 @@ async function runProgramImport(){
         }
       }
 
-      // arrangement 構築
+      if(!progId){
+        log(`  ⚠️ QA に Program が見つかりません → スキップ`,'error');
+        skipCount++; continue;
+      }
       const arrangement=[];
       let curSection=null,curModule=null;
       const missingContents=[]; // 見つからなかった content を記録
