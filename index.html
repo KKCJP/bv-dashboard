@@ -1459,7 +1459,7 @@ async function runFullSync(){
           method:'PUT', headers:{...HDR(),'Content-Type':'application/json'},
           body:JSON.stringify({program:{title:pp.title, background:{type:'PROGRAM_BACKGROUND_TYPE_IMAGE', image:{id:fileId}}}})
         });
-        if(!setRes.ok) throw new Error(`Program PUT 失敗: ${setRes.status}`);
+        if(!setRes.ok){ const errBody=await setRes.text(); throw new Error(`Program PUT 失敗: ${setRes.status}: ${errBody.substring(0,150)}`); }
 
         thumbOk++;
         log(`  ✅ ${pp.title}`,'done');
@@ -1746,7 +1746,7 @@ async function runStep6Only(){
         const etag=s3Res.headers.get('ETag')||'';
         await fetch(`${BASE()}/bv/cms/v1/library/files/${fileId}:complete-upload`,{method:'POST',headers:{...HDR(),'Content-Type':'application/json'},body:JSON.stringify({id:uploadId,parts:[{part_number:1,etag}]})});
         const setRes=await fetch(`${BASE()}/bv/cpm/v1alpha1/sites/${qaSiteId}/programs/${qaProgId}`,{method:'PUT',headers:{...HDR(),'Content-Type':'application/json'},body:JSON.stringify({program:{title:pp.title,background:{type:'PROGRAM_BACKGROUND_TYPE_IMAGE',image:{id:fileId}}}})});
-        if(!setRes.ok) throw new Error(`Program PUT 失敗: ${setRes.status}`);
+        if(!setRes.ok){ const errBody=await setRes.text(); throw new Error(`Program PUT 失敗: ${setRes.status}: ${errBody.substring(0,150)}`); }
         thumbOk++; log(`  ✅ ${pp.title}`,'done');
       }catch(e){ thumbFail++; log(`  ❌ ${pp.title}: ${e.message}`,'error'); }
       await new Promise(r=>setTimeout(r,300));
