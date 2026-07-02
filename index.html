@@ -4734,20 +4734,33 @@ async function runProgramImport(){
       // program_id で既存を照合（IDがあればID優先、なければタイトル照合）
       let progId=prog.program_id||'';
       if(progId){
-        // ID指定あり → そのまま PUT
+        // ID指定あり → QA に存在するか確認
         const byId=existingProgs.find(p=>p.content_id===progId);
         if(!byId){
-          log(`  ⚠️ program_id が見つかりません → 新規作成します`);
-          progId=''; // 新建に切り替え
+          // Prod の ID → QA のタイトルで再照合
+          log(`  ⚠️ program_id が QA に存在しません → タイトルで再照合`);
+          progId='';
         }
         // 同名のプログラムが他にあれば警告
         const sameTitle=existingProgs.filter(p=>p.title===prog.title&&p.content_id!==progId);
         if(sameTitle.length) log(`  ⚠️ 同じ名前のProgramが他に${sameTitle.length}件あります：${sameTitle.map(p=>p.content_id.substring(0,8)).join(', ')} → 人工確認を推奨`);
-      } else {
-        // ID未指定 → タイトルで照合
+      }
+
+      if(!progId){
+        // ID未指定 or 未発見 → タイトルで照合
         const byTitle=existingProgs.filter(p=>p.title===prog.title);
-        if(byTitle.length>1) log(`  ⚠️ 同じ名前のProgramが${byTitle.length}件あります：${byTitle.map(p=>p.content_id.substring(0,8)).join(', ')} → program_id を指定してください`);
+        if(byTitle.length>1) log(`  ⚠️ 同じ名前のProgramが${byTitle.length}件あります：${byTitle.map(p=>p.content_id.substring(0,8)).join(', ')} → 先頭の1件を使用`);
         progId=byTitle[0]?.content_id||'';
+        // GET で実際に存在するか確認
+        if(progId){
+          try{
+            const checkR=await fetch(`${BASE()}/bv/cpm/v1alpha1/sites/${site}/programs/${progId}?action=GET_FORM_REQUEST_ACTION_CURRENT&mode=FORM_MODE_EDIT`,{headers:HDR()});
+            if(!checkR.ok){
+              log(`  ⚠️ ID ${progId.substring(0,16)}... が実際には存在しません → スキップ`,'error');
+              progId='';
+            }
+          }catch{ progId=''; }
+        }
       }
 
       // arrangement 構築
