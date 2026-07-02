@@ -559,8 +559,9 @@ tr:last-child td{border-bottom:none;}
     <div class="card">
       <div class="card-title">🖼️ Thumbnail 一括アップロード</div>
       <p style="color:var(--muted);font-size:12px;margin-bottom:12px;">画像をドラッグ → Program名でマッチング → 16:9トリミング → アップロード</p>
-      <div style="display:flex;gap:8px;align-items:center;margin-bottom:10px;">
+      <div style="display:flex;gap:8px;align-items:center;margin-bottom:10px;flex-wrap:wrap;">
         <button class="btn btn-secondary btn-sm" onclick="loadProgramListForThumb()">🔄 Program一覧読み込み</button>
+        <button class="btn btn-secondary btn-sm" id="step6-thumb-btn" onclick="runStep6Only()">🔁 Prod → QA Thumbnail 同期</button>
         <span id="prog-list-count" style="font-size:11px;color:var(--muted);"></span>
       </div>
       <div class="upload-zone" id="thumb-zone" onclick="document.getElementById('thumb-input').click()" ondragover="event.preventDefault();this.classList.add('drag-over')" ondragleave="this.classList.remove('drag-over')" ondrop="handleThumbDrop(event)">
@@ -1477,9 +1478,13 @@ async function runFullSync(){
         });
 
         // QA Program の background に設定
+        // background のみ更新する場合も arrangement が必要なので既存を取得
+        const existArrRes=await fetch(`${BASE()}/bv/cpm/v1alpha1/sites/${qaSiteId}/programs/${qaProgId}?action=GET_FORM_REQUEST_ACTION_CURRENT&mode=FORM_MODE_EDIT`,{headers:HDR()});
+        const existArrData=existArrRes.ok?await existArrRes.json():{};
+        const existArrangement=existArrData.program?.arrangement||{displayable:true,items:[]};
         const setRes=await fetch(`${BASE()}/bv/cpm/v1alpha1/sites/${qaSiteId}/programs/${qaProgId}`,{
           method:'PUT', headers:{...HDR(),'Content-Type':'application/json'},
-          body:JSON.stringify({program:{title:pp.title, background:{type:'PROGRAM_BACKGROUND_TYPE_IMAGE', image:{id:fileId}}}})
+          body:JSON.stringify({program:{title:pp.title, background:{type:'PROGRAM_BACKGROUND_TYPE_IMAGE', image:{id:fileId}}, arrangement:existArrangement}})
         });
         if(!setRes.ok){ const errBody=await setRes.text(); throw new Error(`Program PUT 失敗: ${setRes.status}: ${errBody.substring(0,150)}`); }
 
@@ -1761,9 +1766,13 @@ async function runStep5Only(){
 // ── ⑥ Thumbnail 同期のみ（Prod→QA） ──
 async function runStep6Only(){
   const btn=document.getElementById('step6-btn');
+  const btn2=document.getElementById('step6-thumb-btn');
+  const btns=[btn,btn2].filter(Boolean);
+  const setText=t=>btns.forEach(b=>{b.disabled=true;b.textContent=t;});
+  const reset=()=>{ if(btn){btn.disabled=false;btn.textContent='🖼️ Thumbnail 同期（Prod→QA）';} if(btn2){btn2.disabled=false;btn2.textContent='🔁 Prod → QA Thumbnail 同期';} };
   const statusEl=document.getElementById('step-individual-status');
-  const log=makeLog('full-sync-log','full-sync-log-card');
-  btn.disabled=true; btn.textContent='🖼️ 実行中...';
+  const log=makeLog(document.getElementById('full-sync-log')?'full-sync-log':'prog-log', document.getElementById('full-sync-log-card')?'full-sync-log-card':'prog-log-card');
+  setText('🖼️ 同期中...');
   try{
     const {qaSiteId,prodSiteId,qaProgMap,prodPrograms}=await loadQaBaseData();
     log(`▶ Thumbnail 同期開始（Prod ${prodPrograms.length}件）`);
@@ -1804,7 +1813,10 @@ async function runStep6Only(){
         if(!s3Res.ok) throw new Error(`S3 PUT 失敗: ${s3Res.status}`);
         const etag=s3Res.headers.get('ETag')||'';
         await fetch(`${BASE()}/bv/cms/v1/library/files/${fileId}:complete-upload`,{method:'POST',headers:{...HDR(),'Content-Type':'application/json'},body:JSON.stringify({id:uploadId,parts:[{part_number:1,etag}]})});
-        const setRes=await fetch(`${BASE()}/bv/cpm/v1alpha1/sites/${qaSiteId}/programs/${qaProgId}`,{method:'PUT',headers:{...HDR(),'Content-Type':'application/json'},body:JSON.stringify({program:{title:pp.title,background:{type:'PROGRAM_BACKGROUND_TYPE_IMAGE',image:{id:fileId}}}})});
+        const existArrR=await fetch(`${BASE()}/bv/cpm/v1alpha1/sites/${qaSiteId}/programs/${qaProgId}?action=GET_FORM_REQUEST_ACTION_CURRENT&mode=FORM_MODE_EDIT`,{headers:HDR()});
+        const existArrD=existArrR.ok?await existArrR.json():{};
+        const existArr=existArrD.program?.arrangement||{displayable:true,items:[]};
+        const setRes=await fetch(`${BASE()}/bv/cpm/v1alpha1/sites/${qaSiteId}/programs/${qaProgId}`,{method:'PUT',headers:{...HDR(),'Content-Type':'application/json'},body:JSON.stringify({program:{title:pp.title,background:{type:'PROGRAM_BACKGROUND_TYPE_IMAGE',image:{id:fileId}},arrangement:existArr}})});
         if(!setRes.ok){ const errBody=await setRes.text(); throw new Error(`Program PUT 失敗: ${setRes.status}: ${errBody.substring(0,150)}`); }
         thumbOk++; log(`  ✅ ${pp.title}`,'done');
       }catch(e){ thumbFail++; log(`  ❌ ${pp.title}: ${e.message}`,'error'); }
@@ -1814,7 +1826,7 @@ async function runStep6Only(){
     statusEl.textContent=`🖼️ Thumbnail完了：${thumbOk}件`;
     toast(`Thumbnail同期完了：${thumbOk}件`,'success');
   }catch(e){ log(`❌ ${e.message}`,'error'); toast('失敗: '+e.message,'error'); }
-  finally{ btn.disabled=false; btn.textContent='🖼️ Thumbnail 同期（Prod→QA）'; }
+  finally{ reset(); }
 }
 // Prod の Arrangement 構造を取得し、QA にある VOD/CPM content で補完して PUT する
 async function runSyncArrangement(){
