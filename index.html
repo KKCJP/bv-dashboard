@@ -583,7 +583,8 @@ tr:last-child td{border-bottom:none;}
         <button class="btn btn-secondary" onclick="downloadProgramTemplate()">⬇ テンプレートDL</button>
         <button class="btn btn-secondary" id="export-prog-btn" onclick="exportProgramCsv()">⬇ 既存Program CSV匯出</button>
         <button class="btn btn-secondary" id="export-cpm-vod-btn" onclick="exportCpmVodCsv()">⬇ CPM VOD 一覧CSV</button>
-        <button class="btn btn-secondary" onclick="document.getElementById('prog-csv-input').click()">⬆ CSV アップロード</button>
+        <button class="btn btn-secondary" onclick="document.getElementById('prog-csv-input').dataset.mode='program_only';document.getElementById('prog-csv-input').click()">⬆ CSV（Program 情報）</button>
+        <button class="btn btn-secondary" onclick="document.getElementById('prog-csv-input').dataset.mode='arrangement_only';document.getElementById('prog-csv-input').click()">⬆ CSV（Arrangement）</button>
         <input type="file" id="prog-csv-input" accept=".csv" style="display:none" onchange="handleProgramCSV(event)">
       </div>
       <div id="prog-preview" style="display:none;">
@@ -4857,7 +4858,12 @@ function downloadProgramTemplate(){
 }
 
 function handleProgramCSV(event){
-  const file=event.target.files?.[0]; event.target.value=''; if(!file) return;
+  const file=event.target.files?.[0];
+  const mode=event.target.dataset.mode||'program_only';
+  event.target.value='';
+  if(!file) return;
+  // モードをグローバルに保存（プレビュー後のボタンで使用）
+  window._progImportMode=mode;
   const reader=new FileReader();
   reader.onload=e=>{
     try{
@@ -4992,8 +4998,14 @@ function handleProgramCSV(event){
 }
 
 function renderProgramPreview(){
+  const mode=window._progImportMode||'program_only';
+  const modeLabel=mode==='program_only'
+    ?'<span style="background:rgba(99,102,241,.2);color:#818cf8;padding:2px 8px;border-radius:4px;font-size:11px;">📋 Program 情報のみ</span>'
+    :'<span style="background:rgba(52,211,153,.15);color:var(--green);padding:2px 8px;border-radius:4px;font-size:11px;">🎬 Arrangement のみ</span>';
   document.getElementById('prog-preview').style.display='block';
-  document.getElementById('prog-preview-list').innerHTML=programImportData.map(p=>{
+  document.getElementById('prog-preview-list').innerHTML=
+    `<div style="margin-bottom:10px;">${modeLabel} <span style="font-size:11px;color:var(--muted);">${programImportData.length}件 読み込み済み</span></div>`+
+    programImportData.map(p=>{
     const f=p._fields||{};
     const labels=(f.labels||p.labels||[]).join(',');
     const authorName=f.author_name||p.author_name||'';
@@ -5002,7 +5014,7 @@ function renderProgramPreview(){
     return `<div style="border:1px solid var(--border);border-radius:6px;padding:10px 14px;margin-bottom:8px;font-size:12px;">
       <div style="font-weight:600;margin-bottom:4px;">📚 ${esc(p.title||p.program_id||'?')}</div>
       <div style="color:var(--muted);">更新フィールド: ${esc(updatingFields)}${contentCount?' ｜ コンテンツ: '+contentCount+'件':''}</div>
-      ${p.program_id?`<div style="color:var(--muted);font-size:10px;font-family:monospace;">ID: ${p.program_id.substring(0,16)}...</div>`:'<div style="color:var(--yellow);font-size:11px;">⚠️ program_id なし → 新規作成</div>'}
+      ${p.program_id?`<div style="color:var(--muted);font-size:10px;font-family:monospace;">ID: ${p.program_id.substring(0,16)}...</div>`:`<div style="color:var(--yellow);font-size:11px;">${mode==='program_only'?'⚠️ program_id なし → 新規作成':'⚠️ program_id なし → タイトルで照合'}</div>`}
     </div>`;
   }).join('');
 }
@@ -5124,7 +5136,7 @@ async function runProgramImport(mode='program_only'){
         try{
           const r=await fetch(`${BASE()}/bv/cpm/v1alpha1/sites/${site}/programs`,{
             method:'POST', headers:{...HDR(),'Content-Type':'application/json'},
-            body:JSON.stringify({program:{title:prog.title}})
+            body:JSON.stringify({program:{title:prog.title, arrangement:{displayable:true,items:[]}}})
           });
           if(r.ok){
             const d=await r.json();
@@ -5265,14 +5277,15 @@ async function runProgramImport(mode='program_only'){
             background:ep.background||{type:'PROGRAM_BACKGROUND_TYPE_DEFAULT'},
           };
         } else {
-          // Program 情報のみ更新（arrangement は既存を保持）
+          // Program 情報のみ更新（arrangement は空で送る → 既存の content は保持されない）
+          // items に不正な content_id があると UpdateOne: not found になるため空で送る
           putBody={
             title: f.title||ep.title||'',
             highlight:{displayable:true,texts:mergedHighlight},
             about:{displayable:true,html_content:f.about_html!==undefined?f.about_html:(ep.about?.html_content||'')},
             author_info:mergedAuthor,
             label_info:{displayable:true,labels:(f.labels!==undefined?f.labels:(ep.label_info?.labels||[]).map(l=>typeof l==='object'?(l.name||l):l)).map(l=>({name:l}))},
-            arrangement:ep.arrangement||{displayable:true,items:[]},
+            arrangement:{displayable:true,items:[]},
             clip:{displayable:true,clips:ep.clip?.clips||[]},
             rating:{displayable:false},
             level_info:ep.level_info||{displayable:false,level:'PROGRAM_LEVEL_BEGINNER'},
