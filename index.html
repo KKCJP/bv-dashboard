@@ -1351,9 +1351,8 @@ async function runFullSync(){
     if(!prodOutline.id && !qaOutline.id){
       log('  ⚠️ Outline が見つかりません（スキップ）');
     } else {
-      // QA Program title → content_id マップ（Outline は Program の ID が必要）
-      const qaProgramTitleMap={};
-      qaPrograms.forEach(p=>{ qaProgramTitleMap[p.title]=p.content_id; });
+      // qaProgMap は STEP 3 で新規作成分も追加済みなのでそのまま使う
+      const qaProgramTitleMap=qaProgMap;
 
       // Prod Outline の categories 構造を QA 用に変換
       // contents の id は QA の Program content_id に差し替え
