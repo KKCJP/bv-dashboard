@@ -197,7 +197,8 @@ tr:last-child td{border-bottom:none;}
     <!-- 全同期ボタン（メイン） -->
     <div style="padding:14px;background:rgba(99,102,241,.08);border:1px solid rgba(99,102,241,.3);border-radius:8px;margin-bottom:14px;">
       <div style="font-size:13px;font-weight:600;color:#818cf8;margin-bottom:6px;">🚀 Prod → QA 全同期</div>
-      <p style="font-size:11px;color:var(--muted);margin-bottom:10px;">VOD が QA CMS にアップロード済みであることを確認してから実行してください。<br>② CPM VOD 追加 → ③ Program 作成 → ④ Arrangement 補完 → ⑤ Outline 同期 → ⑥ Thumbnail 同期 を自動実行します。</p>
+      <p style="font-size:11px;color:var(--muted);margin-bottom:6px;">VOD が QA CMS にアップロード済みであることを確認してから実行してください。<br>② CPM VOD 追加 → ③ Program 作成 → ④ Arrangement 補完 → ⑤ Outline 同期 → ⑥ Thumbnail 同期 を自動実行します。</p>
+      <p style="font-size:11px;color:var(--red);margin-bottom:10px;">⚠️ 設定の Base URL が <b>QA</b>（api.one-qa.kkstream.io）になっていることを必ず確認してください。Prod URL のまま実行すると Prod のデータが上書きされます。</p>
       <div class="btn-row">
         <button class="btn btn-primary" id="full-sync-btn" onclick="runFullSync()" style="background:linear-gradient(135deg,#6366f1,#8b5cf6);">🚀 全同期実行</button>
         <span id="full-sync-status" style="font-size:11px;color:var(--muted);"></span>
@@ -1145,6 +1146,14 @@ async function runFullSync(){
   btn.disabled=true; btn.textContent='🚀 実行中...';
   const setStatus=t=>{ statusEl.textContent=t; };
 
+  // ⚠️ 安全チェック：BASE() が Prod URL になっていないか確認
+  const currentBase=BASE();
+  if(currentBase.includes('api.one.blendvision.com')&&!currentBase.includes('qa')){
+    toast('❌ 設定の Base URL が Prod になっています！QA に切り替えてから実行してください。','error');
+    btn.disabled=false; btn.textContent='🚀 全同期実行';
+    return;
+  }
+
   try{
     // ════ STEP 1: QA CMS VOD 全件取得（name → vod_id）════
     log('━━ STEP 1: QA CMS VOD 取得 ━━');
@@ -1598,6 +1607,13 @@ async function loadQaBaseData(){
 
 // ── ③ Program 作成のみ ──
 async function runStep3Only(){
+
+  // ⚠️ 安全チェック：BASE() が Prod URL になっていないか確認
+  if(BASE().includes('api.one.blendvision.com')&&!BASE().includes('qa')){
+    toast('❌ 設定の Base URL が Prod になっています！QA に切り替えてから実行してください。','error');
+    return;
+  }
+
   const btn=document.getElementById('step3-btn');
   const statusEl=document.getElementById('step-individual-status');
   const log=makeLog('full-sync-log','full-sync-log-card');
@@ -1635,6 +1651,13 @@ async function runStep3Only(){
 
 // ── ② VOD→CPM 追加のみ ──
 async function runStep2Only(){
+
+  // ⚠️ 安全チェック：BASE() が Prod URL になっていないか確認
+  if(BASE().includes('api.one.blendvision.com')&&!BASE().includes('qa')){
+    toast('❌ 設定の Base URL が Prod になっています！QA に切り替えてから実行してください。','error');
+    return;
+  }
+
   const btn=document.getElementById('step2-btn');
   const statusEl=document.getElementById('step-individual-status');
   const log=makeLog('full-sync-log','full-sync-log-card');
@@ -1675,6 +1698,13 @@ async function runStep2Only(){
 
 // ── ④ Arrangement 補完のみ ──
 async function runStep4Only(){
+
+  // ⚠️ 安全チェック：BASE() が Prod URL になっていないか確認
+  if(BASE().includes('api.one.blendvision.com')&&!BASE().includes('qa')){
+    toast('❌ 設定の Base URL が Prod になっています！QA に切り替えてから実行してください。','error');
+    return;
+  }
+
   const btn=document.getElementById('step4-btn');
   const statusEl=document.getElementById('step-individual-status');
   const log=makeLog('full-sync-log','full-sync-log-card');
@@ -1759,6 +1789,13 @@ async function runStep4Only(){
 
 // ── ⑤ Outline 同期のみ ──
 async function runStep5Only(){
+
+  // ⚠️ 安全チェック：BASE() が Prod URL になっていないか確認
+  if(BASE().includes('api.one.blendvision.com')&&!BASE().includes('qa')){
+    toast('❌ 設定の Base URL が Prod になっています！QA に切り替えてから実行してください。','error');
+    return;
+  }
+
   const btn=document.getElementById('step5-btn');
   const statusEl=document.getElementById('step-individual-status');
   const log=makeLog('full-sync-log','full-sync-log-card');
@@ -1807,6 +1844,13 @@ async function runStep5Only(){
 
 // ── ⑥ Thumbnail 同期のみ（Prod→QA） ──
 async function runStep6Only(){
+
+  // ⚠️ 安全チェック：BASE() が Prod URL になっていないか確認
+  if(BASE().includes('api.one.blendvision.com')&&!BASE().includes('qa')){
+    toast('❌ 設定の Base URL が Prod になっています！QA に切り替えてから実行してください。','error');
+    return;
+  }
+
   const btn=document.getElementById('step6-btn');
   const btn2=document.getElementById('step6-thumb-btn');
   const btns=[btn,btn2].filter(Boolean);
@@ -5300,17 +5344,19 @@ async function runProgramImport(mode='program_only'){
           catch(e){ if(attempt<2) await new Promise(r=>setTimeout(r,2000)); else throw e; }
         }
 
-        // contents/setting も有値フィールドのみ更新
-        const existContent=existingProgs.find(p=>p.content_id===progId)||{};
-        await cpmPut(`/bv/cpm/v1alpha1/sites/${site}/contents/setting`,{content:{
-          content_id:progId,content_type:'CONTENT_TYPE_PROGRAM',
-          visibility:f.visibility||existContent.visibility||'CONTENT_VISIBILITY_DRAFT',
-          labels:f.labels!==undefined?f.labels:(existContent.labels||[]),
-          part_numbers:f.part_numbers!==undefined?f.part_numbers:(existContent.part_numbers||[]),
-          schedule:{start_time:null,end_time:null},
-          license_setting:{license:'CONTENT_LICENSE_LICENSE_ONLY',custom_url_resource:''},
-          note:'',form_type:null
-        }});
+        // contents/setting も有値フィールドのみ更新（QA では失敗する場合あり → 無視）
+        try{
+          const existContent=existingProgs.find(p=>p.content_id===progId)||{};
+          await cpmPut(`/bv/cpm/v1alpha1/sites/${site}/contents/setting`,{content:{
+            content_id:progId,content_type:'CONTENT_TYPE_PROGRAM',
+            visibility:f.visibility||existContent.visibility||'CONTENT_VISIBILITY_DRAFT',
+            labels:f.labels!==undefined?f.labels:(existContent.labels||[]),
+            part_numbers:f.part_numbers!==undefined?f.part_numbers:(existContent.part_numbers||[]),
+            schedule:{start_time:null,end_time:null},
+            license_setting:{license:'CONTENT_LICENSE_LICENSE_ONLY',custom_url_resource:''},
+            note:'',form_type:null
+          }});
+        }catch(e){ /* /contents/setting は QA で失敗する場合があるが無視 */ }
 
       } else {
         // ── 新規 → POST → PUT（全フィールド送る） ──
