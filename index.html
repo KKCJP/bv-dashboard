@@ -3617,11 +3617,22 @@ async function runOutlineImport(){
           }
           child.contents=resolved;
           if(missing.length) log(`  ⚠️ content 未找到（PUT から除外）：${missing.join('、')}`,'error');
+          if(resolved.length===0) log(`  ℹ️ Space「${child.name||''}」は全 content が未解決のため除外`);
         }
         await resolveContentNames(child);
       }
     };
+
+    // contents が空の Space を再帰的に除外する
+    const removeEmptySpaces=(cats)=>(cats||[]).filter(cat=>{
+      if(cat.type==='CATEGORY_TYPE_SPACE') return (cat.contents||[]).length>0;
+      if(cat.sub_categories) cat.sub_categories=removeEmptySpaces(cat.sub_categories);
+      if(cat.categories) cat.categories=removeEmptySpaces(cat.categories);
+      return true;
+    });
     await resolveContentNames({sub_categories:categories});
+    // 空の Space を除外
+    categories=removeEmptySpaces(categories);
 
     // PUT 前にどの content_id を送るかログに出す
     const allContentIds=[];
