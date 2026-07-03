@@ -3565,7 +3565,22 @@ async function runOutlineImport(){
           const missing=[];
           for(const c of child.contents||[]){
             if(c.id){
-              resolved.push(c);
+              // c.id が QA CPM に存在するか確認（Prod の ID が混入している可能性）
+              const qaEntry=Object.values(cpmContentTitleMap).find(e=>e.id===c.id);
+              if(qaEntry){
+                resolved.push(c); // QA CPM に存在する → そのまま使用
+              } else if(c._search_name||c.name||c.title){
+                // QA に存在しない ID → name で再検索
+                const searchName=(c._search_name||c.name||c.title||'').trim();
+                const cpmEntry=cpmContentTitleMap[searchName]||
+                  Object.values(cpmContentTitleMap).find(e=>
+                    Object.keys(cpmContentTitleMap).find(k=>k===searchName)?cpmContentTitleMap[k]===e:false
+                  )||null;
+                if(cpmEntry) resolved.push({id:cpmEntry.id,type:c.type||cpmEntry.type||'CONTENT_TYPE_PROGRAM'});
+                else missing.push(searchName||c.id);
+              } else {
+                missing.push(c.id); // ID も name もない → スキップ
+              }
             } else if(c._search_name){
               const searchName=c._search_name.trim();
               try{
