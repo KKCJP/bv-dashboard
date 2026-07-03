@@ -3641,6 +3641,11 @@ async function runOutlineImport(){
     log(`  📋 PUT に含まれる content: ${allContentIds.length}件`);
     if(allContentIds.length>0) log(`  例: ${allContentIds.slice(0,3).map(c=>c.name?.substring(0,16)+'... ('+c.type+')').join('、')}`);
 
+    // 送る ID のうち実際に QA CPM に存在するか抽出してログ
+    const allCpmIds=new Set(Object.values(cpmContentTitleMap).map(e=>e.id));
+    const notInCpm=allContentIds.filter(c=>!allCpmIds.has(c.name));
+    if(notInCpm.length) log(`  ⚠️ QA CPM に存在しない ID: ${notInCpm.length}件 例: ${notInCpm.slice(0,3).map(c=>c.name?.substring(0,16)+'...').join('、')}`,'error');
+
     const putBody={categories};
     log(`  🚀 Outline PUT 実行中...`);
     console.log('[outline PUT] body=', JSON.stringify(putBody).substring(0,500));
@@ -5521,7 +5526,16 @@ function handleThumbSelect(e){ addThumbFiles([...e.target.files]); }
 function handleThumbDrop(e){ e.preventDefault(); document.getElementById('thumb-zone').classList.remove('drag-over'); addThumbFiles([...e.dataTransfer.files]); }
 function cropTo169(file){ return new Promise(resolve=>{ const img=new Image(); img.onload=()=>{ const canvas=document.createElement('canvas'); const W=1280,H=720; const sr=img.width/img.height,tr=16/9; let sx,sy,sw,sh; if(sr>tr){sh=img.height;sw=sh*tr;sy=0;sx=(img.width-sw)/2;}else{sw=img.width;sh=sw/tr;sx=0;sy=(img.height-sh)/2;} canvas.width=W;canvas.height=H; canvas.getContext('2d').drawImage(img,sx,sy,sw,sh,0,0,W,H); canvas.toBlob(blob=>resolve(blob),'image/jpeg',0.9); }; img.src=URL.createObjectURL(file); }); }
 function matchProg(filename){ const base=filename.replace(/\.[^/.]+$/,'').toLowerCase(); return programListCache.find(p=>p.title.toLowerCase()===base||p.title.toLowerCase().includes(base)||base.includes(p.title.toLowerCase().substring(0,8)))||null; }
-async function addThumbFiles(files){ for(const file of files){ const blob=await cropTo169(file); const matched=matchProg(file.name); thumbFiles.push({file,blob,progId:matched?.id||'',progTitle:matched?.title||'',matched:!!matched}); } renderThumbList(); }
+async function addThumbFiles(files){
+  // programListCache が空なら自動読み込み
+  if(!programListCache.length) await loadProgramListForThumb();
+  for(const file of files){
+    const blob=await cropTo169(file);
+    const matched=matchProg(file.name);
+    thumbFiles.push({file,blob,progId:matched?.id||'',progTitle:matched?.title||'',matched:!!matched});
+  }
+  renderThumbList();
+}
 function renderThumbList(){
   if(!thumbFiles.length){ document.getElementById('thumb-list').style.display='none'; return; }
   document.getElementById('thumb-list').style.display='block';
