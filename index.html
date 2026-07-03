@@ -1015,7 +1015,7 @@ async function runCompare(){
             continue;
           }
           for(const item of items){
-            const contentName=item.content?.name||item.name||item.title||'';
+            const contentName=item.content?.vod?.title||item.content?.name||item.name||item.title||'';
             const prodContentId=item.content?.id||item.content_id||'';
             // QA で同名 content を検索
             const qaContentId=qaContentMap[contentName]||'';
@@ -2022,7 +2022,7 @@ async function runSyncArrangement(){
       for(const arr of prodArrangements){
         const newItems=[];
         for(const item of arr.items||arr.contents||[]){
-          const contentName=item.content?.name||item.name||item.title||'';
+          const contentName=item.content?.vod?.title||item.content?.name||item.name||item.title||'';
           const prodVodId=item.content?.id||item.content_id||'';
 
           // 1) QA CPM title で検索
