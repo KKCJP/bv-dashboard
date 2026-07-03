@@ -516,7 +516,8 @@ tr:last-child td{border-bottom:none;}
         大分類 → 中分類 → Space → Program の階層構造を CSV で匯出/匯入
       </p>
       <div class="btn-row" style="margin-bottom:16px;">
-        <button class="btn btn-secondary" id="export-outline-btn" onclick="exportOutlineCsv()">⬇ Outline CSV 匯出</button>
+        <button class="btn btn-secondary" id="export-outline-btn" onclick="exportOutlineCsv()">⬇ Outline CSV 匯出（QA）</button>
+        <button class="btn btn-secondary" id="export-prod-outline-btn" onclick="exportProdOutlineAsQaCsv()">⬇ Prod Outline → QA CSV</button>
         <button class="btn btn-secondary" onclick="document.getElementById('outline-csv-input').click()">⬆ CSV 匯入</button>
         <input type="file" id="outline-csv-input" accept=".csv" style="display:none" onchange="handleOutlineCsv(event)">
       </div>
@@ -3297,6 +3298,100 @@ async function uploadSubtitle(){
 
 // ════ Outline 管理 ═══════════════════════════════════════
 let outlineData=null, outlineImportData=null;
+
+// ════ Prod Outline → QA CSV 生成 ════════════════════
+async function exportProdOutlineAsQaCsv(){
+  const btn=document.getElementById('export-prod-outline-btn');
+  const prodSiteId=cfg('prod_site_id'), qaSiteId=cfg('site_id');
+  if(!cfg('prod_token')||!prodSiteId){ toast('設定ページで Prod Token と Prod Site ID を確認してください','error'); return; }
+  if(!qaSiteId){ toast('設定ページで QA Site ID を確認してください','error'); return; }
+
+  btn.disabled=true; btn.textContent='⬇ 取得中...';
+  const log=makeLog('outline-log','outline-log-card');
+  log('▶ Prod Outline → QA CSV 生成開始');
+
+  try{
+    // QA CPM の全コンテンツ（title → content_id）
+    btn.textContent='⬇ QA CPM 取得中...';
+    const qaCpmMap={};
+    for(const ct of ['CONTENT_TYPE_PROGRAM','CONTENT_TYPE_VOD','CONTENT_TYPE_FORM']){
+      let page=1;
+      while(true){
+        const r=await fetch(`${BASE()}/bv/cpm/v1alpha1/sites/${qaSiteId}/contents?current_page=${page}&items_per_page=100&filter.content_types=${ct}`,{headers:HDR()});
+        const d=await r.json();
+        (d.contents||[]).forEach(c=>{ if(c.title&&c.content_id) qaCpmMap[c.title]={id:c.content_id,type:ct}; });
+        if((d.contents||[]).length<100) break;
+        page++;
+      }
+    }
+    log(`  ✅ QA CPM: ${Object.keys(qaCpmMap).length}件`,'done');
+
+    // Prod Outline 取得
+    btn.textContent='⬇ Prod Outline 取得中...';
+    const prodOutline=await fetchOutline(PROD_BASE, prodHdr(), prodSiteId);
+    if(!prodOutline.categories?.length){ toast('Prod Outline が取得できませんでした','error'); return; }
+    log(`  ✅ Prod Outline 取得完了`,'done');
+
+    // CSV 行を生成（既存の Outline CSV フォーマットに合わせる）
+    // フォーマット: 大分類ID,大分類名,中分類ID,中分類名,SpaceID,Space名,コンテンツID,コンテンツName,コンテンツType
+    const rows=[['大分類ID','大分類名','中分類ID','中分類名','SpaceID','Space名','コンテンツID','コンテンツName','コンテンツType']];
+
+    let matchCount=0, missingCount=0;
+
+    const processCategories=(cats, l1id='', l1name='', l2id='', l2name='')=>{
+      for(const cat of cats||[]){
+        const catId=cat.id||'';
+        const catName=cat.name||cat.title||'';
+
+        if(cat.type==='CATEGORY_TYPE_SPACE'||cat.space_id){
+          // Space → contents を処理
+          const contents=cat.contents||[];
+          if(contents.length===0){
+            // content なしでも行を出力（空の Space として）
+            rows.push([l1id,l1name,l2id,l2name,catId,catName,'','','']);
+          } else {
+            for(const c of contents){
+              const prodContentId=c.id||'';
+              const contentName=c.name||c.title||'';
+              const contentType=c.type||'CONTENT_TYPE_PROGRAM';
+              // QA CPM で title 照合
+              const qaEntry=qaCpmMap[contentName];
+              const qaId=qaEntry?.id||'';
+              if(qaId) matchCount++;
+              else missingCount++;
+              rows.push([l1id,l1name,l2id,l2name,catId,catName,qaId,contentName,contentType]);
+            }
+          }
+        } else if(!l1name){
+          // 第1階層
+          processCategories(cat.sub_categories||cat.categories||[], catId, catName, '', '');
+        } else {
+          // 第2階層
+          processCategories(cat.sub_categories||cat.categories||[], l1id, l1name, catId, catName);
+        }
+      }
+    };
+
+    processCategories(prodOutline.categories);
+
+    log(`  ✅ CSV 生成完了：✅マッチ ${matchCount}件 / ⚠️未マッチ ${missingCount}件`,'done');
+    if(missingCount>0) log(`  ℹ️ 未マッチの行は コンテンツID が空になっています。手動で確認・削除してから匯入してください`);
+
+    const csv=rows.map(r=>r.map(c=>`"${(c||'').replace(/"/g,'""')}"`).join(',')).join('\n');
+    const a=document.createElement('a');
+    a.href='data:text/csv;charset=utf-8,\uFEFF'+encodeURIComponent(csv);
+    a.download='prod_outline_qa_ids.csv';
+    a.click();
+    toast(`CSV ダウンロード完了（✅${matchCount}件 / ⚠️${missingCount}件未マッチ）`,'success');
+
+  }catch(e){
+    log(`❌ ${e.message}`,'error');
+    toast('失敗: '+e.message,'error');
+  }finally{
+    btn.disabled=false; btn.textContent='⬇ Prod Outline → QA CSV';
+  }
+}
+// ════ Prod Outline → QA CSV 生成 終 ══════════════════
 
 async function exportOutlineCsv(){
   const btn=document.getElementById('export-outline-btn');
