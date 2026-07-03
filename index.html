@@ -840,6 +840,36 @@ function applyLang(){
 const BASE = () => cfg('base_url') || 'https://api.one.blendvision.com';
 const HDR = () => ({ 'Content-Type':'application/json', 'Authorization':`Bearer ${cfg('token')}`, 'x-bv-org-id':cfg('org_id') });
 function cfg(k){ return localStorage.getItem('bv_'+k)||''; }
+
+// 文字列類似度（0〜1）- Levenshtein ベース
+function strSimilarity(a, b){
+  if(!a||!b) return 0;
+  a=a.toLowerCase().replace(/\.mp4$/i,'').trim();
+  b=b.toLowerCase().replace(/\.mp4$/i,'').trim();
+  if(a===b) return 1;
+  const la=a.length, lb=b.length;
+  if(la===0||lb===0) return 0;
+  // 長さが大きく違う場合は早期リターン（80%以上の類似度は不可能）
+  if(Math.min(la,lb)/Math.max(la,lb) < 0.5) return 0;
+  const dp=Array.from({length:la+1},(_,i)=>Array.from({length:lb+1},(_,j)=>i===0?j:j===0?i:0));
+  for(let i=1;i<=la;i++) for(let j=1;j<=lb;j++)
+    dp[i][j]=a[i-1]===b[j-1]?dp[i-1][j-1]:1+Math.min(dp[i-1][j],dp[i][j-1],dp[i-1][j-1]);
+  return 1-dp[la][lb]/Math.max(la,lb);
+}
+
+// CPM マップから類似度 80% 以上でマッチ
+function fuzzyFindInMap(map, searchKey, threshold=0.8){
+  const normKey=(searchKey||'').replace(/\.mp4$/i,'').trim();
+  // 完全一致優先
+  if(map[normKey]) return {value:map[normKey], key:normKey, score:1};
+  // 類似度検索
+  let best=null, bestScore=threshold;
+  for(const k of Object.keys(map)){
+    const score=strSimilarity(normKey, k);
+    if(score>bestScore){ bestScore=score; best={value:map[k],key:k,score}; }
+  }
+  return best;
+}
 function setCfg(k,v){ localStorage.setItem('bv_'+k,v); }
 
 const SETTINGS_KEYS = ['token','org_id','site_id','lang','base_url','sum_format','sum_type','sum_length','prod_token','prod_org_id','prod_site_id'];
@@ -921,12 +951,18 @@ function extractOutlineContents(categories, result=[], l1='', l2=''){
 async function fetchOutline(base, hdr, site){
   try{
     const r=await fetch(`${base}/bv/cpm/marketplace/v1alpha1/sites/${site}/outlines:query-for-licensing`,{headers:hdr});
-    if(!r.ok) return {id:'', contents:[]};
+    if(!r.ok){
+      console.warn('[fetchOutline] failed:', r.status, await r.text().catch(()=>''));
+      return {id:'', categories:[]};
+    }
     const d=await r.json();
     const outline=d.outline||d;
     const contents=extractOutlineContents(outline.categories||[]);
-    return {id:outline.id||'', contents};
-  }catch(e){ return {id:'', contents:[]}; }
+    return {id:outline.id||'', categories:outline.categories||[], contents};
+  }catch(e){
+    console.warn('[fetchOutline] error:', e.message);
+    return {id:'', categories:[]};
+  }
 }
 
 async function runCompare(){
@@ -1203,7 +1239,7 @@ async function runFullSync(){
     while(true){
       const r=await fetch(`${BASE()}/bv/cpm/v1alpha1/sites/${qaSiteId}/contents?current_page=${page}&items_per_page=100&filter.content_types=CONTENT_TYPE_VOD`,{headers:HDR()});
       const d=await r.json();
-      (d.contents||[]).forEach(c=>{ qaCpmMap[c.title||'']=c.content_id; });
+      (d.contents||[]).forEach(c=>{ const _t=(c.title||'').replace(/\.mp4$/i,'').trim(); if(_t) qaCpmMap[_t]=c.content_id; });
       if((d.contents||[]).length<100) break;
       page++;
     }
@@ -1245,7 +1281,7 @@ async function runFullSync(){
     while(true){
       const r=await fetch(`${BASE()}/bv/cpm/v1alpha1/sites/${qaSiteId}/contents?current_page=${page}&items_per_page=100&filter.content_types=CONTENT_TYPE_VOD`,{headers:HDR()});
       const d=await r.json();
-      (d.contents||[]).forEach(c=>{ if(c.title&&c.content_id) qaCpmMap[c.title]=c.content_id; });
+      (d.contents||[]).forEach(c=>{ const _t=(c.title||'').replace(/\.mp4$/i,'').trim(); if(_t&&c.content_id) qaCpmMap[_t]=c.content_id; });
       if((d.contents||[]).length<100) break;
       page++;
     }
@@ -1287,20 +1323,16 @@ async function runFullSync(){
     // Prod の CPM content_id → QA の CPM content_id に変換する関数
     // content.vod.id = Prod の CPM content_id → title で QA CPM と照合
     const resolveQaCpmId=(prodItem)=>{
-      // content.vod.id は Prod CPM の content_id（QA では使えない）
-      // content の name または vod.title で QA CPM title と照合
       const vodTitle=prodItem.content?.vod?.title||'';
       const contentName=prodItem.content?.name||'';
-      // QA CPM title マップから照合（vod.title 優先）
       for(const key of [vodTitle, contentName]){
         if(!key) continue;
-        if(qaCpmMap[key]) return {id:qaCpmMap[key], name:key};
-        // 前缀マッチ（20文字）
-        const prefix=key.substring(0,Math.min(key.length,20));
-        const entry=Object.entries(qaCpmMap).find(([k])=>
-          k===key || k.startsWith(prefix) || key.startsWith(k.substring(0,Math.min(k.length,20)))
-        );
-        if(entry) return {id:entry[1], name:entry[0]};
+        // 完全一致（.mp4 除去済み）
+        const normKey=key.replace(/\.mp4$/i,'').trim();
+        if(qaCpmMap[normKey]) return {id:qaCpmMap[normKey], name:normKey};
+        // fuzzy マッチ（80%以上）
+        const fuzzy=fuzzyFindInMap(qaCpmMap, key, 0.8);
+        if(fuzzy) return {id:fuzzy.value, name:fuzzy.key};
       }
       return null;
     };
@@ -1592,7 +1624,7 @@ async function loadQaBaseData(){
   while(true){
     const r=await fetch(`${BASE()}/bv/cpm/v1alpha1/sites/${qaSiteId}/contents?current_page=${page}&items_per_page=100&filter.content_types=CONTENT_TYPE_VOD`,{headers:HDR()});
     const d=await r.json();
-    (d.contents||[]).forEach(c=>{ if(c.title) qaCpmMap[c.title]=c.content_id; });
+    (d.contents||[]).forEach(c=>{ const _t=(c.title||'').replace(/\.mp4$/i,'').trim(); if(_t) qaCpmMap[_t]=c.content_id; });
     if((d.contents||[]).length<100) break;
     page++;
   }
@@ -1718,10 +1750,10 @@ async function runStep4Only(){
       const contentName=prodItem.content?.name||'';
       for(const key of [vodTitle,contentName]){
         if(!key) continue;
-        if(qaCpmMap[key]) return {id:qaCpmMap[key],name:key};
-        const prefix=key.substring(0,Math.min(key.length,20));
-        const entry=Object.entries(qaCpmMap).find(([k])=>k===key||k.startsWith(prefix)||key.startsWith(k.substring(0,Math.min(k.length,20))));
-        if(entry) return {id:entry[1],name:entry[0]};
+        const normKey=key.replace(/\.mp4$/i,'').trim();
+        if(qaCpmMap[normKey]) return {id:qaCpmMap[normKey],name:normKey};
+        const fuzzy=fuzzyFindInMap(qaCpmMap, key, 0.8);
+        if(fuzzy) return {id:fuzzy.value,name:fuzzy.key};
       }
       return null;
     };
@@ -2160,7 +2192,7 @@ async function runVodMatch(){
       while(true){
         const r=await fetch(`${BASE()}/bv/cpm/v1alpha1/sites/${site}/contents?current_page=${page}&items_per_page=100&filter.content_types=CONTENT_TYPE_VOD`,{headers:HDR()});
         const d=await r.json();
-        (d.contents||[]).forEach(c=>{ if(c.title) qaCpmMap[c.title]=c.content_id; });
+        (d.contents||[]).forEach(c=>{ const _t=(c.title||'').replace(/\.mp4$/i,'').trim(); if(_t) qaCpmMap[_t]=c.content_id; });
         if((d.contents||[]).length<100) break;
         page++;
       }
@@ -3319,7 +3351,7 @@ async function exportProdOutlineAsQaCsv(){
       while(true){
         const r=await fetch(`${BASE()}/bv/cpm/v1alpha1/sites/${qaSiteId}/contents?current_page=${page}&items_per_page=100&filter.content_types=${ct}`,{headers:HDR()});
         const d=await r.json();
-        (d.contents||[]).forEach(c=>{ if(c.title&&c.content_id) qaCpmMap[c.title]={id:c.content_id,type:ct}; });
+        (d.contents||[]).forEach(c=>{ const _t=(c.title||'').replace(/\.mp4$/i,'').trim(); if(_t&&c.content_id) qaCpmMap[_t]={id:c.content_id,type:ct}; });
         if((d.contents||[]).length<100) break;
         page++;
       }
@@ -3328,8 +3360,13 @@ async function exportProdOutlineAsQaCsv(){
 
     // Prod Outline 取得
     btn.textContent='⬇ Prod Outline 取得中...';
+    log('  📋 Prod Outline 取得中...');
     const prodOutline=await fetchOutline(PROD_BASE, prodHdr(), prodSiteId);
-    if(!prodOutline.categories?.length){ toast('Prod Outline が取得できませんでした','error'); return; }
+    if(!prodOutline.categories?.length){
+      log(`  ❌ Prod Outline が取得できませんでした（categories が空）`,'error');
+      toast('Prod Outline が取得できませんでした','error');
+      return;
+    }
     log(`  ✅ Prod Outline 取得完了`,'done');
 
     // CSV 行を生成（既存の Outline CSV フォーマットに合わせる）
@@ -3643,7 +3680,7 @@ async function runOutlineImport(){
           const _r=await fetch(`${BASE()}/bv/cpm/v1alpha1/sites/${site}/contents?current_page=${_p}&items_per_page=100&filter.content_types=${ct}`,{headers:HDR()});
           const _d=await _r.json();
           const _items=_d.contents||[];
-          _items.forEach(c=>{ if(c.title&&c.content_id) cpmContentTitleMap[c.title]={id:c.content_id,type:ct}; });
+          _items.forEach(c=>{ const _t=(c.title||'').replace(/\.mp4$/i,'').trim(); if(_t&&c.content_id) cpmContentTitleMap[_t]={id:c.content_id,type:ct}; });
           if(_items.length<100) break;
           _p++;
         }
@@ -3679,18 +3716,16 @@ async function runOutlineImport(){
             } else if(c._search_name){
               const searchName=c._search_name.trim();
               try{
-                // 1) cpmContentTitleMap から完全一致（VOD・Program・Form すべて対象）
+                // 1) 完全一致
                 let cpmEntry=cpmContentTitleMap[searchName];
 
-                // 2) 前缀マッチ
+                // 2) fuzzy マッチ（80%以上）
                 if(!cpmEntry){
-                  const prefixKey=Object.keys(cpmContentTitleMap).find(k=>
-                    k===searchName || k.startsWith(searchName) || searchName.startsWith(k)
-                  );
-                  if(prefixKey) cpmEntry=cpmContentTitleMap[prefixKey];
+                  const fuzzy=fuzzyFindInMap(cpmContentTitleMap, searchName, 0.8);
+                  if(fuzzy) cpmEntry=fuzzy.value;
                 }
 
-                // 3) QA Program 一覧から直接 API 検索（cpmContentTitleMap に含まれない場合）
+                // 3) QA Program 一覧から直接 API 検索
                 if(!cpmEntry){
                   try{
                     const pr=await fetch(`${BASE()}/bv/cpm/v1alpha1/sites/${site}/contents?current_page=1&items_per_page=10&filter.content_types=CONTENT_TYPE_PROGRAM&filter.title=${encodeURIComponent(searchName)}`,{headers:HDR()});
@@ -4163,7 +4198,7 @@ async function runProdArrangementPreview(){
       while(true){
         const r=await fetch(`${BASE()}/bv/cpm/v1alpha1/sites/${qaSiteId}/contents?current_page=${page}&items_per_page=100&filter.content_types=${ct}`,{headers:HDR()});
         const d=await r.json();
-        (d.contents||[]).forEach(c=>{ if(c.title&&c.content_id) qaCpmMap[c.title]={id:c.content_id,type:ct}; });
+        (d.contents||[]).forEach(c=>{ const _t=(c.title||'').replace(/\.mp4$/i,'').trim(); if(_t&&c.content_id) qaCpmMap[_t]={id:c.content_id,type:ct}; });
         if((d.contents||[]).length<100) break;
         page++;
       }
@@ -5217,7 +5252,7 @@ async function runProgramImport(mode='program_only'){
         const d=await r.json();
         (d.contents||[]).forEach(c=>{
           if(c.title&&c.content_id){
-            arrangementCpmMap[c.title]={id:c.content_id,type:ct};
+            const _at=(c.title||'').replace(/\.mp4$/i,'').trim(); if(_at) arrangementCpmMap[_at]={id:c.content_id,type:ct};
             arrangementCpmIds.add(c.content_id);
           }
         });
@@ -5340,19 +5375,25 @@ async function runProgramImport(mode='program_only'){
           let contentType='CONTENT_TYPE_VOD';
 
           if(!contentId && searchName){
-            // QA CPM title で完全一致検索（VOD・FORM 両方対象）
-            if(arrangementCpmMap[searchName]){
-              contentId=arrangementCpmMap[searchName].id;
-              contentType=arrangementCpmMap[searchName].type;
+            const normSearch=searchName.replace(/\.mp4$/i,'').trim();
+            if(arrangementCpmMap[normSearch]){
+              contentId=arrangementCpmMap[normSearch].id;
+              contentType=arrangementCpmMap[normSearch].type;
+            } else {
+              const fuzzy=fuzzyFindInMap(arrangementCpmMap, searchName, 0.8);
+              if(fuzzy){ contentId=fuzzy.value.id; contentType=fuzzy.value.type; }
             }
           }
-          // content_id が指定されているが QA CPM に存在しない場合は title で再検索
+          // content_id が QA CPM に存在しない場合は fuzzy で再検索
           if(contentId && !arrangementCpmIds.has(contentId) && searchName){
-            if(arrangementCpmMap[searchName]){
-              contentId=arrangementCpmMap[searchName].id;
-              contentType=arrangementCpmMap[searchName].type;
+            const normSearch=searchName.replace(/\.mp4$/i,'').trim();
+            if(arrangementCpmMap[normSearch]){
+              contentId=arrangementCpmMap[normSearch].id;
+              contentType=arrangementCpmMap[normSearch].type;
             } else {
-              contentId=''; // QA にない
+              const fuzzy=fuzzyFindInMap(arrangementCpmMap, searchName, 0.8);
+              if(fuzzy){ contentId=fuzzy.value.id; contentType=fuzzy.value.type; }
+              else { contentId=''; }
             }
           }
 
@@ -5607,14 +5648,23 @@ async function downloadProdThumbnails(){
 }
 // ── Prod 縮圖一括ダウンロード 終 ─────────────────────
 async function loadProgramListForThumb(){
-  const el=document.getElementById('prog-list-count'); el.textContent='読み込み中...';
+  const el=document.getElementById('prog-list-count');
+  if(el) el.textContent='読み込み中...';
   try{
-    const site=siteId();
-    const r=await fetch(`${BASE()}/bv/cpm/v1alpha1/sites/${site}/contents?current_page=1&items_per_page=200&filter.content_types=CONTENT_TYPE_PROGRAM`,{headers:HDR()});
-    const d=await r.json();
-    programListCache=(d.contents||[]).map(c=>({id:c.content_id,title:c.title}));
-    el.textContent=`${programListCache.length}件`;
-  }catch(e){ el.textContent='失敗: '+e.message; }
+    const site=cfg('site_id');
+    if(!site){ if(el) el.textContent='Site ID 未設定'; return; }
+    programListCache=[];
+    let page=1;
+    while(true){
+      const r=await fetch(`${BASE()}/bv/cpm/v1alpha1/sites/${site}/contents?current_page=${page}&items_per_page=100&filter.content_types=CONTENT_TYPE_PROGRAM`,{headers:HDR()});
+      const d=await r.json();
+      const items=d.contents||[];
+      programListCache.push(...items.map(c=>({id:c.content_id,title:c.title})));
+      if(items.length<100) break;
+      page++;
+    }
+    if(el) el.textContent=`${programListCache.length}件`;
+  }catch(e){ if(el) el.textContent='失敗: '+e.message; }
 }
 
 function handleThumbSelect(e){ addThumbFiles([...e.target.files]); }
