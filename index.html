@@ -605,6 +605,7 @@ tr:last-child td{border-bottom:none;}
       <div style="display:flex;gap:8px;align-items:center;margin-bottom:10px;flex-wrap:wrap;">
         <button class="btn btn-secondary btn-sm" onclick="loadProgramListForThumb()">🔄 Program一覧読み込み</button>
         <button class="btn btn-secondary btn-sm" id="step6-thumb-btn" onclick="runStep6Only()">🔁 Prod → QA Thumbnail 同期</button>
+        <button class="btn btn-secondary btn-sm" id="dl-prod-thumb-btn" onclick="downloadProdThumbnails()">📦 Prod 縮圖一括DL（ZIP）</button>
         <span id="prog-list-count" style="font-size:11px;color:var(--muted);"></span>
       </div>
       <div class="upload-zone" id="thumb-zone" onclick="document.getElementById('thumb-input').click()" ondragover="event.preventDefault();this.classList.add('drag-over')" ondragleave="this.classList.remove('drag-over')" ondrop="handleThumbDrop(event)">
@@ -5405,7 +5406,80 @@ async function runProgramImport(mode='program_only'){
   if(arrBtn){ arrBtn.disabled=false; }
 }
 
-// ════ Thumbnail ══════════════════════════════════════════
+// ── Prod 縮圖一括ダウンロード ──────────────────────
+async function downloadProdThumbnails(){
+  const btn=document.getElementById('dl-prod-thumb-btn');
+  const prodSiteId=cfg('prod_site_id'), prodToken=cfg('prod_token');
+  if(!prodToken||!prodSiteId){
+    toast('設定ページで Prod Token と Prod Site ID を確認してください','error'); return;
+  }
+  if(!window.JSZip){ toast('JSZip が読み込まれていません','error'); return; }
+
+  const log=makeLog(
+    document.getElementById('full-sync-log')?'full-sync-log':'prog-log',
+    document.getElementById('full-sync-log-card')?'full-sync-log-card':'prog-log-card'
+  );
+
+  btn.disabled=true; btn.textContent='📦 取得中...';
+  log('▶ Prod 縮圖一括ダウンロード開始');
+
+  try{
+    // Prod の全 Program を取得
+    const prodPrograms=await fetchAllPrograms(PROD_BASE, prodHdr(), prodSiteId);
+    log(`  ✅ Prod Program: ${prodPrograms.length}件`,'done');
+
+    const zip=new JSZip();
+    let ok=0, skip=0, fail=0;
+
+    for(let i=0;i<prodPrograms.length;i++){
+      const pp=prodPrograms[i];
+      btn.textContent=`📦 取得中 ${i+1}/${prodPrograms.length}...`;
+      try{
+        // Program 詳細から background.image URL を取得
+        const r=await fetch(`${PROD_BASE}/bv/cpm/v1alpha1/sites/${prodSiteId}/programs/${pp.content_id}?action=GET_FORM_REQUEST_ACTION_CURRENT&mode=FORM_MODE_EDIT`,{headers:prodHdr()});
+        if(!r.ok){ skip++; continue; }
+        const d=await r.json();
+        const bg=d.program?.background;
+        if(bg?.type!=='PROGRAM_BACKGROUND_TYPE_IMAGE'||!bg?.image){ skip++; continue; }
+        const imgUrl=bg.image.uri||bg.image.url||'';
+        if(!imgUrl){ skip++; continue; }
+
+        // 画像をダウンロード
+        const imgRes=await fetch(imgUrl);
+        if(!imgRes.ok){ fail++; log(`  ❌ ${pp.title}: 画像取得失敗 ${imgRes.status}`,'error'); continue; }
+        const blob=await imgRes.blob();
+
+        // ファイル名 = Program 名（使えない文字を除去）
+        const ext=imgUrl.split('.').pop().split('?')[0]||'jpg';
+        const safeName=pp.title.replace(/[\\/:*?"<>|]/g,'_').substring(0,80);
+        zip.file(`${safeName}.${ext}`, blob);
+        ok++;
+        if(ok%10===0) log(`  📋 ${ok}件取得済み...`);
+      }catch(e){ fail++; log(`  ❌ ${pp.title}: ${e.message}`,'error'); }
+      await new Promise(r=>setTimeout(r,150));
+    }
+
+    if(ok===0){ toast('ダウンロードできる縮圖がありません','error'); return; }
+
+    log(`▶ ZIP 生成中...（${ok}件）`);
+    btn.textContent='📦 ZIP 生成中...';
+    const zipBlob=await zip.generateAsync({type:'blob'});
+    const a=document.createElement('a');
+    a.href=URL.createObjectURL(zipBlob);
+    a.download='prod_thumbnails.zip';
+    a.click();
+    URL.revokeObjectURL(a.href);
+
+    log(`✅ 完了：${ok}件ダウンロード / ${skip}件スキップ（縮圖なし）/ ${fail}件失敗`,'done');
+    toast(`縮圖 ZIP ダウンロード完了：${ok}件`,'success');
+  }catch(e){
+    log(`❌ ${e.message}`,'error');
+    toast('失敗: '+e.message,'error');
+  }finally{
+    btn.disabled=false; btn.textContent='📦 Prod 縮圖一括DL（ZIP）';
+  }
+}
+// ── Prod 縮圖一括ダウンロード 終 ─────────────────────
 async function loadProgramListForThumb(){
   const el=document.getElementById('prog-list-count'); el.textContent='読み込み中...';
   try{
