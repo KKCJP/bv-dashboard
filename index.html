@@ -3648,7 +3648,7 @@ async function runOutlineImport(){
     }
     console.log('[outline import] catMap size=', catMap.size, [...catMap.values()].map(c=>c.name+':'+c.sub_categories.length+'subs'));
 
-    const categories=[...catMap.values()];
+    let categories=[...catMap.values()];
 
     // Space 数を再帰でカウント
     const countSpaces=(cats)=>cats.reduce((sum,cat)=>{
