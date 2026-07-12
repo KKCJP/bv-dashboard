@@ -576,8 +576,9 @@ tr:last-child td{border-bottom:none;}
           </div>
           <button class="btn btn-primary btn-sm" onclick="runApplyExistingCertTemplates(false)">🔗 全件にテンプレートを自動反映（名前一致）</button>
           <button class="btn btn-secondary btn-sm" onclick="runApplyExistingCertTemplates(true)">🔗 選択項目のみに反映</button>
+          <button class="btn btn-secondary btn-sm" onclick="downloadCertTemplateIdList()">⬇ 証明書テンプレートID一覧CSV</button>
         </div>
-        <p style="font-size:11px;color:var(--muted);margin-top:8px;">既存の cert-template を Program タイトルと名前で照合し、Template ID を自動設定します（テンプレートの再作成はしません）。Issuer ID を名前で選べるようにするには、Issuer 一覧を返す API のネットワークトレースが必要です — わかり次第、選択式に変更します。合格閾値に ON/OFF の切り替えがある場合も、実際の保存時のリクエスト内容（トレース）を見せてもらえれば対応します。</p>
+        <p style="font-size:11px;color:var(--muted);margin-top:8px;">既存の cert-template を Program タイトルと名前で照合し、Template ID を自動設定します（テンプレートの再作成はしません）。「⬇ 証明書テンプレートID一覧CSV」で name→template_id の対応表をダウンロードできます。Program CSV に cert_template_id / cert_issuer_id / cert_enabled / cert_threshold 列を追加すると、「📋 Program 情報のみ」実行時に証明書設定も一緒に反映されます（列が無ければ証明書設定は現状維持）。</p>
       </div>
       <div style="overflow-x:auto;">
         <table id="prog-list-table" style="display:none;">
@@ -5151,7 +5152,7 @@ async function exportProgramCsv(){
 }
 
 function downloadProgramTemplate(){
-  const rows=[['field','value'],['',''],['# ===== Program 1 =====',''],['program_title','マネージャー層に必要とされるビジネス環境の先読み力'],['topic_labels','ビジネス基礎力,VUCA'],['highlight_1','激動の時代における企業経営の基本的な考え方'],['highlight_2','VUCAの時代に事業戦略を担うためのスキルセット'],['highlight_3','新規事業のアイデア創出のためのテクニックと検証方法'],['about','先行きが不透明で将来の予測も困難な時代として...'],['author_name','佐古 雅亮'],['author_title','Spready株式会社 代表取締役'],['author_desc','著者説明文'],['author_avatar_library_id',''],['background_library_id',''],['part_numbers','E1000078'],['visibility','CONTENT_VISIBILITY_DRAFT'],['',''],['# --- コンテンツ構成 ---',''],['main_category','ビジネス環境の先読み力 前半'],['sub_category','Part 1'],['content','71_1 VUCA変化の激しい時代'],['content','71_2 ビジネス環境を「読む」ためのマインドセット'],['sub_category','Part 2'],['content','71_3 ビジネス環境を「読む」ためのスキルセット'],['main_category','ビジネス環境の先読み力 後半'],['content','71_4 ビジネス環境先読みの王道'],['',''],['---',''],['',''],['# ===== Program 2 =====',''],['program_title','次のコースタイトル'],['highlight_1','学習ポイント1'],['visibility','CONTENT_VISIBILITY_DRAFT'],['main_category','メインカテゴリ名'],['content','実際の動画名']];
+  const rows=[['field','value'],['',''],['# ===== Program 1 =====',''],['program_title','マネージャー層に必要とされるビジネス環境の先読み力'],['topic_labels','ビジネス基礎力,VUCA'],['highlight_1','激動の時代における企業経営の基本的な考え方'],['highlight_2','VUCAの時代に事業戦略を担うためのスキルセット'],['highlight_3','新規事業のアイデア創出のためのテクニックと検証方法'],['about','先行きが不透明で将来の予測も困難な時代として...'],['author_name','佐古 雅亮'],['author_title','Spready株式会社 代表取締役'],['author_desc','著者説明文'],['author_avatar_library_id',''],['background_library_id',''],['part_numbers','E1000078'],['visibility','CONTENT_VISIBILITY_DRAFT'],['cert_template_id','（⬇証明書テンプレートID一覧CSVからコピー、空欄なら証明書設定は現状維持）'],['cert_issuer_id',''],['cert_enabled','true'],['cert_threshold','80'],['',''],['# --- コンテンツ構成 ---',''],['main_category','ビジネス環境の先読み力 前半'],['sub_category','Part 1'],['content','71_1 VUCA変化の激しい時代'],['content','71_2 ビジネス環境を「読む」ためのマインドセット'],['sub_category','Part 2'],['content','71_3 ビジネス環境を「読む」ためのスキルセット'],['main_category','ビジネス環境の先読み力 後半'],['content','71_4 ビジネス環境先読みの王道'],['',''],['---',''],['',''],['# ===== Program 2 =====',''],['program_title','次のコースタイトル'],['highlight_1','学習ポイント1'],['visibility','CONTENT_VISIBILITY_DRAFT'],['main_category','メインカテゴリ名'],['content','実際の動画名']];
   const csv=rows.map(r=>r.map(c=>`"${(c||'').replace(/"/g,'""')}"`).join(',')).join('\n');
   const a=document.createElement('a'); a.href='data:text/csv;charset=utf-8,\uFEFF'+encodeURIComponent(csv); a.download='bv_program_template.csv'; a.click();
   toast('テンプレートをダウンロードしました','success');
@@ -5247,6 +5248,10 @@ function handleProgramCSV(event){
               case 'background_library_id': p._fields.background_library_id=val; break;
               case 'part_numbers': p._fields.part_numbers=val.split(',').map(s=>s.trim()).filter(Boolean); break;
               case 'visibility': p._fields.visibility=val; break;
+              case 'cert_template_id': p._fields.cert_template_id=val; break;
+              case 'cert_issuer_id': p._fields.cert_issuer_id=val; break;
+              case 'cert_enabled': p._fields.cert_enabled=val; break;
+              case 'cert_threshold': p._fields.cert_threshold=val; break;
             }
           }
         }
@@ -5281,6 +5286,10 @@ function handleProgramCSV(event){
             case 'background_library_id': cur._fields.background_library_id=value; break;
             case 'part_numbers': cur._fields.part_numbers=value.split(',').map(s=>s.trim()).filter(Boolean); break;
             case 'visibility': cur._fields.visibility=value; break;
+            case 'cert_template_id': cur._fields.cert_template_id=value; break;
+            case 'cert_issuer_id': cur._fields.cert_issuer_id=value; break;
+            case 'cert_enabled': cur._fields.cert_enabled=value; break;
+            case 'cert_threshold': cur._fields.cert_threshold=value; break;
             case 'main_category': cur.contents.push({type:'section',name:value}); break;
             case 'sub_category': cur.contents.push({type:'module',name:value}); break;
             case 'content': cur.contents.push({type:'content',content_title:value}); break;
@@ -5646,6 +5655,19 @@ async function runProgramImport(mode='program_only'){
           ? (isValidUUID(f.background_library_id)?{type:'PROGRAM_BACKGROUND_TYPE_IMAGE',image:{id:f.background_library_id}}:{type:'PROGRAM_BACKGROUND_TYPE_DEFAULT'})
           : (ep.background||{type:'PROGRAM_BACKGROUND_TYPE_DEFAULT'});
 
+        // CSV に cert_template_id 等の列があれば証明書設定を更新、無ければ現状維持
+        const mergedCert=(()=>{
+          const cur=ep.certification?.setting||{enabled:false,template_id:'',issuer_id:'',passing_threshold:0};
+          const hasCertCol=f.cert_template_id!==undefined||f.cert_issuer_id!==undefined||f.cert_enabled!==undefined||f.cert_threshold!==undefined;
+          if(!hasCertCol) return ep.certification||{setting:cur};
+          const setting={...cur};
+          if(f.cert_template_id!==undefined) setting.template_id=f.cert_template_id;
+          if(f.cert_issuer_id!==undefined) setting.issuer_id=f.cert_issuer_id;
+          if(f.cert_enabled!==undefined) setting.enabled=['true','1','yes','on','有効','はい'].includes(String(f.cert_enabled).trim().toLowerCase());
+          if(f.cert_threshold!==undefined) setting.passing_threshold=parseInt(f.cert_threshold)||0;
+          return {setting};
+        })();
+
         let putBody;
         if(isArrOnly){
           // Arrangement のみ更新（メタ情報は既存を保持）
@@ -5661,7 +5683,7 @@ async function runProgramImport(mode='program_only'){
             rating:ep.rating||{displayable:false},
             level_info:ep.level_info||{displayable:false,level:'PROGRAM_LEVEL_BEGINNER'},
             relation:ep.relation||{displayable:true,related_contents:[]},
-            certification:ep.certification||{setting:{enabled:false,template_id:'',issuer_id:'',passing_threshold:0}},
+            certification:mergedCert,
             background:ep.background||{type:'PROGRAM_BACKGROUND_TYPE_DEFAULT'},
           };
         } else {
@@ -5677,7 +5699,7 @@ async function runProgramImport(mode='program_only'){
             rating:{displayable:false},
             level_info:ep.level_info||{displayable:false,level:'PROGRAM_LEVEL_BEGINNER'},
             relation:{displayable:true,related_contents:ep.relation?.related_contents||[]},
-            certification:ep.certification||{setting:{enabled:false,template_id:'',issuer_id:'',passing_threshold:0}},
+            certification:mergedCert,
             background:mergedBg,
           };
         }
@@ -6112,6 +6134,24 @@ async function applyCertToProgram(program, certSetting){
 }
 
 // 既存の cert-templates を全ページ取得
+// 証明書テンプレートの name → template_id 対応表を CSV でダウンロード
+async function downloadCertTemplateIdList(){
+  toast('テンプレート一覧を取得中...','info');
+  let templates=[];
+  try{ templates=await fetchAllCertTemplates(); }
+  catch(e){ toast('取得失敗: '+e.message,'error'); return; }
+  const rows=[['name','template_id','logo_library_id','badge_library_id','background_library_id']];
+  templates.forEach(t=>rows.push([
+    t.name||'', t.id||'',
+    t.logo?.library_id||'', t.badge?.library_id||'', t.background?.library_id||''
+  ]));
+  const csv=rows.map(r=>r.map(c=>`"${(c||'').toString().replace(/"/g,'""')}"`).join(',')).join('\n');
+  const a=document.createElement('a');
+  a.href='data:text/csv;charset=utf-8,\uFEFF'+encodeURIComponent(csv);
+  a.download='cert_template_id_list.csv'; a.click();
+  toast(`テンプレート ${templates.length}件 CSV ダウンロード完了`,'success');
+}
+
 async function fetchAllCertTemplates(){
   let page=1; const perPage=50; let all=[];
   while(true){
