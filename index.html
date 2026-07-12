@@ -5397,7 +5397,7 @@ async function runRestoreProgramMeta(){
 function stripBadContentIds(items, badIdSet){
   return items.filter(item=>{
     if(item.type==='PROGRAM_ARRANGEMENT_ITEM_TYPE_CONTENT'){
-      const cid=item.content?.vod?.id||'';
+      const cid=item.content?.vod?.id||item.content?.form?.id||'';
       return !badIdSet.has(cid);
     }
     if(item.section?.items) item.section.items=stripBadContentIds(item.section.items, badIdSet);
@@ -5410,7 +5410,7 @@ function stripBadContentIds(items, badIdSet){
 function stripEmptyContentIds(items){
   return items.filter(item=>{
     if(item.type==='PROGRAM_ARRANGEMENT_ITEM_TYPE_CONTENT'){
-      return !!(item.content?.vod?.id);
+      return !!(item.content?.vod?.id||item.content?.form?.id);
     }
     if(item.section?.items) item.section.items=stripEmptyContentIds(item.section.items);
     if(item.module?.items) item.module.items=stripEmptyContentIds(item.module.items);
@@ -5602,7 +5602,7 @@ async function runProgramImport(mode='program_only'){
           }
 
           const displayName=searchName||contentId;
-          const item={type:'PROGRAM_ARRANGEMENT_ITEM_TYPE_CONTENT',sequence:0,content:{type:contentType,name:displayName,vod:{id:contentId}}};
+          const item={type:'PROGRAM_ARRANGEMENT_ITEM_TYPE_CONTENT',sequence:0,content:{type:contentType,name:displayName,...(contentType==='CONTENT_TYPE_FORM'?{form:{id:contentId}}:{vod:{id:contentId}})}};
           if(curModule) curModule.module.items.push(item);
           else if(curSection) curSection.section.items.push(item);
           else arrangement.push(item);
