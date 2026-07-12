@@ -648,6 +648,7 @@ tr:last-child td{border-bottom:none;}
         <input type="file" id="cert-img-input" accept="image/*" multiple style="display:none" onchange="handleCertImageSelect(event)">
         🖼️ Badge 画像をまとめてドラッグ（複数可、CSVで指定したファイル名と一致させてください）
       </div>
+      <div id="cert-img-filelist" style="display:none;margin-top:8px;font-size:11px;color:var(--muted);"></div>
       <div id="cert-preview" style="display:none;margin-top:12px;">
         <table>
           <thead><tr><th>テンプレート名</th><th>Logo</th><th>Badge</th><th>Background</th><th></th></tr></thead>
@@ -5773,7 +5774,17 @@ async function runThumbUpload(){
 
 // ════ 証明書テンプレート 一括作成 ════════════════════════
 let certBatchRows=[]; // {name, logoFilename, badgeFilename, bgFilename}
-let certImageFiles={}; // lowerFilename -> File
+let certImageFiles={}; // normalizedFilename -> File
+let certImageFileNames={}; // normalizedFilename -> 元のファイル名（表示用）
+
+function normalizeFilename(name){
+  if(!name) return '';
+  let n=name.trim().toLowerCase();
+  n=n.replace(/\.(png|jpe?g|gif|webp|bmp)$/i,''); // 副拡張子を除去
+  n=n.replace(/[\s　_\-\.]/g,''); // 空白（全角含む）・アンダースコア・ハイフン・ピリオドを除去
+  n=n.replace(/["'"''""「」『』【】\(\)（）\[\]]/g,''); // 引用符・括弧を除去
+  return n;
+}
 let sharedCertLogoId=''; let sharedCertLogoName='';
 let sharedCertBgId=''; let sharedCertBgName='';
 
@@ -5835,10 +5846,22 @@ function handleCertCsv(event){
 function handleCertImageSelect(e){ addCertImageFiles([...e.target.files]); }
 function handleCertImageDrop(e){ e.preventDefault(); document.getElementById('cert-img-zone').classList.remove('drag-over'); addCertImageFiles([...e.dataTransfer.files]); }
 function addCertImageFiles(files){
-  for(const f of files){ certImageFiles[f.name.toLowerCase()]=f; }
+  for(const f of files){
+    const key=normalizeFilename(f.name);
+    certImageFiles[key]=f;
+    certImageFileNames[key]=f.name;
+  }
+  renderCertImgFileList();
   renderCertPreview();
 }
-function findCertFile(filename){ if(!filename) return null; return certImageFiles[filename.toLowerCase()]||null; }
+function renderCertImgFileList(){
+  const box=document.getElementById('cert-img-filelist');
+  const names=Object.values(certImageFiles).map(f=>f.name);
+  if(!names.length){ box.style.display='none'; box.innerHTML=''; return; }
+  box.style.display='block';
+  box.innerHTML=`✅ ${names.length}件のファイルを検出：`+names.map(n=>`<span style="display:inline-block;background:var(--surface2);border-radius:4px;padding:1px 6px;margin:2px;">${esc(n)}</span>`).join('');
+}
+function findCertFile(filename){ if(!filename) return null; return certImageFiles[normalizeFilename(filename)]||null; }
 
 function renderCertPreview(){
   const box=document.getElementById('cert-preview');
@@ -5874,12 +5897,13 @@ function renderCertPreview(){
 }
 
 function clearCertBatch(){
-  certBatchRows=[]; certImageFiles={};
+  certBatchRows=[]; certImageFiles={}; certImageFileNames={};
   sharedCertLogoId=''; sharedCertLogoName=''; sharedCertBgId=''; sharedCertBgName='';
   const csvInput=document.getElementById('cert-csv-input'); if(csvInput) csvInput.value='';
   const imgInput=document.getElementById('cert-img-input'); if(imgInput) imgInput.value='';
   const logoStatus=document.getElementById('cert-shared-logo-status'); if(logoStatus) logoStatus.textContent='未設定';
   const bgStatus=document.getElementById('cert-shared-bg-status'); if(bgStatus) bgStatus.textContent='未設定';
+  renderCertImgFileList();
   document.getElementById('cert-preview').style.display='none';
 }
 
