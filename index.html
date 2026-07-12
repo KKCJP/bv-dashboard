@@ -5855,12 +5855,19 @@ function renderCertPreview(){
   document.getElementById('cert-preview-tbody').innerHTML=certBatchRows.map((r,i)=>{
     const logoFile=findCertFile(r.logoFilename);
     const bgFile=findCertFile(r.bgFilename);
+    // Logo/Background: 個別ファイルが見つかればそれを優先。見つからなくても共通画像があれば共通にフォールバック（エラー扱いにしない）
+    const logoCell=logoFile ? cell(logoFile,r.logoFilename)
+      : sharedCertLogoId ? sharedCell(sharedCertLogoId,sharedCertLogoName)
+      : (r.logoFilename ? cell(null,r.logoFilename) : sharedCell(sharedCertLogoId,sharedCertLogoName));
+    const bgCell=bgFile ? cell(bgFile,r.bgFilename)
+      : sharedCertBgId ? sharedCell(sharedCertBgId,sharedCertBgName)
+      : (r.bgFilename ? cell(null,r.bgFilename) : sharedCell(sharedCertBgId,sharedCertBgName));
     return `
     <tr>
       <td style="font-size:12px;">${esc(r.name)}</td>
-      <td>${logoFile?cell(logoFile,r.logoFilename):(r.logoFilename?cell(null,r.logoFilename):sharedCell(sharedCertLogoId,sharedCertLogoName))}</td>
+      <td>${logoCell}</td>
       <td>${cell(findCertFile(r.badgeFilename),r.badgeFilename)}</td>
-      <td>${bgFile?cell(bgFile,r.bgFilename):(r.bgFilename?cell(null,r.bgFilename):sharedCell(sharedCertBgId,sharedCertBgName))}</td>
+      <td>${bgCell}</td>
       <td><button class="btn btn-secondary btn-xs" onclick="certBatchRows.splice(${i},1);renderCertPreview()">✕</button></td>
     </tr>`;
   }).join('');
