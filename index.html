@@ -624,7 +624,21 @@ tr:last-child td{border-bottom:none;}
     </div>
     <div class="card">
       <div class="card-title">🏆 証明書テンプレート 一括作成</div>
-      <p style="color:var(--muted);font-size:12px;margin-bottom:12px;">CSVでテンプレート名を指定 → logo・badge・背景画像をまとめてドラッグ（ファイル名で自動マッチング）→ 一括作成。画像を指定しない項目は空欄のまま送信されます（デフォルト画像の挙動は要確認）。</p>
+      <p style="color:var(--muted);font-size:12px;margin-bottom:12px;">Logo・Background は共通の1枚を全テンプレートで使い回せます。Badge だけテンプレートごとに違う画像を、CSVのファイル名でマッチングします。</p>
+      <div style="display:flex;gap:16px;flex-wrap:wrap;margin-bottom:14px;padding:10px;background:var(--surface2);border-radius:8px;">
+        <div>
+          <div style="font-size:11px;color:var(--muted);margin-bottom:4px;">共通 Logo（全テンプレート共通）</div>
+          <button class="btn btn-secondary btn-sm" onclick="document.getElementById('cert-shared-logo-input').click()">🖼️ 選択してアップロード</button>
+          <input type="file" id="cert-shared-logo-input" accept="image/*" style="display:none" onchange="handleSharedCertImage(event,'logo')">
+          <div id="cert-shared-logo-status" style="font-size:11px;color:var(--muted);margin-top:4px;">未設定</div>
+        </div>
+        <div>
+          <div style="font-size:11px;color:var(--muted);margin-bottom:4px;">共通 Background（全テンプレート共通）</div>
+          <button class="btn btn-secondary btn-sm" onclick="document.getElementById('cert-shared-bg-input').click()">🖼️ 選択してアップロード</button>
+          <input type="file" id="cert-shared-bg-input" accept="image/*" style="display:none" onchange="handleSharedCertImage(event,'background')">
+          <div id="cert-shared-bg-status" style="font-size:11px;color:var(--muted);margin-top:4px;">未設定</div>
+        </div>
+      </div>
       <div class="btn-row" style="margin-bottom:12px;">
         <button class="btn btn-secondary" onclick="downloadCertTemplateCsv()">⬇ テンプレートDL</button>
         <button class="btn btn-secondary" onclick="document.getElementById('cert-csv-input').click()">⬆ CSV アップロード</button>
@@ -632,7 +646,7 @@ tr:last-child td{border-bottom:none;}
       </div>
       <div class="upload-zone" id="cert-img-zone" onclick="document.getElementById('cert-img-input').click()" ondragover="event.preventDefault();this.classList.add('drag-over')" ondragleave="this.classList.remove('drag-over')" ondrop="handleCertImageDrop(event)">
         <input type="file" id="cert-img-input" accept="image/*" multiple style="display:none" onchange="handleCertImageSelect(event)">
-        🖼️ logo・badge・背景画像をまとめてドラッグ（複数可、CSVで指定したファイル名と一致させてください）
+        🖼️ Badge 画像をまとめてドラッグ（複数可、CSVで指定したファイル名と一致させてください）
       </div>
       <div id="cert-preview" style="display:none;margin-top:12px;">
         <table>
@@ -5760,11 +5774,28 @@ async function runThumbUpload(){
 // ════ 証明書テンプレート 一括作成 ════════════════════════
 let certBatchRows=[]; // {name, logoFilename, badgeFilename, bgFilename}
 let certImageFiles={}; // lowerFilename -> File
+let sharedCertLogoId=''; let sharedCertLogoName='';
+let sharedCertBgId=''; let sharedCertBgName='';
+
+async function handleSharedCertImage(event, role){
+  const file=event.target.files[0]; if(!file) return;
+  const statusEl=document.getElementById(role==='logo'?'cert-shared-logo-status':'cert-shared-bg-status');
+  statusEl.textContent='アップロード中...';
+  try{
+    const libId=await uploadImageToLibrary(file);
+    if(role==='logo'){ sharedCertLogoId=libId; sharedCertLogoName=file.name; }
+    else { sharedCertBgId=libId; sharedCertBgName=file.name; }
+    statusEl.innerHTML=`✅ ${esc(file.name)}`;
+    renderCertPreview();
+  }catch(e){ statusEl.textContent='❌ 失敗: '+e.message; }
+  event.target.value='';
+}
 
 function downloadCertTemplateCsv(){
   const rows=[
-    ['name','logo_filename','badge_filename','background_filename'],
-    ['ＴＥＳＴ','発行元 Nikkei.png','#29_108★_生産性を高めるチームマネジメント.png','背景画像.png']
+    ['name','badge_filename','logo_filename','background_filename'],
+    ['ＴＥＳＴ1','#29_108★_生産性を高めるチームマネジメント.png','',''],
+    ['ＴＥＳＴ2','21_114_価値創造のためのマーケティング思考法.png','','']
   ];
   const csv=rows.map(r=>r.map(c=>`"${(c||'').replace(/"/g,'""')}"`).join(',')).join('\n');
   const a=document.createElement('a');
@@ -5818,20 +5849,30 @@ function renderCertPreview(){
     if(fname) return `<span style="color:#f87171;font-size:11px;">⚠️ ${esc(fname)} 未検出</span>`;
     return `<span style="color:var(--muted);font-size:11px;">— 未指定</span>`;
   };
-  document.getElementById('cert-preview-tbody').innerHTML=certBatchRows.map((r,i)=>`
+  const sharedCell=(sharedId,sharedName)=> sharedId
+    ? `<span style="color:var(--muted);font-size:11px;" title="${esc(sharedName)}">（共通）✅</span>`
+    : `<span style="color:#f87171;font-size:11px;">⚠️ 共通画像未設定</span>`;
+  document.getElementById('cert-preview-tbody').innerHTML=certBatchRows.map((r,i)=>{
+    const logoFile=findCertFile(r.logoFilename);
+    const bgFile=findCertFile(r.bgFilename);
+    return `
     <tr>
       <td style="font-size:12px;">${esc(r.name)}</td>
-      <td>${cell(findCertFile(r.logoFilename),r.logoFilename)}</td>
+      <td>${logoFile?cell(logoFile,r.logoFilename):(r.logoFilename?cell(null,r.logoFilename):sharedCell(sharedCertLogoId,sharedCertLogoName))}</td>
       <td>${cell(findCertFile(r.badgeFilename),r.badgeFilename)}</td>
-      <td>${cell(findCertFile(r.bgFilename),r.bgFilename)}</td>
+      <td>${bgFile?cell(bgFile,r.bgFilename):(r.bgFilename?cell(null,r.bgFilename):sharedCell(sharedCertBgId,sharedCertBgName))}</td>
       <td><button class="btn btn-secondary btn-xs" onclick="certBatchRows.splice(${i},1);renderCertPreview()">✕</button></td>
-    </tr>`).join('');
+    </tr>`;
+  }).join('');
 }
 
 function clearCertBatch(){
   certBatchRows=[]; certImageFiles={};
+  sharedCertLogoId=''; sharedCertLogoName=''; sharedCertBgId=''; sharedCertBgName='';
   const csvInput=document.getElementById('cert-csv-input'); if(csvInput) csvInput.value='';
   const imgInput=document.getElementById('cert-img-input'); if(imgInput) imgInput.value='';
+  const logoStatus=document.getElementById('cert-shared-logo-status'); if(logoStatus) logoStatus.textContent='未設定';
+  const bgStatus=document.getElementById('cert-shared-bg-status'); if(bgStatus) bgStatus.textContent='未設定';
   document.getElementById('cert-preview').style.display='none';
 }
 
@@ -5866,9 +5907,17 @@ async function runCertBatchCreate(){
       const logoFile=findCertFile(r.logoFilename);
       const badgeFile=findCertFile(r.badgeFilename);
       const bgFile=findCertFile(r.bgFilename);
+
+      // Logo: 個別ファイル指定があればそれをアップロード、なければ共通IDを再利用（アップロードし直さない）
       if(logoFile){ log('  📤 logo アップロード中...'); template.logo={library_id: await uploadImageToLibrary(logoFile)}; }
+      else if(sharedCertLogoId){ template.logo={library_id: sharedCertLogoId}; }
+
+      // Badge: テンプレートごとに異なる想定 → 必ずファイルをアップロード
       if(badgeFile){ log('  📤 badge アップロード中...'); template.badge={library_id: await uploadImageToLibrary(badgeFile)}; }
+
+      // Background: Logo と同様、共通IDを再利用
       if(bgFile){ log('  📤 background アップロード中...'); template.background={library_id: await uploadImageToLibrary(bgFile)}; }
+      else if(sharedCertBgId){ template.background={library_id: sharedCertBgId}; }
       await bvPost('/cxm/storefront/v1alpha1/cert-templates',{template});
       log('  ✅ 完了','done'); ok++;
     }catch(e){ log(`  ❌ ${e.message}`,'error'); fail++; }
