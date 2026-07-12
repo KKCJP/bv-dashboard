@@ -559,6 +559,26 @@ tr:last-child td{border-bottom:none;}
         <button class="btn btn-secondary btn-sm" onclick="batchCertUpdate(true)" style="margin-left:8px;">🏆 証明書 ON</button>
         <button class="btn btn-secondary btn-sm" onclick="batchCertUpdate(false)">🏆 証明書 OFF</button>
       </div>
+      <!-- 証明書テンプレート 反映設定（Program一覧・証明書欄向け共通設定） -->
+      <div style="padding:10px;background:var(--surface2);border-radius:8px;margin-bottom:12px;">
+        <div style="font-size:12px;font-weight:600;margin-bottom:8px;">🏆 証明書テンプレート 反映設定（共通）</div>
+        <div style="display:flex;gap:16px;flex-wrap:wrap;align-items:flex-end;">
+          <div>
+            <div style="font-size:11px;color:var(--muted);margin-bottom:4px;">Issuer ID（全件共通）</div>
+            <div style="display:flex;gap:6px;">
+              <input type="text" id="cert-batch-issuer-id" placeholder="issuer_id" style="width:280px;">
+              <button class="btn btn-secondary btn-xs" onclick="document.getElementById('cert-batch-issuer-id').value='772c8921-3ca3-426e-bc44-fb80cd30bd72'">プリセット</button>
+            </div>
+          </div>
+          <div>
+            <div style="font-size:11px;color:var(--muted);margin-bottom:4px;">合格閾値（%）</div>
+            <input type="number" id="cert-batch-threshold" min="0" max="100" value="0" style="width:100px;">
+          </div>
+          <button class="btn btn-primary btn-sm" onclick="runApplyExistingCertTemplates(false)">🔗 全件にテンプレートを自動反映（名前一致）</button>
+          <button class="btn btn-secondary btn-sm" onclick="runApplyExistingCertTemplates(true)">🔗 選択項目のみに反映</button>
+        </div>
+        <p style="font-size:11px;color:var(--muted);margin-top:8px;">既存の cert-template を Program タイトルと名前で照合し、Template ID を自動設定します（テンプレートの再作成はしません）。Issuer ID を名前で選べるようにするには、Issuer 一覧を返す API のネットワークトレースが必要です — わかり次第、選択式に変更します。合格閾値に ON/OFF の切り替えがある場合も、実際の保存時のリクエスト内容（トレース）を見せてもらえれば対応します。</p>
+      </div>
       <div style="overflow-x:auto;">
         <table id="prog-list-table" style="display:none;">
           <thead><tr>
@@ -640,24 +660,11 @@ tr:last-child td{border-bottom:none;}
         </div>
       </div>
       <div style="padding:10px;background:var(--surface2);border-radius:8px;margin-bottom:14px;">
-        <label style="display:flex;align-items:center;gap:6px;font-size:12px;margin-bottom:10px;">
+        <label style="display:flex;align-items:center;gap:6px;font-size:12px;margin-bottom:6px;">
           <input type="checkbox" id="cert-auto-apply" checked style="width:14px;height:14px;">
           作成した Template ID を、同名の Program の証明書設定に自動反映する（有効化 + Template ID 設定）
         </label>
-        <p style="font-size:11px;color:var(--muted);margin-bottom:8px;">CSVの「name」列と、Program一覧（上の「🔄 Program一覧読み込み」で取得済みのもの）のタイトルを照合します。事前に読み込んでおいてください。</p>
-        <div style="display:flex;gap:16px;flex-wrap:wrap;">
-          <div>
-            <div style="font-size:11px;color:var(--muted);margin-bottom:4px;">Issuer ID（全テンプレート共通）</div>
-            <div style="display:flex;gap:6px;">
-              <input type="text" id="cert-batch-issuer-id" placeholder="issuer_id" style="width:280px;">
-              <button class="btn btn-secondary btn-xs" onclick="document.getElementById('cert-batch-issuer-id').value='772c8921-3ca3-426e-bc44-fb80cd30bd72'">プリセット</button>
-            </div>
-          </div>
-          <div>
-            <div style="font-size:11px;color:var(--muted);margin-bottom:4px;">合格閾値（%）</div>
-            <input type="number" id="cert-batch-threshold" min="0" max="100" value="0" style="width:100px;">
-          </div>
-        </div>
+        <p style="font-size:11px;color:var(--muted);">CSVの「name」列と、Program一覧のタイトルを照合します。事前に「Program 一覧・バッチ削除」カードで読み込みを行い、Issuer ID・合格閾値もそちらで設定しておいてください。</p>
       </div>
       <div class="btn-row" style="margin-bottom:12px;">
         <button class="btn btn-secondary" onclick="downloadCertTemplateCsv()">⬇ テンプレートDL</button>
@@ -676,7 +683,6 @@ tr:last-child td{border-bottom:none;}
         </table>
         <div class="btn-row" style="margin-top:10px;">
           <button class="btn btn-primary" onclick="runCertBatchCreate()">🚀 一括作成</button>
-          <button class="btn btn-secondary" onclick="runApplyExistingCertTemplates()" title="すでに作成済みのTemplateを再利用し、Programへの反映だけ行います">🔗 既存テンプレートをProgramに反映（再作成なし）</button>
           <button class="btn btn-secondary" onclick="clearCertBatch()">✕ クリア</button>
         </div>
       </div>
@@ -5980,12 +5986,18 @@ async function fetchAllCertTemplates(){
 }
 
 // すでに作成済みの cert-template を、同名の Program に反映するだけ（再作成なし）
-async function runApplyExistingCertTemplates(){
-  if(!programListData.length){ toast('先に「🔄 Program一覧読み込み」でProgram一覧を取得してください','error'); return; }
+// selectedOnly=true の場合、Program 一覧でチェックを入れた項目だけを対象にする
+async function runApplyExistingCertTemplates(selectedOnly){
+  if(!programListData.length){ toast('先に「🔄 読み込み」でProgram一覧を取得してください','error'); return; }
+  let targets=programListData;
+  if(selectedOnly){
+    if(!selectedProgramIds.size){ toast('Programにチェックを入れてください','error'); return; }
+    targets=programListData.filter(p=>selectedProgramIds.has(p.id));
+  }
   const issuerId=document.getElementById('cert-batch-issuer-id').value.trim();
   const threshold=parseInt(document.getElementById('cert-batch-threshold').value)||0;
-  const log=makeLog('cert-batch-log','cert-batch-log-card');
-  log('▶ 既存の証明書テンプレートを取得中...');
+  const log=makeLog('prog-list-log','prog-list-log-card');
+  log(`▶ ${selectedOnly?'選択項目':'全件'}（${targets.length}件）に証明書テンプレートを反映します。既存テンプレートを取得中...`);
   let templates=[];
   try{ templates=await fetchAllCertTemplates(); }
   catch(e){ log('❌ テンプレート取得失敗: '+e.message,'error'); toast('テンプレート取得に失敗しました','error'); return; }
@@ -5996,7 +6008,7 @@ async function runApplyExistingCertTemplates(){
   for(const t of templates){ if(t.name) nameToTemplate[t.name.trim()]=t; }
 
   let ok=0, fail=0, skip=0;
-  for(const p of programListData){
+  for(const p of targets){
     const t=nameToTemplate[p.title.trim()];
     if(!t){ skip++; continue; } // このProgramに対応する名前のテンプレートが無い→対象外として静かにスキップ
     log(`[${p.title}] → template_id: ${t.id.substring(0,8)}...`);
