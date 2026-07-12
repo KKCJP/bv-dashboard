@@ -614,7 +614,7 @@ tr:last-child td{border-bottom:none;}
         <div id="prog-preview-list"></div>
         <div class="btn-row" style="margin-top:12px;">
           <button class="btn btn-secondary btn-sm" id="prod-arr-preview-btn" onclick="runProdArrangementPreview()">🔍 Prod Arrangement プレビュー（QA ID 変換）</button>
-        <button class="btn btn-secondary" id="prog-import-btn" style="background:rgba(239,68,68,.12);border-color:rgba(239,68,68,.4);" onclick="runProgramImport('program_only')">📋 Program 情報のみ（⚠️Arrangementが空になります）</button>
+        <button class="btn btn-primary" id="prog-import-btn" onclick="runProgramImport('program_only')">📋 Program 情報のみ（新規作成あり）</button>
         <button class="btn btn-secondary" id="arr-import-btn" onclick="runProgramImport('arrangement_only')">🎬 Arrangement のみ（新規作成なし）</button>
         <button class="btn btn-secondary" style="background:rgba(251,191,36,.15);border-color:rgba(251,191,36,.4);color:var(--yellow,#fbbf24);" onclick="runRestoreProgramMeta()" title="このCSVの about・highlight・background・author情報だけを復元します。Arrangement と証明書設定は現在の値をそのまま保持します">🩹 説明・縮圖のみ復元（Arrangement/証明書は保持）</button>
           <button class="btn btn-secondary" onclick="clearProgramPreview()">✕ クリア</button>
@@ -5399,10 +5399,6 @@ function stripBadContentIds(items, badIdSet){
 
 async function runProgramImport(mode='program_only'){
   if(!programImportData.length){ toast('データがありません','error'); return; }
-  if(mode==='program_only'){
-    const okConfirm=confirm(`⚠️ 警告：この操作は既存 Program の Arrangement（コース内容）を空にします。\n\n説明・縮圖・作者情報だけを直したい場合は、代わりに「🩹 説明・縮圖のみ復元」ボタンを使ってください。\n\n本当に Arrangement を空にして続行しますか？`);
-    if(!okConfirm) return;
-  }
   const importBtn=document.getElementById('prog-import-btn');
   const arrBtn=document.getElementById('arr-import-btn');
   const activeBtn=mode==='program_only'?importBtn:arrBtn;
@@ -5419,6 +5415,7 @@ async function runProgramImport(mode='program_only'){
   log('  📋 QA CPM コンテンツ取得中...');
   const arrangementCpmMap={};
   const arrangementCpmIds=new Set();
+  const arrangementCpmTypeById={}; // content_id -> 実際の CONTENT_TYPE（VOD/FORM）。これが無いと FORM(テスト等) も VOD 扱いになり存在確認に失敗する
   try{
     for(const ct of ['CONTENT_TYPE_VOD','CONTENT_TYPE_FORM']){
       let p=1;
@@ -5429,6 +5426,7 @@ async function runProgramImport(mode='program_only'){
           if(c.title&&c.content_id){
             const _at=(c.title||'').replace(/\.mp4$/i,'').trim(); if(_at) arrangementCpmMap[_at]={id:c.content_id,type:ct};
             arrangementCpmIds.add(c.content_id);
+            arrangementCpmTypeById[c.content_id]=ct;
           }
         });
         if((d.contents||[]).length<100) break;
@@ -5471,6 +5469,7 @@ async function runProgramImport(mode='program_only'){
   }catch{}
 
   let skipCount=0;
+  let missingPrograms=[];
   for(let i=0;i<programImportData.length;i++){
     const prog=programImportData[i];
     log(`[${i+1}/${programImportData.length}] 📚 「${prog.title}」`);
@@ -5559,8 +5558,10 @@ async function runProgramImport(mode='program_only'){
               if(fuzzy){ contentId=fuzzy.value.id; contentType=fuzzy.value.type; }
             }
           }
-          // content_id が QA CPM に存在しない場合は fuzzy で再検索
-          if(contentId && !arrangementCpmIds.has(contentId) && searchName){
+          // content_id が QA CPM に存在しない場合は fuzzy で再検索。存在する場合も、実際の type（VOD/FORM）で上書きする
+          if(contentId && arrangementCpmIds.has(contentId)){
+            contentType=arrangementCpmTypeById[contentId]||contentType;
+          } else if(contentId && !arrangementCpmIds.has(contentId) && searchName){
             const normSearch=searchName.replace(/\.mp4$/i,'').trim();
             if(arrangementCpmMap[normSearch]){
               contentId=arrangementCpmMap[normSearch].id;
@@ -5664,15 +5665,14 @@ async function runProgramImport(mode='program_only'){
             background:ep.background||{type:'PROGRAM_BACKGROUND_TYPE_DEFAULT'},
           };
         } else {
-          // Program 情報のみ更新（arrangement は空で送る → 既存の content は保持されない）
-          // items に不正な content_id があると UpdateOne: not found になるため空で送る
+          // Program 情報のみ更新（Arrangement は現状を保持し、空にしない）
           putBody={
             title: f.title||ep.title||'',
             highlight:{displayable:true,texts:mergedHighlight},
             about:{displayable:true,html_content:f.about_html!==undefined?f.about_html:(ep.about?.html_content||'')},
             author_info:mergedAuthor,
             label_info:{displayable:true,labels:(f.labels!==undefined?f.labels:(ep.label_info?.labels||[]).map(l=>typeof l==='object'?(l.name||l):l)).map(l=>({name:l}))},
-            arrangement:{displayable:true,items:[]},
+            arrangement: ep.arrangement||{displayable:true,items:[]},
             clip:{displayable:true,clips:ep.clip?.clips||[]},
             rating:{displayable:false},
             level_info:ep.level_info||{displayable:false,level:'PROGRAM_LEVEL_BEGINNER'},
