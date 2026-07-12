@@ -5406,6 +5406,18 @@ function stripBadContentIds(items, badIdSet){
   });
 }
 
+// content_id が空文字の残留項目を再帰的に除外する（既存 Arrangement に混入している場合の防御）
+function stripEmptyContentIds(items){
+  return items.filter(item=>{
+    if(item.type==='PROGRAM_ARRANGEMENT_ITEM_TYPE_CONTENT'){
+      return !!(item.content?.vod?.id);
+    }
+    if(item.section?.items) item.section.items=stripEmptyContentIds(item.section.items);
+    if(item.module?.items) item.module.items=stripEmptyContentIds(item.module.items);
+    return true;
+  });
+}
+
 async function runProgramImport(mode='program_only'){
   if(!programImportData.length){ toast('データがありません','error'); return; }
   const importBtn=document.getElementById('prog-import-btn');
@@ -5614,7 +5626,7 @@ async function runProgramImport(mode='program_only'){
         }
         return true;
       });
-      const finalArrangement=cleanArrangement(arrangement);
+      const finalArrangement=stripEmptyContentIds(cleanArrangement(arrangement));
       reseq(finalArrangement);
       const contentCount=finalArrangement.flatMap(s=>
         s.section?.items?.flatMap(i=>i.module?.items||[i])||s.module?.items||[s]
@@ -5669,6 +5681,12 @@ async function runProgramImport(mode='program_only'){
         })();
 
         let putBody;
+        const countItems=items=>items.reduce((n,it)=>n+(it.type==='PROGRAM_ARRANGEMENT_ITEM_TYPE_CONTENT'?1:(it.section?.items?countItems(it.section.items):it.module?.items?countItems(it.module.items):0)),0);
+        const existingArrRaw=ep.arrangement||{displayable:true,items:[]};
+        const existingArrCleaned=stripEmptyContentIds(JSON.parse(JSON.stringify(existingArrRaw.items||[])));
+        const removedEmptyCount=countItems(existingArrRaw.items||[])-countItems(existingArrCleaned);
+        if(removedEmptyCount>0) log(`  🩹 既存 Arrangement 内の空ID項目を${removedEmptyCount}件除去しました`,'error');
+
         if(isArrOnly){
           // Arrangement のみ更新（メタ情報は既存を保持）
           if(!hasContents){ log(`  ℹ️ arrangement 空のためスキップ`); skipCount++; continue; }
@@ -5694,7 +5712,7 @@ async function runProgramImport(mode='program_only'){
             about:{displayable:true,html_content:f.about_html!==undefined?f.about_html:(ep.about?.html_content||'')},
             author_info:mergedAuthor,
             label_info:{displayable:true,labels:(f.labels!==undefined?f.labels:(ep.label_info?.labels||[]).map(l=>typeof l==='object'?(l.name||l):l)).map(l=>({name:l}))},
-            arrangement: ep.arrangement||{displayable:true,items:[]},
+            arrangement: {displayable:true, items:existingArrCleaned},
             clip:{displayable:true,clips:ep.clip?.clips||[]},
             rating:{displayable:false},
             level_info:ep.level_info||{displayable:false,level:'PROGRAM_LEVEL_BEGINNER'},
