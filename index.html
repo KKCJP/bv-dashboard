@@ -614,8 +614,9 @@ tr:last-child td{border-bottom:none;}
         <div id="prog-preview-list"></div>
         <div class="btn-row" style="margin-top:12px;">
           <button class="btn btn-secondary btn-sm" id="prod-arr-preview-btn" onclick="runProdArrangementPreview()">🔍 Prod Arrangement プレビュー（QA ID 変換）</button>
-        <button class="btn btn-primary" id="prog-import-btn" onclick="runProgramImport('program_only')">📋 Program 情報のみ（新規作成あり）</button>
+        <button class="btn btn-secondary" id="prog-import-btn" style="background:rgba(239,68,68,.12);border-color:rgba(239,68,68,.4);" onclick="runProgramImport('program_only')">📋 Program 情報のみ（⚠️Arrangementが空になります）</button>
         <button class="btn btn-secondary" id="arr-import-btn" onclick="runProgramImport('arrangement_only')">🎬 Arrangement のみ（新規作成なし）</button>
+        <button class="btn btn-secondary" style="background:rgba(251,191,36,.15);border-color:rgba(251,191,36,.4);color:var(--yellow,#fbbf24);" onclick="runRestoreProgramMeta()" title="このCSVの about・highlight・background・author情報だけを復元します。Arrangement と証明書設定は現在の値をそのまま保持します">🩹 説明・縮圖のみ復元（Arrangement/証明書は保持）</button>
           <button class="btn btn-secondary" onclick="clearProgramPreview()">✕ クリア</button>
         </div>
       </div>
@@ -4475,6 +4476,24 @@ function closeCertModal(){
   certCurrentId='';
 }
 
+// Program の全フィールドを保持したまま、certification だけ差し替えた putBody を作る
+function buildCertPutBody(ep, certSetting){
+  return {
+    title: ep.title||'',
+    highlight: ep.highlight||{displayable:true,texts:['','','']},
+    about: ep.about||{displayable:true,html_content:''},
+    author_info: ep.author_info||{displayable:true,name:'',title:'',description:'',avatar_library_id:'',avatar_url:''},
+    label_info: ep.label_info||{displayable:true,labels:[]},
+    arrangement: ep.arrangement||{displayable:true,items:[]},
+    clip: ep.clip||{displayable:true,clips:[]},
+    rating: ep.rating||{displayable:false},
+    level_info: ep.level_info||{displayable:false,level:'PROGRAM_LEVEL_BEGINNER'},
+    relation: ep.relation||{displayable:true,related_contents:[]},
+    certification: {setting: certSetting},
+    background: ep.background||{type:'PROGRAM_BACKGROUND_TYPE_DEFAULT'},
+  };
+}
+
 async function saveCertSetting(){
   const site=cfg('site_id');
   const p=programListData.find(p=>p.id===certCurrentId);
@@ -4488,9 +4507,13 @@ async function saveCertSetting(){
       issuer_id: document.getElementById('cert-issuer-id').value.trim(),
       passing_threshold: parseInt(document.getElementById('cert-threshold').value)||0,
     };
+    // 既存の Program 全フィールドを取得してから certification だけ差し替える（他フィールドの消失を防止）
+    const existRes=await fetch(`${BASE()}/bv/cpm/v1alpha1/sites/${site}/programs/${certCurrentId}?action=GET_FORM_REQUEST_ACTION_CURRENT&mode=FORM_MODE_EDIT`,{headers:HDR()});
+    const ep=(await existRes.json()).program||{};
+    const putBody=buildCertPutBody(ep, certSetting);
     const r=await fetch(`${BASE()}/bv/cpm/v1alpha1/sites/${site}/programs/${certCurrentId}`,{
       method:'PUT', headers:{...HDR(),'Content-Type':'application/json'},
-      body:JSON.stringify({program:{title:p.title, arrangement:p.arrangement, certification:{setting:certSetting}}})
+      body:JSON.stringify({program:putBody})
     });
     if(!r.ok) throw new Error(`${r.status}: ${(await r.text()).substring(0,100)}`);
     // ローカルデータ更新
@@ -4521,9 +4544,13 @@ async function batchCertUpdate(enabled){
         issuer_id: p.certIssuerId||'',
         passing_threshold: p.certThreshold||0,
       };
+      // 既存の Program 全フィールドを取得してから certification だけ差し替える（他フィールドの消失を防止）
+      const existRes=await fetch(`${BASE()}/bv/cpm/v1alpha1/sites/${site}/programs/${id}?action=GET_FORM_REQUEST_ACTION_CURRENT&mode=FORM_MODE_EDIT`,{headers:HDR()});
+      const ep=(await existRes.json()).program||{};
+      const putBody=buildCertPutBody(ep, certSetting);
       const r=await fetch(`${BASE()}/bv/cpm/v1alpha1/sites/${site}/programs/${id}`,{
         method:'PUT', headers:{...HDR(),'Content-Type':'application/json'},
-        body:JSON.stringify({program:{title:p.title, arrangement:p.arrangement, certification:{setting:certSetting}}})
+        body:JSON.stringify({program:putBody})
       });
       if(!r.ok) throw new Error(`${r.status}`);
       p.certEnabled=enabled;
@@ -5293,8 +5320,89 @@ function renderProgramPreview(){
 }
 function clearProgramPreview(){ programImportData=[]; document.getElementById('prog-preview').style.display='none'; }
 
+// バックアップCSV（横向き programs CSV）から about・highlight・background・author 情報だけを復元する。
+// Arrangement と証明書設定は「現在の値」をそのまま使う（バックアップの値では上書きしない）。
+async function runRestoreProgramMeta(){
+  if(!programImportData.length){ toast('先に「⬆ CSV（Program 情報）」でバックアップCSVを読み込んでください','error'); return; }
+  if(!programListData.length){ toast('先に「🔄 読み込み」でProgram一覧を取得してください','error'); return; }
+  const site=siteId();
+  const isValidUUID=s=>/^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$/i.test(s||'');
+  const log=makeLog('prog-log','prog-log-card');
+  log(`▶ 説明・縮圖の復元開始：${programImportData.length}件（Arrangement・証明書設定はそのまま保持します）`);
+  let ok=0, fail=0, skip=0;
+  for(let i=0;i<programImportData.length;i++){
+    const prog=programImportData[i];
+    const f=prog._fields||{};
+    log(`[${i+1}/${programImportData.length}] ${esc(prog.title)}`);
+    try{
+      let progId=(prog.program_id&&programListData.some(p=>p.id===prog.program_id))?prog.program_id:'';
+      if(!progId){
+        const match=programListData.find(p=>p.title.trim()===prog.title.trim());
+        progId=match?.id||'';
+      }
+      if(!progId){ log('  ⚠️ 対応する Program が見つかりません → スキップ','error'); skip++; continue; }
+
+      const existRes=await fetch(`${BASE()}/bv/cpm/v1alpha1/sites/${site}/programs/${progId}?action=GET_FORM_REQUEST_ACTION_CURRENT&mode=FORM_MODE_EDIT`,{headers:HDR()});
+      if(!existRes.ok) throw new Error(`現在情報の取得に失敗: ${existRes.status}`);
+      const ep=(await existRes.json()).program||{};
+
+      const mergedHighlight=[...(ep.highlight?.texts||['','',''])];
+      if(f.highlight?.[0]) mergedHighlight[0]=f.highlight[0];
+      if(f.highlight?.[1]) mergedHighlight[1]=f.highlight[1];
+      if(f.highlight?.[2]) mergedHighlight[2]=f.highlight[2];
+
+      const mergedAuthor={...(ep.author_info||{}),displayable:true};
+      if(f.author_name) mergedAuthor.name=f.author_name;
+      if(f.author_title) mergedAuthor.title=f.author_title;
+      if(f.author_desc) mergedAuthor.description=f.author_desc;
+      if(f.author_avatar_library_id && isValidUUID(f.author_avatar_library_id)) mergedAuthor.avatar_library_id=f.author_avatar_library_id;
+
+      const mergedBg=(f.background_library_id && isValidUUID(f.background_library_id))
+        ? {type:'PROGRAM_BACKGROUND_TYPE_IMAGE', image:{id:f.background_library_id}}
+        : (ep.background||{type:'PROGRAM_BACKGROUND_TYPE_DEFAULT'});
+
+      const putBody={
+        title: ep.title||prog.title||'',
+        highlight: {displayable:true, texts:mergedHighlight},
+        about: {displayable:true, html_content: f.about_html?f.about_html:(ep.about?.html_content||'')},
+        author_info: mergedAuthor,
+        label_info: ep.label_info||{displayable:true,labels:[]},
+        arrangement: ep.arrangement||{displayable:true,items:[]},   // ← 現状維持。バックアップでは絶対に上書きしない
+        clip: ep.clip||{displayable:true,clips:[]},
+        rating: ep.rating||{displayable:false},
+        level_info: ep.level_info||{displayable:false,level:'PROGRAM_LEVEL_BEGINNER'},
+        relation: ep.relation||{displayable:true,related_contents:[]},
+        certification: ep.certification||{setting:{enabled:false,template_id:'',issuer_id:'',passing_threshold:0}}, // ← 現状維持
+        background: mergedBg,
+      };
+      await cpmPut(`/bv/cpm/v1alpha1/sites/${site}/programs/${progId}`,{program:putBody});
+      log(`  ✅ 復元完了（about: ${f.about_html?'あり':'既存維持'} / background: ${f.background_library_id?'あり':'既存維持'}）`,'done');
+      ok++;
+    }catch(e){ log(`  ❌ ${e.message}`,'error'); fail++; }
+  }
+  log(`🏁 完了：復元 ${ok}件 / 失敗 ${fail}件 / スキップ ${skip}件`,'done');
+  toast(`復元完了：${ok}件 / 失敗:${fail}件`, ok>0?'success':'error');
+}
+
+// arrangement の items から、指定した content_id を持つ content を再帰的に除外する
+function stripBadContentIds(items, badIdSet){
+  return items.filter(item=>{
+    if(item.type==='PROGRAM_ARRANGEMENT_ITEM_TYPE_CONTENT'){
+      const cid=item.content?.vod?.id||'';
+      return !badIdSet.has(cid);
+    }
+    if(item.section?.items) item.section.items=stripBadContentIds(item.section.items, badIdSet);
+    if(item.module?.items) item.module.items=stripBadContentIds(item.module.items, badIdSet);
+    return true;
+  });
+}
+
 async function runProgramImport(mode='program_only'){
   if(!programImportData.length){ toast('データがありません','error'); return; }
+  if(mode==='program_only'){
+    const okConfirm=confirm(`⚠️ 警告：この操作は既存 Program の Arrangement（コース内容）を空にします。\n\n説明・縮圖・作者情報だけを直したい場合は、代わりに「🩹 説明・縮圖のみ復元」ボタンを使ってください。\n\n本当に Arrangement を空にして続行しますか？`);
+    if(!okConfirm) return;
+  }
   const importBtn=document.getElementById('prog-import-btn');
   const arrBtn=document.getElementById('arr-import-btn');
   const activeBtn=mode==='program_only'?importBtn:arrBtn;
@@ -5574,9 +5682,23 @@ async function runProgramImport(mode='program_only'){
           };
         }
 
-        for(let attempt=0;attempt<3;attempt++){
-          try{ await cpmPut(`/bv/cpm/v1alpha1/sites/${site}/programs/${progId}`,{program:putBody}); break; }
-          catch(e){ if(attempt<2) await new Promise(r=>setTimeout(r,2000)); else throw e; }
+        {
+          let currentPutBody=putBody;
+          for(let attempt=0;attempt<3;attempt++){
+            try{ await cpmPut(`/bv/cpm/v1alpha1/sites/${site}/programs/${progId}`,{program:currentPutBody}); putBody=currentPutBody; break; }
+            catch(e){
+              const badIds=[...String(e.message).matchAll(/CONTENT_TYPE_\w+:([0-9a-fA-F-]{36})/g)].map(m=>m[1]);
+              if(badIds.length && currentPutBody.arrangement?.items?.length){
+                log(`  ⚠️ 存在しない content を検出 → 除外して再試行: ${badIds.join(', ')}`,'error');
+                let stripped=stripBadContentIds(currentPutBody.arrangement.items, new Set(badIds));
+                stripped=cleanArrangement(stripped);
+                reseq(stripped);
+                currentPutBody={...currentPutBody, arrangement:{displayable:true, items:stripped}};
+                continue;
+              }
+              if(attempt<2) await new Promise(r=>setTimeout(r,2000)); else throw e;
+            }
+          }
         }
 
         // contents/setting も有値フィールドのみ更新（QA では失敗する場合あり → 無視）
@@ -5615,9 +5737,23 @@ async function runProgramImport(mode='program_only'){
         progId=(createResp.program||createResp).id||'';
         if(!progId) throw new Error('program_id が取得できません');
         await new Promise(r=>setTimeout(r,1000));
-        for(let attempt=0;attempt<3;attempt++){
-          try{ await cpmPut(`/bv/cpm/v1alpha1/sites/${site}/programs/${progId}`,{program:putBody}); break; }
-          catch(e){ if(attempt<2) await new Promise(r=>setTimeout(r,2000)); else throw e; }
+        {
+          let currentPutBody=putBody;
+          for(let attempt=0;attempt<3;attempt++){
+            try{ await cpmPut(`/bv/cpm/v1alpha1/sites/${site}/programs/${progId}`,{program:currentPutBody}); break; }
+            catch(e){
+              const badIds=[...String(e.message).matchAll(/CONTENT_TYPE_\w+:([0-9a-fA-F-]{36})/g)].map(m=>m[1]);
+              if(badIds.length && currentPutBody.arrangement?.items?.length){
+                log(`  ⚠️ 存在しない content を検出 → 除外して再試行: ${badIds.join(', ')}`,'error');
+                let stripped=stripBadContentIds(currentPutBody.arrangement.items, new Set(badIds));
+                stripped=cleanArrangement(stripped);
+                reseq(stripped);
+                currentPutBody={...currentPutBody, arrangement:{displayable:true, items:stripped}};
+                continue;
+              }
+              if(attempt<2) await new Promise(r=>setTimeout(r,2000)); else throw e;
+            }
+          }
         }
         await cpmPut(`/bv/cpm/v1alpha1/sites/${site}/contents/setting`,{content:{content_id:progId,content_type:'CONTENT_TYPE_PROGRAM',visibility:f.visibility||'CONTENT_VISIBILITY_DRAFT',labels:f.labels||[],part_numbers:f.part_numbers||[],schedule:{start_time:null,end_time:null},license_setting:{license:'CONTENT_LICENSE_LICENSE_ONLY',custom_url_resource:''},note:'',form_type:null}});
       }
@@ -5957,12 +6093,16 @@ async function uploadImageToLibrary(file){
   return fileId;
 }
 
-// Program の証明書設定に反映する
+// Program の証明書設定に反映する（他フィールドを消さないよう、現在の値を取得してから certification だけ差し替える）
 async function applyCertToProgram(program, certSetting){
   const site=siteId();
+  const existRes=await fetch(`${BASE()}/bv/cpm/v1alpha1/sites/${site}/programs/${program.id}?action=GET_FORM_REQUEST_ACTION_CURRENT&mode=FORM_MODE_EDIT`,{headers:HDR()});
+  if(!existRes.ok) throw new Error(`現在の Program 情報取得に失敗: ${existRes.status}`);
+  const ep=(await existRes.json()).program||{};
+  const putBody=buildCertPutBody(ep, certSetting);
   const r=await fetch(`${BASE()}/bv/cpm/v1alpha1/sites/${site}/programs/${program.id}`,{
     method:'PUT', headers:{...HDR(),'Content-Type':'application/json'},
-    body:JSON.stringify({program:{title:program.title, arrangement:program.arrangement, certification:{setting:certSetting}}})
+    body:JSON.stringify({program:putBody})
   });
   if(!r.ok) throw new Error(`${r.status}: ${(await r.text()).substring(0,150)}`);
   program.certEnabled=certSetting.enabled;
