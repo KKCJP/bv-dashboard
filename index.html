@@ -883,7 +883,6 @@ const I18N = {
     full_sync_title:'🚀 Prod → QA 全同步',
     full_sync_warn:'⚠️ 請務必確認設定裡的 Base URL 是 <b>QA</b>（api.one-qa.kkstream.io）。如果還是 Prod URL 就執行，會覆蓋 Prod 的資料。',
     issuer_id_common_label:'Issuer ID（全部共用）',
-    no_selection_all_target:'未勾選 → 對象為全部',
     lang_colon:'語言：',
     log_title_plain:'Log',
     nav_compare:'Prod vs QA',
@@ -1068,7 +1067,6 @@ const I18N = {
     full_sync_title:'🚀 Prod → QA 全同期',
     full_sync_warn:'⚠️ 設定の Base URL が <b>QA</b>（api.one-qa.kkstream.io）になっていることを必ず確認してください。Prod URL のまま実行すると Prod のデータが上書きされます。',
     issuer_id_common_label:'Issuer ID（全件共通）',
-    no_selection_all_target:'未選択 → 全件が対象',
     lang_colon:'語言：',
     log_title_plain:'ログ',
     nav_compare:'Prod vs QA',
@@ -4645,15 +4643,14 @@ async function loadProgramList(){
       const detail=detailRes.ok?await detailRes.json():{};
       const prog=detail.program||{};
       const items=prog.arrangement?.items||[];
-      // content 数を数える
-      let contentCount=0;
-      for(const item of items){
-        if(item.type==='PROGRAM_ARRANGEMENT_ITEM_TYPE_SECTION'){
-          contentCount+=(item.section?.items||[]).filter(si=>si.type==='PROGRAM_ARRANGEMENT_ITEM_TYPE_CONTENT').length;
-        } else if(item.type==='PROGRAM_ARRANGEMENT_ITEM_TYPE_CONTENT'){
-          contentCount++;
-        }
-      }
+      // content 数を数える（section・module どちらの入れ子でも、深さに関わらず正しく数える）
+      const countArrangementContents=arr=>arr.reduce((n,item)=>{
+        if(item.type==='PROGRAM_ARRANGEMENT_ITEM_TYPE_CONTENT') return n+1;
+        if(item.section?.items) return n+countArrangementContents(item.section.items);
+        if(item.module?.items) return n+countArrangementContents(item.module.items);
+        return n;
+      },0);
+      const contentCount=countArrangementContents(items);
       const cert=prog.certification?.setting||{};
       programListData.push({
         id: p.content_id,
@@ -4677,7 +4674,6 @@ async function loadProgramList(){
     document.getElementById('prog-list-table').style.display='table';
     document.getElementById('prog-list-empty').style.display='none';
     document.getElementById('prog-list-filter-row').style.display='flex';
-    document.getElementById('prog-list-batch').style.display='block';
     countEl.textContent=`${programListData.length}件 / 空:${programListData.filter(p=>p.isEmpty).length}件 / 重複:${programListData.filter(p=>p.isDuplicate).length}件`;
   }catch(e){ toast('取得失敗: '+e.message,'error'); }
   finally{ btn.disabled=false; btn.textContent='🔄 読み込み'; }
@@ -4846,14 +4842,15 @@ function toggleAllPrograms(checked){
 }
 
 function updateProgramBatchBar(){
+  const bar=document.getElementById('prog-list-batch');
   const countEl=document.getElementById('prog-list-selected-count');
-  if(!countEl) return;
+  if(!bar||!countEl) return;
   if(selectedProgramIds.size>0){
+    bar.style.display='block';
     countEl.textContent=`${selectedProgramIds.size}件選択中`;
     countEl.style.color='var(--accent)';
   } else {
-    countEl.textContent=t('no_selection_all_target');
-    countEl.style.color='var(--muted)';
+    bar.style.display='none';
   }
 }
 
