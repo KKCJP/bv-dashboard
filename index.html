@@ -91,6 +91,7 @@ tr:last-child td{border-bottom:none;}
 
 <nav class="sidebar">
   <div class="sidebar-logo">BV Dashboard<span id="nav-subtitle">管理ツール</span></div>
+  <div id="sidebar-env-badge" style="margin:0 18px 12px;padding:4px 10px;border-radius:6px;font-size:11px;font-weight:700;text-align:center;"></div>
   <div class="nav-item active" onclick="showPage('settings')">⚙️ <span data-i18n="nav_settings">設定</span></div>
   <div class="nav-item" onclick="showPage('vods')">🎬 <span data-i18n="nav_vods">動画管理</span></div>
   <div class="nav-item" onclick="showPage('subtitles')">📄 <span data-i18n="nav_subtitles">字幕管理</span></div>
@@ -108,7 +109,8 @@ tr:last-child td{border-bottom:none;}
 <div id="page-settings" class="page active">
   <div class="page-title" id="page-title-settings" data-i18n="settings_title">⚙️ 設定</div>
   <div class="card">
-    <div class="card-title" data-i18n="api_title">API 認証情報（QA / 現在の接続先）</div>
+    <div class="card-title" data-i18n="api_title">API 認証情報（メイン接続先）</div>
+    <p style="font-size:11px;color:var(--muted);margin-bottom:12px;" data-i18n="api_hint">ダッシュボードのほぼ全機能はこの接続先に対して読み書きします。QA・Prod どちらを指定しても構いません（Base URL で決まります）。「Prod → QA 全同期」機能だけは、このメイン接続先が QA である必要があります。</p>
     <div class="form-grid">
       <div class="form-group full"><label data-i18n="token_label">BV API Token</label><input type="password" id="s-token" placeholder="eyJhbGc...（Bearer不要）"></div>
       <div class="form-group"><label data-i18n="org_label">Org ID</label><input type="text" id="s-org-id" placeholder="xxxxxxxx-xxxx-..."></div>
@@ -116,7 +118,13 @@ tr:last-child td{border-bottom:none;}
       <div class="form-group"><label data-i18n="lang_label">デフォルト字幕言語</label>
         <select id="s-lang"><option value="ja-JP">日本語 (ja-JP)</option><option value="zh-TW">繁體中文 (zh-TW)</option><option value="en-US">English (en-US)</option><option value="ko-KR">한국어 (ko-KR)</option></select>
       </div>
-      <div class="form-group"><label data-i18n="baseurl_label">API Base URL</label><input type="text" id="s-base-url" value="https://api.one.blendvision.com"></div>
+      <div class="form-group">
+        <label data-i18n="baseurl_label">API Base URL</label>
+        <div style="display:flex;gap:8px;align-items:center;">
+          <input type="text" id="s-base-url" value="https://api.one.blendvision.com" oninput="updateEnvBadge()" style="flex:1;">
+          <span id="env-badge" style="font-size:11px;font-weight:700;padding:3px 8px;border-radius:5px;white-space:nowrap;"></span>
+        </div>
+      </div>
     </div>
     <div class="btn-row" style="margin-top:16px;">
       <button class="btn btn-primary" onclick="saveSettings()"><span data-i18n="btn_save">💾 保存</span></button>
@@ -125,8 +133,8 @@ tr:last-child td{border-bottom:none;}
     </div>
   </div>
   <div class="card">
-    <div class="card-title" data-i18n="prod_conn_title">🔄 Prod 接続情報（Prod vs QA 比較用）</div>
-    <p style="font-size:11px;color:var(--muted);margin-bottom:12px;" data-i18n="prod_conn_hint">上の設定は QA 用。こちらに Prod の Token と Site ID を入力すると「Prod vs QA 比較」ページが使えます。</p>
+    <div class="card-title" data-i18n="prod_conn_title">🔄 比較用サブ接続先</div>
+    <p style="font-size:11px;color:var(--muted);margin-bottom:12px;" data-i18n="prod_conn_hint">「Prod vs QA 比較」ページ専用の、もう一方の環境の認証情報です（メイン接続先が QA ならここは Prod、メインが Prod ならここは QA を入れてください）。</p>
     <div class="form-grid">
       <div class="form-group full"><label data-i18n="prod_token_label">Prod API Token</label><input type="password" id="s-prod-token" placeholder="Prod の eyJhbGc..."></div>
       <div class="form-group"><label data-i18n="prod_org_label">Prod Org ID</label><input type="text" id="s-prod-org-id" placeholder="xxxxxxxx-xxxx-..."></div>
@@ -760,7 +768,8 @@ const I18N = {
     btn_refresh:'🔄 更新', btn_csv_dl:'⬇ CSV', btn_csv_import:'⬆ CSV 改名',
     col_name:'影片名稱', col_sub:'字幕', col_sum:'摘要', col_tag:'標記', col_action:'操作',
     loading:'載入中...', no_vod:'按「更新」載入影片', no_vod_found:'沒有影片',
-    settings_title:'⚙️ 設定', nav_vods_title:'🎬 影片管理', nav_subtitles_title:'📄 字幕管理', nav_cpm_title:'📝 CPM 管理', api_title:'API 認證資訊',
+    settings_title:'⚙️ 設定', nav_vods_title:'🎬 影片管理', nav_subtitles_title:'📄 字幕管理', nav_cpm_title:'📝 CPM 管理', api_title:'API 認證資訊（主要連線）',
+    api_hint:'儀表板幾乎所有功能都是對這個連線目標讀寫。QA 或 Prod 都可以填，由 Base URL 決定。只有「Prod → QA 全同步」這個功能，需要這個主要連線是 QA。',
     token_label:'BV API Token', org_label:'Org ID', site_label:'CPM Site ID',
     lang_label:'預設字幕語言', baseurl_label:'API Base URL',
     batch_title:'批次設定', sum_format_label:'摘要格式', sum_type_label:'摘要類型', sum_length_label:'摘要長度',
@@ -897,8 +906,8 @@ const I18N = {
     preview_label:'預覽',
     prod_arr_preview_hint:'把 Prod 的 Arrangement 結構轉換成 QA 的 program_id 與 content_id 的預覽。✅=有比對到 / ⚠️=QA 沒有',
     prod_arr_preview_title:'🔍 Prod Arrangement → QA ID 轉換預覽',
-    prod_conn_hint:'上方設定為 QA 用。在這裡輸入 Prod 的 Token 與 Site ID，就能使用「Prod vs QA 比較」頁面。',
-    prod_conn_title:'🔄 Prod 連線資訊（Prod vs QA 比較用）',
+    prod_conn_hint:'「Prod vs QA 比較」頁面專用，填另一邊環境的認證資訊（如果上面主要連線是 QA，這裡就填 Prod；如果上面是 Prod，這裡就填 QA）。',
+    prod_conn_title:'🔄 比較用次要連線',
     prod_org_label:'Prod Org ID',
     prod_site_label:'Prod CPM Site ID',
     prod_token_label:'Prod API Token',
@@ -947,7 +956,8 @@ const I18N = {
     btn_refresh:'🔄 更新', btn_csv_dl:'⬇ CSV', btn_csv_import:'⬆ CSV改名',
     col_name:'動画名', col_sub:'字幕', col_sum:'要約', col_tag:'タグ', col_action:'操作',
     loading:'読み込み中...', no_vod:'「更新」を押して読み込んでください', no_vod_found:'動画がありません',
-    settings_title:'⚙️ 設定', nav_vods_title:'🎬 動画管理', nav_subtitles_title:'📄 字幕管理', nav_cpm_title:'📝 CPM 管理', api_title:'API 認証情報',
+    settings_title:'⚙️ 設定', nav_vods_title:'🎬 動画管理', nav_subtitles_title:'📄 字幕管理', nav_cpm_title:'📝 CPM 管理', api_title:'API 認証情報（メイン接続先）',
+    api_hint:'ダッシュボードのほぼ全機能はこの接続先に対して読み書きします。QA・Prod どちらを指定しても構いません（Base URL で決まります）。「Prod → QA 全同期」機能だけは、このメイン接続先が QA である必要があります。',
     token_label:'BV API Token', org_label:'Org ID', site_label:'CPM Site ID',
     lang_label:'デフォルト字幕言語', baseurl_label:'API Base URL',
     batch_title:'バッチ設定', sum_format_label:'要約フォーマット', sum_type_label:'要約タイプ', sum_length_label:'要約長さ',
@@ -1081,8 +1091,8 @@ const I18N = {
     preview_label:'プレビュー',
     prod_arr_preview_hint:'Prod の Arrangement 構造を QA の program_id と content_id に変換したプレビューです。✅=マッチ / ⚠️=QAになし',
     prod_arr_preview_title:'🔍 Prod Arrangement → QA ID 変換プレビュー',
-    prod_conn_hint:'上の設定は QA 用。こちらに Prod の Token と Site ID を入力すると「Prod vs QA 比較」ページが使えます。',
-    prod_conn_title:'🔄 Prod 接続情報（Prod vs QA 比較用）',
+    prod_conn_hint:'「Prod vs QA 比較」ページ専用の、もう一方の環境の認証情報です（メイン接続先が QA ならここは Prod、メインが Prod ならここは QA を入れてください）。',
+    prod_conn_title:'🔄 比較用サブ接続先',
     prod_org_label:'Prod Org ID',
     prod_site_label:'Prod CPM Site ID',
     prod_token_label:'Prod API Token',
@@ -1210,9 +1220,27 @@ const SETTINGS_IDS  = ['s-token','s-org-id','s-site-id','s-lang','s-base-url','s
 function saveSettings(){
   SETTINGS_KEYS.forEach((k,i)=>{ const el=document.getElementById(SETTINGS_IDS[i]); if(el) setCfg(k,el.value.trim()); });
   toast('設定を保存しました','success');
+  updateEnvBadge();
 }
 function loadSettings(){
   SETTINGS_KEYS.forEach((k,i)=>{ const v=cfg(k); const el=document.getElementById(SETTINGS_IDS[i]); if(v&&el) el.value=v; });
+  updateEnvBadge();
+}
+// Base URL の文字列から QA か Prod かを判定して、設定画面と左サイドバーの両方にバッジで表示する（あくまで目安。最終判断はURL自体で行うこと）
+function updateEnvBadge(){
+  const url=(cfg('base_url')||document.getElementById('s-base-url')?.value||'').toLowerCase();
+  const isQa=url.includes('qa');
+  const label = url ? (isQa?'🟢 QA':'🔴 PROD') : '';
+  const bg = isQa ? 'rgba(34,197,94,.15)' : 'rgba(248,113,113,.15)';
+  const fg = isQa ? '#4ade80' : '#f87171';
+  const badge=document.getElementById('env-badge');
+  if(badge){ badge.textContent=label; badge.style.background=bg; badge.style.color=fg; }
+  const sideBadge=document.getElementById('sidebar-env-badge');
+  if(sideBadge){
+    sideBadge.textContent = url ? `${label}${isQa?'':' ⚠️注意'}` : '';
+    sideBadge.style.background=bg; sideBadge.style.color=fg;
+    sideBadge.style.display = url ? 'block' : 'none';
+  }
 }
 async function testConnection(){
   const el=document.getElementById('conn-status');
@@ -4727,7 +4755,7 @@ function openCertModal(id){
   document.getElementById('cert-enabled').checked=p.certEnabled;
   document.getElementById('cert-template-id').value=p.certTemplateId||'';
   document.getElementById('cert-issuer-id').value=p.certIssuerId||'';
-  document.getElementById('cert-threshold').value=p.certThreshold||0;
+  document.getElementById('cert-threshold').value=Math.round((p.certThreshold||0)*100);
   document.getElementById('cert-modal-status').textContent='';
   document.getElementById('cert-modal').style.display='flex';
 }
@@ -4766,7 +4794,7 @@ async function saveCertSetting(){
       enabled: document.getElementById('cert-enabled').checked,
       template_id: document.getElementById('cert-template-id').value.trim(),
       issuer_id: document.getElementById('cert-issuer-id').value.trim(),
-      passing_threshold: parseInt(document.getElementById('cert-threshold').value)||0,
+      passing_threshold: (parseFloat(document.getElementById('cert-threshold').value)||0)/100,
     };
     // 既存の Program 全フィールドを取得してから certification だけ差し替える（他フィールドの消失を防止）
     const existRes=await fetch(`${BASE()}/bv/cpm/v1alpha1/sites/${site}/programs/${certCurrentId}?action=GET_FORM_REQUEST_ACTION_CURRENT&mode=FORM_MODE_EDIT`,{headers:HDR()});
@@ -5369,7 +5397,7 @@ async function exportProgramCsv(){
         cert_template_id: certSetting.template_id||'',
         cert_issuer_id: certSetting.issuer_id||'',
         cert_enabled: certSetting.enabled?'true':'false',
-        cert_threshold: certSetting.passing_threshold!=null?String(certSetting.passing_threshold):'0',
+        cert_threshold: certSetting.passing_threshold!=null?String(Math.round(certSetting.passing_threshold*100)):'0',
       };
       FIELDS.forEach((f,fi)=>{ progRows[fi].push(vals[f]||''); });
 
@@ -5879,7 +5907,7 @@ async function runProgramImport(mode='program_only'){
           if(f.cert_template_id!==undefined) setting.template_id=f.cert_template_id;
           if(f.cert_issuer_id!==undefined) setting.issuer_id=f.cert_issuer_id;
           if(f.cert_enabled!==undefined) setting.enabled=['true','1','yes','on','有効','はい'].includes(String(f.cert_enabled).trim().toLowerCase());
-          if(f.cert_threshold!==undefined) setting.passing_threshold=parseInt(f.cert_threshold)||0;
+          if(f.cert_threshold!==undefined) setting.passing_threshold=(parseFloat(f.cert_threshold)||0)/100;
           return {setting};
         })();
 
@@ -6373,7 +6401,7 @@ async function runApplyExistingCertTemplates(){
   const selectedOnly=selectedProgramIds.size>0;
   let targets=selectedOnly?programListData.filter(p=>selectedProgramIds.has(p.id)):programListData;
   const issuerId=document.getElementById('cert-batch-issuer-id').value.trim();
-  const threshold=parseInt(document.getElementById('cert-batch-threshold').value)||0;
+  const threshold=(parseFloat(document.getElementById('cert-batch-threshold').value)||0)/100;
   const log=makeLog('prog-list-log','prog-list-log-card');
   log(`▶ ${selectedOnly?'選択項目':'全件'}（${targets.length}件）に証明書テンプレートを反映します。既存テンプレートを取得中...`);
   let templates=[];
@@ -6407,7 +6435,7 @@ async function runCertBatchCreate(){
     toast('先に「🔄 Program一覧読み込み」でProgram一覧を取得してください','error'); return;
   }
   const issuerId=document.getElementById('cert-batch-issuer-id').value.trim();
-  const threshold=parseInt(document.getElementById('cert-batch-threshold').value)||0;
+  const threshold=(parseFloat(document.getElementById('cert-batch-threshold').value)||0)/100;
   const log=makeLog('cert-batch-log','cert-batch-log-card');
   log(`▶ 証明書テンプレート作成開始：${certBatchRows.length}件${autoApply?'（Program自動反映あり）':''}`);
   let ok=0, fail=0;
