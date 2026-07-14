@@ -5314,7 +5314,7 @@ async function exportProgramCsv(){
 
     // ── programs.csv（横向き） ──
     // 固定フィールドの行ラベル
-    const FIELDS=['program_id','program_title','topic_labels','highlight_1','highlight_2','highlight_3','about','author_name','author_title','author_desc','author_avatar_library_id','background_library_id','part_numbers','visibility'];
+    const FIELDS=['program_id','program_title','topic_labels','highlight_1','highlight_2','highlight_3','about','author_name','author_title','author_desc','author_avatar_library_id','background_library_id','part_numbers','visibility','cert_template_id','cert_issuer_id','cert_enabled','cert_threshold'];
     // header 行：field | Program 1 | Program 2 | ...
     const progHeader=['field',...allProgs.map((_,i)=>`Program ${i+1}`)];
     // 各フィールドの行
@@ -5348,6 +5348,7 @@ async function exportProgramCsv(){
       const author=p.author_info||{};
       const bg=p.background||{};
       const aboutHtml=(p.about?.html_content||'').replace(/\r?\n/g,' ').replace(/\s{2,}/g,' ').trim();
+      const certSetting=p.certification?.setting||{};
 
       // programs.csv の各フィールド値を列に追加
       const vals={
@@ -5365,6 +5366,10 @@ async function exportProgramCsv(){
         background_library_id: bg.image?.id||'',
         part_numbers: partNums,
         visibility: visibility,
+        cert_template_id: certSetting.template_id||'',
+        cert_issuer_id: certSetting.issuer_id||'',
+        cert_enabled: certSetting.enabled?'true':'false',
+        cert_threshold: certSetting.passing_threshold!=null?String(certSetting.passing_threshold):'0',
       };
       FIELDS.forEach((f,fi)=>{ progRows[fi].push(vals[f]||''); });
 
