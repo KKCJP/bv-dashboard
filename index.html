@@ -95,7 +95,7 @@ tr:last-child td{border-bottom:none;}
   <div class="nav-item" onclick="showPage('vods')">🎬 <span data-i18n="nav_vods">動画管理</span></div>
   <div class="nav-item" onclick="showPage('subtitles')">📄 <span data-i18n="nav_subtitles">字幕管理</span></div>
   <div class="nav-item" onclick="showPage('cpm')">📝 <span data-i18n="nav_cpm">CPM 管理</span></div>
-  <div class="nav-item" onclick="showPage('compare')">🔍 Prod vs QA</div>
+  <div class="nav-item" onclick="showPage('compare')">🔍 <span data-i18n="nav_compare">Prod vs QA</span></div>
   <div style="margin-top:auto;padding:16px 18px;display:flex;gap:6px;">
     <button class="btn btn-xs" id="lang-zh" onclick="setLang('zh')" style="flex:1;">繁中</button>
     <button class="btn btn-xs btn-secondary" id="lang-ja" onclick="setLang('ja')" style="flex:1;">日本語</button>
@@ -106,7 +106,7 @@ tr:last-child td{border-bottom:none;}
 
 <!-- ══ 設定 ══ -->
 <div id="page-settings" class="page active">
-  <div class="page-title" id="page-title-settings">⚙️ 設定</div>
+  <div class="page-title" id="page-title-settings" data-i18n="settings_title">⚙️ 設定</div>
   <div class="card">
     <div class="card-title" data-i18n="api_title">API 認証情報（QA / 現在の接続先）</div>
     <div class="form-grid">
@@ -125,16 +125,16 @@ tr:last-child td{border-bottom:none;}
     </div>
   </div>
   <div class="card">
-    <div class="card-title">🔄 Prod 接続情報（Prod vs QA 比較用）</div>
-    <p style="font-size:11px;color:var(--muted);margin-bottom:12px;">上の設定は QA 用。こちらに Prod の Token と Site ID を入力すると「Prod vs QA 比較」ページが使えます。</p>
+    <div class="card-title" data-i18n="prod_conn_title">🔄 Prod 接続情報（Prod vs QA 比較用）</div>
+    <p style="font-size:11px;color:var(--muted);margin-bottom:12px;" data-i18n="prod_conn_hint">上の設定は QA 用。こちらに Prod の Token と Site ID を入力すると「Prod vs QA 比較」ページが使えます。</p>
     <div class="form-grid">
-      <div class="form-group full"><label>Prod API Token</label><input type="password" id="s-prod-token" placeholder="Prod の eyJhbGc..."></div>
-      <div class="form-group"><label>Prod Org ID</label><input type="text" id="s-prod-org-id" placeholder="xxxxxxxx-xxxx-..."></div>
-      <div class="form-group"><label>Prod CPM Site ID</label><input type="text" id="s-prod-site-id" placeholder="xxxxxxxx-xxxx-..."></div>
+      <div class="form-group full"><label data-i18n="prod_token_label">Prod API Token</label><input type="password" id="s-prod-token" placeholder="Prod の eyJhbGc..."></div>
+      <div class="form-group"><label data-i18n="prod_org_label">Prod Org ID</label><input type="text" id="s-prod-org-id" placeholder="xxxxxxxx-xxxx-..."></div>
+      <div class="form-group"><label data-i18n="prod_site_label">Prod CPM Site ID</label><input type="text" id="s-prod-site-id" placeholder="xxxxxxxx-xxxx-..."></div>
     </div>
     <div class="btn-row" style="margin-top:16px;">
-      <button class="btn btn-primary" onclick="saveSettings()">💾 保存</button>
-      <button class="btn btn-secondary" onclick="testProdConnection()">🔗 Prod 接続テスト</button>
+      <button class="btn btn-primary" onclick="saveSettings()"><span data-i18n="btn_save">💾 保存</span></button>
+      <button class="btn btn-secondary" onclick="testProdConnection()"><span data-i18n="btn_test_prod">🔗 Prod 接続テスト</span></button>
       <span id="prod-conn-status" style="font-size:12px;color:var(--muted);"></span>
     </div>
   </div>
@@ -153,77 +153,77 @@ tr:last-child td{border-bottom:none;}
   <!-- 証明書設定モーダル -->
   <div id="cert-modal" style="display:none;position:fixed;inset:0;background:rgba(0,0,0,.6);z-index:9999;align-items:center;justify-content:center;">
     <div style="background:var(--surface1);border-radius:12px;padding:24px;width:480px;max-width:90vw;">
-      <div style="font-size:15px;font-weight:600;margin-bottom:16px;">🏆 証明書設定</div>
+      <div style="font-size:15px;font-weight:600;margin-bottom:16px;">🏆 <span data-i18n="cert_modal_title">証明書設定</span></div>
       <div style="font-size:12px;color:var(--muted);margin-bottom:12px;" id="cert-modal-title"></div>
       <div class="form-grid">
         <div class="form-group full">
           <label style="display:flex;align-items:center;gap:8px;cursor:pointer;">
             <input type="checkbox" id="cert-enabled" style="width:16px;height:16px;">
-            <span>証明書を有効にする</span>
+            <span data-i18n="cert_enable_label">証明書を有効にする</span>
           </label>
         </div>
         <div class="form-group full">
-          <label>Template ID</label>
+          <label data-i18n="cert_template_id_label">Template ID</label>
           <div style="display:flex;gap:8px;">
             <input type="text" id="cert-template-id" placeholder="template_id">
-            <button class="btn btn-secondary btn-xs" onclick="document.getElementById('cert-template-id').value='1903a7d6-8311-4174-b072-9ffc8beeebef'" style="white-space:nowrap;">プリセット</button>
+            <button class="btn btn-secondary btn-xs" onclick="document.getElementById('cert-template-id').value='1903a7d6-8311-4174-b072-9ffc8beeebef'" style="white-space:nowrap;" data-i18n="btn_preset">プリセット</button>
           </div>
         </div>
         <div class="form-group full">
-          <label>Issuer ID</label>
+          <label data-i18n="cert_issuer_id_label">Issuer ID</label>
           <div style="display:flex;gap:8px;">
             <input type="text" id="cert-issuer-id" placeholder="issuer_id">
-            <button class="btn btn-secondary btn-xs" onclick="document.getElementById('cert-issuer-id').value='772c8921-3ca3-426e-bc44-fb80cd30bd72'" style="white-space:nowrap;">プリセット</button>
+            <button class="btn btn-secondary btn-xs" onclick="document.getElementById('cert-issuer-id').value='772c8921-3ca3-426e-bc44-fb80cd30bd72'" style="white-space:nowrap;" data-i18n="btn_preset">プリセット</button>
           </div>
         </div>
         <div class="form-group">
-          <label>合格閾値（%）</label>
+          <label data-i18n="cert_threshold_label">合格閾値（%）</label>
           <input type="number" id="cert-threshold" min="0" max="100" value="0">
         </div>
       </div>
       <div class="btn-row" style="margin-top:16px;">
-        <button class="btn btn-primary" onclick="saveCertSetting()">💾 保存</button>
-        <button class="btn btn-secondary" onclick="closeCertModal()">キャンセル</button>
+        <button class="btn btn-primary" onclick="saveCertSetting()"><span data-i18n="btn_save">💾 保存</span></button>
+        <button class="btn btn-secondary" onclick="closeCertModal()" data-i18n="btn_cancel">キャンセル</button>
         <span id="cert-modal-status" style="font-size:11px;color:var(--muted);"></span>
       </div>
     </div>
   </div>
 <div id="page-compare" class="page">
-  <div class="page-title">🔍 Prod vs QA 比較</div>
+  <div class="page-title" data-i18n="compare_page_title">🔍 Prod vs QA 比較</div>
   <div class="card">
-    <div class="card-title">📚 Program / Outline → Content 比較</div>
-    <p style="font-size:11px;color:var(--muted);margin-bottom:12px;">Prod と QA の Program（Arrangement）と Outline（カテゴリー階層）の Content を比較します。設定ページで Prod Token を先に入力してください。<br>※ API 呼び出し数が多いため数分かかる場合があります。</p>
+    <div class="card-title" data-i18n="compare_card_title">📚 Program / Outline → Content 比較</div>
+    <p style="font-size:11px;color:var(--muted);margin-bottom:12px;" data-i18n="compare_card_hint" data-i18n-html="1">Prod と QA の Program（Arrangement）と Outline（カテゴリー階層）の Content を比較します。設定ページで Prod Token を先に入力してください。<br>※ API 呼び出し数が多いため数分かかる場合があります。</p>
 
     <!-- 全同期ボタン（メイン） -->
     <div style="padding:14px;background:rgba(99,102,241,.08);border:1px solid rgba(99,102,241,.3);border-radius:8px;margin-bottom:14px;">
-      <div style="font-size:13px;font-weight:600;color:#818cf8;margin-bottom:6px;">🚀 Prod → QA 全同期</div>
-      <p style="font-size:11px;color:var(--muted);margin-bottom:6px;">VOD が QA CMS にアップロード済みであることを確認してから実行してください。<br>② CPM VOD 追加 → ③ Program 作成 → ④ Arrangement 補完 → ⑤ Outline 同期 → ⑥ Thumbnail 同期 を自動実行します。</p>
-      <p style="font-size:11px;color:var(--red);margin-bottom:10px;">⚠️ 設定の Base URL が <b>QA</b>（api.one-qa.kkstream.io）になっていることを必ず確認してください。Prod URL のまま実行すると Prod のデータが上書きされます。</p>
+      <div style="font-size:13px;font-weight:600;color:#818cf8;margin-bottom:6px;" data-i18n="full_sync_title">🚀 Prod → QA 全同期</div>
+      <p style="font-size:11px;color:var(--muted);margin-bottom:6px;" data-i18n="full_sync_desc" data-i18n-html="1">VOD が QA CMS にアップロード済みであることを確認してから実行してください。<br>② CPM VOD 追加 → ③ Program 作成 → ④ Arrangement 補完 → ⑤ Outline 同期 → ⑥ Thumbnail 同期 を自動実行します。</p>
+      <p style="font-size:11px;color:var(--red);margin-bottom:10px;" data-i18n="full_sync_warn" data-i18n-html="1">⚠️ 設定の Base URL が <b>QA</b>（api.one-qa.kkstream.io）になっていることを必ず確認してください。Prod URL のまま実行すると Prod のデータが上書きされます。</p>
       <div class="btn-row">
-        <button class="btn btn-primary" id="full-sync-btn" onclick="runFullSync()" style="background:linear-gradient(135deg,#6366f1,#8b5cf6);">🚀 全同期実行</button>
+        <button class="btn btn-primary" id="full-sync-btn" onclick="runFullSync()" style="background:linear-gradient(135deg,#6366f1,#8b5cf6);"><span data-i18n="btn_full_sync_run">🚀 全同期実行</span></button>
         <span id="full-sync-status" style="font-size:11px;color:var(--muted);"></span>
       </div>
     </div>
 
     <!-- 個別ステップボタン -->
     <div style="padding:14px;background:var(--surface2);border:1px solid var(--border);border-radius:8px;margin-bottom:14px;">
-      <div style="font-size:12px;font-weight:600;color:var(--muted);margin-bottom:10px;">個別実行（単独で実行可能）</div>
+      <div style="font-size:12px;font-weight:600;color:var(--muted);margin-bottom:10px;" data-i18n="step_individual_title">個別実行（単独で実行可能）</div>
       <div class="btn-row" style="flex-wrap:wrap;gap:8px;">
-        <button class="btn btn-secondary btn-sm" id="step3-btn" onclick="runStep3Only()">③ Program 作成</button>
-        <button class="btn btn-secondary btn-sm" id="step2-btn" onclick="runStep2Only()">② VOD→CPM 追加</button>
-        <button class="btn btn-secondary btn-sm" id="step4-btn" onclick="runStep4Only()">④ Arrangement 補完</button>
-        <button class="btn btn-secondary btn-sm" id="step5-btn" onclick="runStep5Only()">⑤ Outline 同期</button>
-        <button class="btn btn-secondary btn-sm" id="step6-btn" onclick="runStep6Only()">🖼️ Thumbnail 同期（Prod→QA）</button>
+        <button class="btn btn-secondary btn-sm" id="step3-btn" onclick="runStep3Only()"><span data-i18n="step3_label">③ Program 作成</span></button>
+        <button class="btn btn-secondary btn-sm" id="step2-btn" onclick="runStep2Only()"><span data-i18n="step2_label">② VOD→CPM 追加</span></button>
+        <button class="btn btn-secondary btn-sm" id="step4-btn" onclick="runStep4Only()"><span data-i18n="step4_label">④ Arrangement 補完</span></button>
+        <button class="btn btn-secondary btn-sm" id="step5-btn" onclick="runStep5Only()"><span data-i18n="step5_label">⑤ Outline 同期</span></button>
+        <button class="btn btn-secondary btn-sm" id="step6-btn" onclick="runStep6Only()"><span data-i18n="step6_label">🖼️ Thumbnail 同期（Prod→QA）</span></button>
       </div>
       <div id="step-individual-status" style="font-size:11px;color:var(--muted);margin-top:8px;"></div>
     </div>
 
     <div class="btn-row" style="margin-bottom:12px;">
-      <button class="btn btn-primary" id="compare-btn" onclick="runCompare()">🔍 比較実行</button>
-      <button class="btn btn-secondary" id="compare-csv-btn" onclick="exportCompareCsv()" style="display:none">📥 差分 CSV</button>
-      <button class="btn btn-secondary" id="compare-missing-csv-btn" onclick="exportMissingOnlyCsv()" style="display:none">📥 未存在のみ CSV</button>
-      <button class="btn btn-secondary" id="vod-match-btn" onclick="runVodMatch()" style="display:none">🔎 VOD 照合</button>
-      <button class="btn btn-secondary" id="sync-arrangement-btn" onclick="runSyncArrangement()" style="display:none">🔁 Arrangement 補完のみ</button>
+      <button class="btn btn-primary" id="compare-btn" onclick="runCompare()"><span data-i18n="btn_compare_run">🔍 比較実行</span></button>
+      <button class="btn btn-secondary" id="compare-csv-btn" onclick="exportCompareCsv()" style="display:none"><span data-i18n="btn_diff_csv">📥 差分 CSV</span></button>
+      <button class="btn btn-secondary" id="compare-missing-csv-btn" onclick="exportMissingOnlyCsv()" style="display:none"><span data-i18n="btn_missing_csv">📥 未存在のみ CSV</span></button>
+      <button class="btn btn-secondary" id="vod-match-btn" onclick="runVodMatch()" style="display:none"><span data-i18n="btn_vod_match">🔎 VOD 照合</span></button>
+      <button class="btn btn-secondary" id="sync-arrangement-btn" onclick="runSyncArrangement()" style="display:none"><span data-i18n="btn_sync_arr_only">🔁 Arrangement 補完のみ</span></button>
       <span id="compare-status" style="font-size:11px;color:var(--muted);"></span>
     </div>
     <div id="compare-summary" style="display:none;margin-bottom:12px;padding:12px;background:var(--surface2);border-radius:6px;font-size:12px;line-height:1.8;"></div>
@@ -233,38 +233,38 @@ tr:last-child td{border-bottom:none;}
       <div style="display:grid;grid-template-columns:1fr 1fr;gap:12px;margin-bottom:12px;">
         <!-- QA に VOD なし -->
         <div style="background:rgba(248,113,113,.08);border:1px solid rgba(248,113,113,.3);border-radius:8px;padding:14px;">
-          <div style="font-size:12px;font-weight:600;color:var(--red);margin-bottom:8px;">🚫 VOD が QA に存在しない <span id="no-vod-count" style="font-size:11px;font-weight:400;"></span></div>
-          <p style="font-size:10.5px;color:var(--muted);margin-bottom:8px;">まず VOD を QA にアップロードする必要があります</p>
-          <button class="btn btn-sm btn-secondary" onclick="exportNoVodCsv()">📥 CSV</button>
+          <div style="font-size:12px;font-weight:600;color:var(--red);margin-bottom:8px;"><span data-i18n="no_vod_title">🚫 VOD が QA に存在しない</span> <span id="no-vod-count" style="font-size:11px;font-weight:400;"></span></div>
+          <p style="font-size:10.5px;color:var(--muted);margin-bottom:8px;" data-i18n="no_vod_hint">まず VOD を QA にアップロードする必要があります</p>
+          <button class="btn btn-sm btn-secondary" onclick="exportNoVodCsv()"><span data-i18n="btn_csv">📥 CSV</span></button>
           <div id="no-vod-list" style="margin-top:8px;max-height:200px;overflow-y:auto;font-size:11px;"></div>
         </div>
         <!-- QA に VOD あり → CPM 追加が必要 -->
         <div style="background:rgba(251,191,36,.08);border:1px solid rgba(251,191,36,.3);border-radius:8px;padding:14px;">
-          <div style="font-size:12px;font-weight:600;color:var(--yellow);margin-bottom:8px;">⚠️ VOD はあるが CPM 未登録 <span id="need-cpm-count" style="font-size:11px;font-weight:400;"></span></div>
-          <p style="font-size:10.5px;color:var(--muted);margin-bottom:8px;">VOD は QA にあります。CPM に追加してから Arrangement に紐付けてください</p>
-          <button class="btn btn-sm btn-secondary" onclick="exportNeedCpmCsv()">📥 CSV</button>
-          <button class="btn btn-sm btn-primary" id="batch-add-cpm-btn" onclick="batchAddMissingToCpm()" style="margin-left:4px;">＋ CPM 一括追加</button>
+          <div style="font-size:12px;font-weight:600;color:var(--yellow);margin-bottom:8px;"><span data-i18n="need_cpm_title">⚠️ VOD はあるが CPM 未登録</span> <span id="need-cpm-count" style="font-size:11px;font-weight:400;"></span></div>
+          <p style="font-size:10.5px;color:var(--muted);margin-bottom:8px;" data-i18n="need_cpm_hint">VOD は QA にあります。CPM に追加してから Arrangement に紐付けてください</p>
+          <button class="btn btn-sm btn-secondary" onclick="exportNeedCpmCsv()"><span data-i18n="btn_csv">📥 CSV</span></button>
+          <button class="btn btn-sm btn-primary" id="batch-add-cpm-btn" onclick="batchAddMissingToCpm()" style="margin-left:4px;"><span data-i18n="btn_add_cpm_batch">＋ CPM 一括追加</span></button>
           <div id="need-cpm-list" style="margin-top:8px;max-height:200px;overflow-y:auto;font-size:11px;"></div>
         </div>
       </div>
     </div>
 
     <div id="compare-filter-row" style="display:none;" class="btn-row" style="margin-bottom:8px;">
-      <button class="filter-btn active" onclick="setCompareFilter('all')">全件</button>
-      <button class="filter-btn" onclick="setCompareFilter('missing_content')">⚠️ Content 未存在</button>
-      <button class="filter-btn" onclick="setCompareFilter('missing_arrangement')">❌ Arr 未登録</button>
-      <button class="filter-btn" onclick="setCompareFilter('ok')">✅ 正常</button>
-      <button class="filter-btn" onclick="setCompareFilter('outline')">🗂 Outline のみ</button>
-      <button class="filter-btn" onclick="setCompareFilter('program')">📚 Program のみ</button>
+      <button class="filter-btn active" onclick="setCompareFilter('all')" data-i18n="filter_all">全件</button>
+      <button class="filter-btn" onclick="setCompareFilter('missing_content')" data-i18n="filter_missing_content">⚠️ Content 未存在</button>
+      <button class="filter-btn" onclick="setCompareFilter('missing_arrangement')" data-i18n="filter_missing_arr">❌ Arr 未登録</button>
+      <button class="filter-btn" onclick="setCompareFilter('ok')" data-i18n="filter_ok">✅ 正常</button>
+      <button class="filter-btn" onclick="setCompareFilter('outline')" data-i18n="filter_outline_only">🗂 Outline のみ</button>
+      <button class="filter-btn" onclick="setCompareFilter('program')" data-i18n="filter_program_only">📚 Program のみ</button>
     </div>
     <div class="table-wrap">
       <table id="compare-table" style="display:none;">
         <thead><tr>
-          <th>状態</th>
-          <th>種別</th>
-          <th>Program / Outline 名</th>
-          <th>Arrangement / Space</th>
-          <th>Content 名</th>
+          <th data-i18n="th_status">状態</th>
+          <th data-i18n="th_kind">種別</th>
+          <th data-i18n="th_prog_outline_name">Program / Outline 名</th>
+          <th data-i18n="th_arr_space">Arrangement / Space</th>
+          <th data-i18n="th_content_name">Content 名</th>
           <th>Prod content_id</th>
           <th>QA content_id</th>
         </tr></thead>
@@ -273,11 +273,11 @@ tr:last-child td{border-bottom:none;}
     </div>
   </div>
   <div id="full-sync-log-card" style="display:none;" class="card">
-    <div class="card-title">🚀 全同期ログ</div>
+    <div class="card-title" data-i18n="full_sync_log_title">🚀 全同期ログ</div>
     <div id="full-sync-log" style="font-family:var(--mono);font-size:11px;max-height:400px;overflow-y:auto;"></div>
   </div>
   <div id="compare-log-card" style="display:none;" class="card">
-    <div class="card-title">ログ</div>
+    <div class="card-title" data-i18n="log_title_plain">ログ</div>
     <div id="compare-log" style="font-family:var(--mono);font-size:11px;max-height:200px;overflow-y:auto;"></div>
   </div>
 </div>
@@ -290,11 +290,11 @@ tr:last-child td{border-bottom:none;}
         <button class="filter-btn" id="f-incomplete" onclick="setVodFilter('incomplete')">⚠️ 未完了</button>
         <span id="filter-status" style="font-size:11px;color:var(--muted);"></span>
       </div>
-      <input type="text" id="vod-search" placeholder="🔍 動画名を検索..." style="width:200px;margin-left:8px;" oninput="onVodSearch(this.value)">
+      <input type="text" id="vod-search" placeholder="🔍 動画名を検索..." data-i18n-ph="vod_search_ph" style="width:200px;margin-left:8px;" oninput="onVodSearch(this.value)">
       <div class="toolbar-right">
-        <button class="btn btn-secondary btn-sm" onclick="loadVods()">🔄 更新</button>
-        <button class="btn btn-secondary btn-sm" onclick="exportVodCsv()">⬇ CSV</button>
-        <button class="btn btn-secondary btn-sm" onclick="document.getElementById('import-csv-input').click()">⬆ CSV改名</button>
+        <button class="btn btn-secondary btn-sm" onclick="loadVods()"><span data-i18n="btn_refresh">🔄 更新</span></button>
+        <button class="btn btn-secondary btn-sm" onclick="exportVodCsv()"><span data-i18n="btn_csv_dl">⬇ CSV</span></button>
+        <button class="btn btn-secondary btn-sm" onclick="document.getElementById('import-csv-input').click()"><span data-i18n="btn_csv_import">⬆ CSV改名</span></button>
         <input type="file" id="import-csv-input" accept=".csv" style="display:none" onchange="importRenameCsv(event)">
 
       </div>
@@ -312,11 +312,11 @@ tr:last-child td{border-bottom:none;}
           <option value="ko-KR">→ 한국어</option>
           <option value="ja-JP">→ 日本語</option>
         </select>
-        <input type="text" id="b-trans-display" placeholder="表示名" oninput="this.dataset.userEdited=this.value?'1':''" style="width:80px;padding:4px 8px;font-size:11px;" title="翻訳字幕の表示名">
+        <input type="text" id="b-trans-display" placeholder="表示名" data-i18n-ph="display_name_ph" oninput="this.dataset.userEdited=this.value?'1':''" style="width:80px;padding:4px 8px;font-size:11px;" title="翻訳字幕の表示名">
         <label style="display:flex;align-items:center;gap:6px;cursor:pointer;white-space:nowrap;"><input type="checkbox" id="b-summary" checked> <span id="b-summary-label">摘要生成</span></label>
-        <label style="display:flex;align-items:center;gap:6px;cursor:pointer;white-space:nowrap;font-size:11px;color:var(--muted);"><input type="checkbox" id="b-force-summary" onchange="document.getElementById('b-force-lang-wrap').style.display=this.checked?'flex':'none'"> 強制重産</label>
+        <label style="display:flex;align-items:center;gap:6px;cursor:pointer;white-space:nowrap;font-size:11px;color:var(--muted);"><input type="checkbox" id="b-force-summary" onchange="document.getElementById('b-force-lang-wrap').style.display=this.checked?'flex':'none'"> <span data-i18n="force_regen">強制重産</span></label>
         <div id="b-force-lang-wrap" style="display:none;align-items:center;gap:4px;flex-wrap:wrap;">
-          <span style="font-size:11px;color:var(--muted);">語言：</span>
+          <span style="font-size:11px;color:var(--muted);" data-i18n="lang_colon">語言：</span>
           <label style="font-size:11px;display:flex;align-items:center;gap:3px;cursor:pointer;"><input type="checkbox" class="force-lang-cb" value="ja-JP" checked> 日本語</label>
           <label style="font-size:11px;display:flex;align-items:center;gap:3px;cursor:pointer;"><input type="checkbox" class="force-lang-cb" value="zh-TW"> 繁中</label>
           <label style="font-size:11px;display:flex;align-items:center;gap:3px;cursor:pointer;"><input type="checkbox" class="force-lang-cb" value="en-US"> English</label>
@@ -325,9 +325,9 @@ tr:last-child td{border-bottom:none;}
         </div>
         <label style="display:flex;align-items:center;gap:6px;cursor:pointer;white-space:nowrap;"><input type="checkbox" id="b-tag" checked> <span id="b-tag-label">タグ生成</span></label>
         <label style="display:flex;align-items:center;gap:6px;cursor:pointer;white-space:nowrap;"><input type="checkbox" id="b-cpm"> <span>＋CPM</span></label>
-        <button class="btn btn-primary btn-sm" onclick="confirmBatch()">🚀 実行</button>
-        <button class="btn btn-danger btn-sm" onclick="deleteSelectedVods()">🗑 削除</button>
-        <button class="btn btn-secondary btn-sm" onclick="selectNoneVods()">✕ 解除</button>
+        <button class="btn btn-primary btn-sm" onclick="confirmBatch()"><span data-i18n="batch_run">🚀 実行</span></button>
+        <button class="btn btn-danger btn-sm" onclick="deleteSelectedVods()"><span data-i18n="btn_delete">🗑 削除</span></button>
+        <button class="btn btn-secondary btn-sm" onclick="selectNoneVods()"><span data-i18n="btn_deselect">✕ 解除</span></button>
       </div>
     </div>
     <div class="table-wrap">
@@ -342,13 +342,13 @@ tr:last-child td{border-bottom:none;}
             <th id="th-action" width="90">操作</th>
           </tr>
         </thead>
-        <tbody id="vod-tbody"><tr><td colspan="6" style="text-align:center;color:var(--muted);padding:32px;">「更新」を押して読み込んでください</td></tr></tbody>
+        <tbody id="vod-tbody"><tr><td colspan="6" style="text-align:center;color:var(--muted);padding:32px;" data-i18n="no_vod">「更新」を押して読み込んでください</td></tr></tbody>
       </table>
     </div>
     <div class="pagination" id="vod-pagination"></div>
   </div>
   <div class="card" id="batch-log-card" style="display:none;">
-    <div class="card-title">📋 実行ログ <button class="btn btn-secondary btn-xs" style="margin-left:auto;" onclick="document.getElementById('batch-log-card').style.display='none'">✕</button></div>
+    <div class="card-title" data-i18n="log_title">📋 実行ログ <button class="btn btn-secondary btn-xs" style="margin-left:auto;" onclick="document.getElementById('batch-log-card').style.display='none'">✕</button></div>
     <div class="log-box" id="batch-log"></div>
   </div>
 </div>
@@ -358,22 +358,22 @@ tr:last-child td{border-bottom:none;}
   <div class="page-title" id="page-title-subtitles">📄 字幕管理</div>
   <div class="card">
     <div class="toolbar">
-      <input type="text" id="sub-search" placeholder="🔍 動画名で検索..." style="width:240px;" oninput="filterSubVods()">
+      <input type="text" id="sub-search" placeholder="🔍 動画名で検索..." data-i18n-ph="sub_search_ph" style="width:240px;" oninput="filterSubVods()">
       <div class="toolbar-right">
-        <button class="btn btn-secondary btn-sm" onclick="loadSubVods()">🔄 更新</button>
-        <button class="btn btn-secondary btn-sm" onclick="openBatchSubUpload()">📄 批量上傳</button>
-        <button class="btn btn-secondary btn-sm" onclick="downloadSubtitlesZip()">📥 ZIP 下載</button>
+        <button class="btn btn-secondary btn-sm" onclick="loadSubVods()"><span data-i18n="btn_refresh">🔄 更新</span></button>
+        <button class="btn btn-secondary btn-sm" onclick="openBatchSubUpload()"><span data-i18n="btn_batch_upload">📄 批量上傳</span></button>
+        <button class="btn btn-secondary btn-sm" onclick="downloadSubtitlesZip()"><span data-i18n="btn_zip">📥 ZIP 下載</span></button>
       </div>
     </div>
 
     <!-- 批量比對上傳區 -->
     <div id="batch-sub-zone" style="display:none;background:var(--surface2);border-radius:8px;padding:16px;margin-bottom:12px;">
-      <div style="font-weight:600;font-size:12px;margin-bottom:12px;display:flex;align-items:center;">📄 批量字幕上傳（自動比對影片名稱）
+      <div style="font-weight:600;font-size:12px;margin-bottom:12px;display:flex;align-items:center;"><span data-i18n="batch_sub_title">📄 批量字幕上傳（自動比對影片名稱）</span>
         <button class="btn btn-secondary btn-xs" style="margin-left:auto;" onclick="closeBatchSubUpload()">✕</button>
       </div>
       <div class="form-grid" style="margin-bottom:12px;">
         <div class="form-group">
-          <label>語言</label>
+          <label data-i18n="label_lang">語言</label>
           <select id="batch-sub-lang">
             <option value="ja-JP">日本語 (ja-JP)</option>
             <option value="en-US">English (en-US)</option>
@@ -383,7 +383,7 @@ tr:last-child td{border-bottom:none;}
           </select>
         </div>
         <div class="form-group">
-          <label>表示名</label>
+          <label data-i18n="label_display">表示名</label>
           <input type="text" id="batch-sub-display" placeholder="例：日本語">
         </div>
       </div>
@@ -393,15 +393,15 @@ tr:last-child td{border-bottom:none;}
         ondragleave="this.classList.remove('drag-over')"
         ondrop="handleBatchSubDrop(event)">
         <input type="file" id="batch-sub-input" accept=".srt,.vtt" multiple style="display:none" onchange="handleBatchSubSelect(event)">
-        📄 クリックまたはドラッグ（複数 .srt / .vtt）<br>
-        <span style="font-size:11px;color:var(--muted);">ファイル名と動画名を比較して自動マッチング</span>
+        <span data-i18n="batch_sub_drop">📄 クリックまたはドラッグ（複数 .srt / .vtt）</span><br>
+        <span style="font-size:11px;color:var(--muted);" data-i18n="batch_sub_match_hint">ファイル名と動画名を比較して自動マッチング</span>
       </div>
       <div id="batch-sub-list" style="display:none;margin-top:12px;">
-        <table><thead><tr><th>字幕ファイル</th><th>比對影片</th><th>狀態</th></tr></thead>
+        <table><thead><tr><th data-i18n="col_sub_file">字幕ファイル</th><th data-i18n="col_match_vod">比對影片</th><th data-i18n="col_state">狀態</th></tr></thead>
         <tbody id="batch-sub-tbody"></tbody></table>
         <div class="btn-row" style="margin-top:10px;">
-          <button class="btn btn-primary" onclick="runBatchSubUpload()">🚀 一括アップロード</button>
-          <button class="btn btn-secondary" onclick="clearBatchSubList()">✕ クリア</button>
+          <button class="btn btn-primary" onclick="runBatchSubUpload()"><span data-i18n="thumb_run">🚀 一括アップロード</span></button>
+          <button class="btn btn-secondary" onclick="clearBatchSubList()"><span data-i18n="btn_clear">✕ クリア</span></button>
         </div>
       </div>
       <div id="batch-sub-log" class="log-box" style="display:none;margin-top:12px;"></div>
@@ -413,8 +413,8 @@ tr:last-child td{border-bottom:none;}
     </div>
     <div class="table-wrap">
       <table>
-        <thead><tr><th>動画名</th><th>字幕一覧</th><th width="100">操作</th></tr></thead>
-        <tbody id="sub-tbody"><tr><td colspan="3" style="text-align:center;color:var(--muted);padding:32px;">「更新」を押してください</td></tr></tbody>
+        <thead><tr><th data-i18n="col_name">動画名</th><th data-i18n="col_sub_list">字幕一覧</th><th width="100" data-i18n="col_action">操作</th></tr></thead>
+        <tbody id="sub-tbody"><tr><td colspan="3" style="text-align:center;color:var(--muted);padding:32px;" data-i18n="press_refresh">「更新」を押してください</td></tr></tbody>
       </table>
     </div>
   </div>
@@ -424,85 +424,85 @@ tr:last-child td{border-bottom:none;}
 <div id="page-cpm" class="page">
   <div class="page-title" id="page-title-cpm">📝 CPM 管理</div>
   <div class="tabs">
-    <button class="tab-btn active" id="tab-quiz" onclick="switchTab('quiz')">🧠 Quiz</button>
-    <button class="tab-btn" id="tab-program" onclick="switchTab('program')">📚 Program</button>
-    <button class="tab-btn" id="tab-outline" onclick="switchTab('outline')">🗂️ Outline</button>
-    <button class="tab-btn" id="tab-cpmvod" onclick="switchTab('cpmvod')">🎬 VOD</button>
+    <button class="tab-btn active" id="tab-quiz" onclick="switchTab('quiz')">🧠 <span data-i18n="tab_quiz">Quiz</span></button>
+    <button class="tab-btn" id="tab-program" onclick="switchTab('program')">📚 <span data-i18n="tab_program">Program</span></button>
+    <button class="tab-btn" id="tab-outline" onclick="switchTab('outline')">🗂️ <span data-i18n="tab_outline">Outline</span></button>
+    <button class="tab-btn" id="tab-cpmvod" onclick="switchTab('cpmvod')">🎬 <span data-i18n="tab_cpmvod">VOD</span></button>
   </div>
   <div id="cpm-tab-quiz">
     <div class="card">
-      <div class="card-title">🧠 Quiz 一括生成</div>
+      <div class="card-title" data-i18n="quiz_batch_title">🧠 Quiz 一括生成</div>
       <div class="btn-row" style="margin-bottom:16px;">
-        <button class="btn btn-secondary btn-sm" id="export-quiz-btn" onclick="exportQuizCsv()">⬇ 既存 Quiz CSV 匯出</button>
-        <button class="btn btn-secondary btn-sm" onclick="document.getElementById('quiz-csv-input').click()">⬆ CSV 匯入/新建</button>
+        <button class="btn btn-secondary btn-sm" id="export-quiz-btn" onclick="exportQuizCsv()"><span data-i18n="btn_export_quiz">⬇ 既存 Quiz CSV 匯出</span></button>
+        <button class="btn btn-secondary btn-sm" onclick="document.getElementById('quiz-csv-input').click()"><span data-i18n="btn_import_quiz_csv">⬆ CSV 匯入/新建</span></button>
         <input type="file" id="quiz-csv-input" accept=".csv" style="display:none" onchange="handleQuizCsv(event)">
       </div>
       <div class="form-grid" style="margin-bottom:16px;">
-        <div class="form-group full"><label>Quiz 名</label><input type="text" id="quiz-title" placeholder="例：経営戦略コース Quiz"></div>
-        <div class="form-group full"><label>既存 Quiz ID <span style="font-weight:400;color:var(--muted);font-size:10px;">（入力すると追加、空白で新規作成）</span></label><input type="text" id="quiz-existing-id" placeholder="空白 → 新規作成" style="font-family:monospace;font-size:11px;"></div>
-        <div class="form-group"><label>動画ごとの問題数</label><select id="quiz-q-per-vod"><option value="1">1問</option><option value="2" selected>2問</option><option value="3">3問</option><option value="5">5問</option><option value="10">10問</option></select></div>
-        <div class="form-group"><label>合計問題数（予定）</label><div id="quiz-total-preview" style="padding:8px 10px;background:var(--surface2);border-radius:6px;color:var(--accent2);font-size:12px;">0問</div></div>
+        <div class="form-group full"><label data-i18n="quiz_name_label">Quiz 名</label><input type="text" id="quiz-title" placeholder="例：経営戦略コース Quiz"></div>
+        <div class="form-group full"><label data-i18n="quiz_id_label">既存 Quiz ID <span style="font-weight:400;color:var(--muted);font-size:10px;" data-i18n="quiz_id_hint">（入力すると追加、空白で新規作成）</span></label><input type="text" id="quiz-existing-id" placeholder="空白 → 新規作成" style="font-family:monospace;font-size:11px;"></div>
+        <div class="form-group"><label data-i18n="quiz_q_label">動画ごとの問題数</label><select id="quiz-q-per-vod"><option value="1">1問</option><option value="2" selected>2問</option><option value="3">3問</option><option value="5">5問</option><option value="10">10問</option></select></div>
+        <div class="form-group"><label data-i18n="quiz_total_label">合計問題数（予定）</label><div id="quiz-total-preview" style="padding:8px 10px;background:var(--surface2);border-radius:6px;color:var(--accent2);font-size:12px;">0問</div></div>
       </div>
       <div style="display:flex;align-items:center;gap:8px;margin-bottom:8px;flex-wrap:wrap;">
-        <span style="font-weight:600;font-size:12px;">動画を選択</span>
-        <button class="btn btn-secondary btn-sm" onclick="loadQuizVods()">🔄 読み込み</button>
-        <button class="btn btn-secondary btn-sm" onclick="quizSelectAll()">全選択</button>
-        <button class="btn btn-secondary btn-sm" onclick="quizSelectNone()">解除</button>
-        <input type="text" placeholder="🔍 検索..." style="flex:1;min-width:140px;font-size:11px;" oninput="filterQuizVods(this.value)">
+        <span style="font-weight:600;font-size:12px;" data-i18n="quiz_select_label">動画を選択</span>
+        <button class="btn btn-secondary btn-sm" onclick="loadQuizVods()"><span data-i18n="btn_load">🔄 読み込み</span></button>
+        <button class="btn btn-secondary btn-sm" onclick="quizSelectAll()"><span data-i18n="quiz_sel_all">全選択</span></button>
+        <button class="btn btn-secondary btn-sm" onclick="quizSelectNone()"><span data-i18n="quiz_sel_none">解除</span></button>
+        <input type="text" placeholder="🔍 検索..." data-i18n-ph="search_ph" style="flex:1;min-width:140px;font-size:11px;" oninput="filterQuizVods(this.value)">
       </div>
-      <div class="vod-checkbox-list" id="quiz-vod-list"><div style="padding:20px;text-align:center;color:var(--muted);">「読み込み」を押してください</div></div>
+      <div class="vod-checkbox-list" id="quiz-vod-list"><div style="padding:20px;text-align:center;color:var(--muted);" data-i18n="press_load">「読み込み」を押してください</div></div>
       <div style="margin-top:12px;display:flex;gap:8px;align-items:center;">
-        <button class="btn btn-primary" onclick="runQuizBatch()">🚀 Quiz 生成</button>
+        <button class="btn btn-primary" onclick="runQuizBatch()"><span data-i18n="quiz_run">🚀 Quiz 生成</span></button>
         <span id="quiz-selected-count" style="font-size:11px;color:var(--muted);"></span>
       </div>
     </div>
     <div class="card" id="quiz-import-card" style="display:none;">
-      <div class="card-title">📋 Quiz CSV プレビュー
+      <div class="card-title"><span data-i18n="quiz_csv_preview_title">📋 Quiz CSV プレビュー</span>
         <button class="btn btn-secondary btn-xs" style="margin-left:auto;" onclick="clearQuizImport()">✕</button>
       </div>
       <div id="quiz-import-preview"></div>
       <div class="btn-row" style="margin-top:12px;">
-        <button class="btn btn-primary" id="quiz-import-btn" onclick="runQuizImport()">🚀 匯入/新建</button>
-        <button class="btn btn-secondary" onclick="clearQuizImport()">✕ クリア</button>
+        <button class="btn btn-primary" id="quiz-import-btn" onclick="runQuizImport()"><span data-i18n="btn_import_create">🚀 匯入/新建</span></button>
+        <button class="btn btn-secondary" onclick="clearQuizImport()"><span data-i18n="btn_clear">✕ クリア</span></button>
       </div>
     </div>
     <div class="card" id="quiz-log-card" style="display:none;">
-      <div class="card-title">📋 実行ログ <button class="btn btn-secondary btn-xs" style="margin-left:auto;" onclick="document.getElementById('quiz-log-card').style.display='none'">✕</button></div>
+      <div class="card-title" data-i18n="log_title">📋 実行ログ <button class="btn btn-secondary btn-xs" style="margin-left:auto;" onclick="document.getElementById('quiz-log-card').style.display='none'">✕</button></div>
       <div class="log-box" id="quiz-log"></div>
     </div>
   </div>
   <div id="cpm-tab-cpmvod" style="display:none;">
     <div class="card">
-      <div class="card-title">🎬 CPM VOD 管理</div>
+      <div class="card-title" data-i18n="cpmvod_title">🎬 CPM VOD 管理</div>
       <div class="btn-row" style="margin-bottom:12px;">
-        <button class="btn btn-secondary btn-sm" onclick="loadCpmVods()">🔄 読み込み</button>
-        <button class="btn btn-secondary btn-sm" id="cpm-vod-csv-btn" onclick="exportCpmVodCsv()">⬇ CSV</button>
-        <button class="btn btn-secondary btn-sm" onclick="document.getElementById('cpm-title-csv-input').click()" title="CSV の cpm_title 列で title を上書き">⬆ CSV で title 上書き</button>
+        <button class="btn btn-secondary btn-sm" onclick="loadCpmVods()"><span data-i18n="btn_load">🔄 読み込み</span></button>
+        <button class="btn btn-secondary btn-sm" id="cpm-vod-csv-btn" onclick="exportCpmVodCsv()"><span data-i18n="btn_csv_dl">⬇ CSV</span></button>
+        <button class="btn btn-secondary btn-sm" onclick="document.getElementById('cpm-title-csv-input').click()" title="CSV の cpm_title 列で title を上書き"><span data-i18n="btn_csv_title_overwrite">⬆ CSV で title 上書き</span></button>
         <input type="file" id="cpm-title-csv-input" accept=".csv" style="display:none" onchange="importCpmTitleCsv(event)">
         <span id="cpm-vod-count" style="font-size:11px;color:var(--muted);"></span>
       </div>
       <div id="cpm-vod-batch" style="display:none;background:var(--surface2);border-radius:6px;padding:8px 12px;margin-bottom:10px;font-size:12px;">
         <span id="cpm-vod-selected-count" style="color:var(--accent);font-weight:600;margin-right:12px;"></span>
-        <button class="btn btn-secondary btn-sm" onclick="cpmVodBatchPublish('CONTENT_VISIBILITY_PUBLISHED')">✅ 公開</button>
-        <button class="btn btn-secondary btn-sm" onclick="cpmVodBatchPublish('CONTENT_VISIBILITY_DRAFT')">⏸ 非公開</button>
-        <button class="btn btn-danger btn-sm" onclick="cpmVodBatchDelete()" style="background:#e53935;color:#fff;border:none;">🗑 削除</button>
+        <button class="btn btn-secondary btn-sm" onclick="cpmVodBatchPublish('CONTENT_VISIBILITY_PUBLISHED')"><span data-i18n="btn_publish">✅ 公開</span></button>
+        <button class="btn btn-secondary btn-sm" onclick="cpmVodBatchPublish('CONTENT_VISIBILITY_DRAFT')"><span data-i18n="btn_unpublish">⏸ 非公開</span></button>
+        <button class="btn btn-danger btn-sm" onclick="cpmVodBatchDelete()" style="background:#e53935;color:#fff;border:none;"><span data-i18n="btn_delete">🗑 削除</span></button>
       </div>
       <div id="cpm-vod-table-wrap" style="overflow-x:auto;">
         <table id="cpm-vod-table" style="display:none;">
           <thead><tr>
             <th><input type="checkbox" id="cpm-vod-check-all" onchange="toggleAllCpmVods(this.checked)"></th>
-            <th>タイトル</th>
-            <th>VOD 名</th>
-            <th>状態</th>
-            <th>操作</th>
+            <th data-i18n="th_cpm_title">タイトル</th>
+            <th data-i18n="th_vod_name">VOD 名</th>
+            <th data-i18n="th_state">状態</th>
+            <th data-i18n="col_action">操作</th>
           </tr></thead>
           <tbody id="cpm-vod-tbody"></tbody>
         </table>
-        <div id="cpm-vod-empty" style="color:var(--muted);font-size:12px;padding:20px;text-align:center;">「読み込み」を押してください</div>
+        <div id="cpm-vod-empty" style="color:var(--muted);font-size:12px;padding:20px;text-align:center;" data-i18n="press_load">「読み込み」を押してください</div>
       </div>
     </div>
     <div class="card" id="cpm-vod-log-card" style="display:none;">
-      <div class="card-title">📋 実行ログ
+      <div class="card-title"><span data-i18n="log_title">📋 実行ログ</span>
         <button class="btn btn-secondary btn-xs" style="margin-left:auto;" onclick="document.getElementById('cpm-vod-log-card').style.display='none'">✕</button>
       </div>
       <div class="log-box" id="cpm-vod-log"></div>
@@ -511,27 +511,27 @@ tr:last-child td{border-bottom:none;}
 
   <div id="cpm-tab-outline" style="display:none;">
     <div class="card">
-      <div class="card-title">🗂️ Outline 管理</div>
-      <p style="color:var(--muted);font-size:12px;margin-bottom:16px;">
+      <div class="card-title" data-i18n="outline_mgmt_title">🗂️ Outline 管理</div>
+      <p style="color:var(--muted);font-size:12px;margin-bottom:16px;" data-i18n="outline_mgmt_desc">
         大分類 → 中分類 → Space → Program の階層構造を CSV で匯出/匯入
       </p>
       <div class="btn-row" style="margin-bottom:16px;">
-        <button class="btn btn-secondary" id="export-outline-btn" onclick="exportOutlineCsv()">⬇ Outline CSV 匯出（QA）</button>
-        <button class="btn btn-secondary" id="export-prod-outline-btn" onclick="exportProdOutlineAsQaCsv()">⬇ Prod Outline → QA CSV</button>
-        <button class="btn btn-secondary" onclick="document.getElementById('outline-csv-input').click()">⬆ CSV 匯入</button>
+        <button class="btn btn-secondary" id="export-outline-btn" onclick="exportOutlineCsv()"><span data-i18n="btn_export_outline_qa">⬇ Outline CSV 匯出（QA）</span></button>
+        <button class="btn btn-secondary" id="export-prod-outline-btn" onclick="exportProdOutlineAsQaCsv()"><span data-i18n="btn_export_outline_prod">⬇ Prod Outline → QA CSV</span></button>
+        <button class="btn btn-secondary" onclick="document.getElementById('outline-csv-input').click()"><span data-i18n="btn_import_csv">⬆ CSV 匯入</span></button>
         <input type="file" id="outline-csv-input" accept=".csv" style="display:none" onchange="handleOutlineCsv(event)">
       </div>
       <div id="outline-import-preview" style="display:none;">
-        <div style="font-weight:600;font-size:12px;margin-bottom:8px;">プレビュー</div>
+        <div style="font-weight:600;font-size:12px;margin-bottom:8px;" data-i18n="preview_label">プレビュー</div>
         <div id="outline-preview-list"></div>
         <div class="btn-row" style="margin-top:10px;">
-          <button class="btn btn-primary" id="outline-import-btn" onclick="runOutlineImport()">🚀 匯入</button>
-          <button class="btn btn-secondary" onclick="clearOutlineImport()">✕ クリア</button>
+          <button class="btn btn-primary" id="outline-import-btn" onclick="runOutlineImport()"><span data-i18n="btn_import">🚀 匯入</span></button>
+          <button class="btn btn-secondary" onclick="clearOutlineImport()"><span data-i18n="btn_clear">✕ クリア</span></button>
         </div>
       </div>
     </div>
     <div class="card" id="outline-log-card" style="display:none;">
-      <div class="card-title">📋 実行ログ
+      <div class="card-title"><span data-i18n="log_title">📋 実行ログ</span>
         <button class="btn btn-secondary btn-xs" style="margin-left:auto;" onclick="document.getElementById('outline-log-card').style.display='none'">✕</button>
       </div>
       <div class="log-box" id="outline-log"></div>
@@ -540,181 +540,181 @@ tr:last-child td{border-bottom:none;}
   <div id="cpm-tab-program" style="display:none;">
     <!-- Program 一覧・バッチ削除 -->
     <div class="card">
-      <div class="card-title">📋 Program 一覧・バッチ削除</div>
+      <div class="card-title" data-i18n="prog_list_title">📋 Program 一覧・バッチ削除</div>
       <div class="btn-row" style="margin-bottom:12px;">
-        <button class="btn btn-secondary btn-sm" id="load-prog-list-btn" onclick="loadProgramList()">🔄 読み込み</button>
+        <button class="btn btn-secondary btn-sm" id="load-prog-list-btn" onclick="loadProgramList()"><span data-i18n="btn_load">🔄 読み込み</span></button>
         <span id="prog-list-count" style="font-size:11px;color:var(--muted);"></span>
       </div>
       <!-- フィルター -->
       <div id="prog-list-filter-row" style="display:none;margin-bottom:10px;" class="btn-row">
-        <button class="filter-btn active" onclick="setProgramListFilter('all')">全件</button>
-        <button class="filter-btn" onclick="setProgramListFilter('empty')">⚠️ content なし</button>
-        <button class="filter-btn" onclick="setProgramListFilter('has_content')">✅ content あり</button>
-        <button class="filter-btn" onclick="setProgramListFilter('duplicate')">🔴 重複タイトル</button>
+        <button class="filter-btn active" onclick="setProgramListFilter('all')" data-i18n="filter_all">全件</button>
+        <button class="filter-btn" onclick="setProgramListFilter('empty')" data-i18n="filter_no_content">⚠️ content なし</button>
+        <button class="filter-btn" onclick="setProgramListFilter('has_content')" data-i18n="filter_has_content">✅ content あり</button>
+        <button class="filter-btn" onclick="setProgramListFilter('duplicate')" data-i18n="filter_dup_title">🔴 重複タイトル</button>
       </div>
       <!-- バッチ操作 -->
       <div id="prog-list-batch" style="display:none;background:var(--surface2);border-radius:6px;padding:8px 12px;margin-bottom:10px;font-size:12px;">
         <span id="prog-list-selected-count" style="color:var(--accent);font-weight:600;margin-right:12px;"></span>
-        <button class="btn btn-danger btn-sm" onclick="batchDeletePrograms()" style="background:#e53935;color:#fff;border:none;">🗑 選択を削除</button>
-        <button class="btn btn-secondary btn-sm" onclick="batchCertUpdate(true)" style="margin-left:8px;">🏆 証明書 ON</button>
-        <button class="btn btn-secondary btn-sm" onclick="batchCertUpdate(false)">🏆 証明書 OFF</button>
+        <button class="btn btn-danger btn-sm" onclick="batchDeletePrograms()" style="background:#e53935;color:#fff;border:none;"><span data-i18n="btn_delete_selected">🗑 選択を削除</span></button>
+        <button class="btn btn-secondary btn-sm" onclick="batchCertUpdate(true)" style="margin-left:8px;"><span data-i18n="btn_cert_on">🏆 証明書 ON</span></button>
+        <button class="btn btn-secondary btn-sm" onclick="batchCertUpdate(false)"><span data-i18n="btn_cert_off">🏆 証明書 OFF</span></button>
       </div>
       <!-- 証明書テンプレート 反映設定（Program一覧・証明書欄向け共通設定） -->
       <div style="padding:10px;background:var(--surface2);border-radius:8px;margin-bottom:12px;">
-        <div style="font-size:12px;font-weight:600;margin-bottom:8px;">🏆 証明書テンプレート 反映設定（共通）</div>
+        <div style="font-size:12px;font-weight:600;margin-bottom:8px;" data-i18n="cert_apply_settings_title">🏆 証明書テンプレート 反映設定（共通）</div>
         <div style="display:flex;gap:16px;flex-wrap:wrap;align-items:flex-end;">
           <div>
-            <div style="font-size:11px;color:var(--muted);margin-bottom:4px;">Issuer ID（全件共通）</div>
+            <div style="font-size:11px;color:var(--muted);margin-bottom:4px;" data-i18n="issuer_id_common_label">Issuer ID（全件共通）</div>
             <div style="display:flex;gap:6px;">
               <input type="text" id="cert-batch-issuer-id" placeholder="issuer_id" style="width:280px;">
-              <button class="btn btn-secondary btn-xs" onclick="document.getElementById('cert-batch-issuer-id').value='772c8921-3ca3-426e-bc44-fb80cd30bd72'">プリセット</button>
+              <button class="btn btn-secondary btn-xs" onclick="document.getElementById('cert-batch-issuer-id').value='772c8921-3ca3-426e-bc44-fb80cd30bd72'" data-i18n="btn_preset">プリセット</button>
             </div>
           </div>
           <div>
-            <div style="font-size:11px;color:var(--muted);margin-bottom:4px;">合格閾値（%）</div>
+            <div style="font-size:11px;color:var(--muted);margin-bottom:4px;" data-i18n="cert_threshold_label">合格閾値（%）</div>
             <input type="number" id="cert-batch-threshold" min="0" max="100" value="0" style="width:100px;">
           </div>
-          <button class="btn btn-primary btn-sm" onclick="runApplyExistingCertTemplates(false)">🔗 全件にテンプレートを自動反映（名前一致）</button>
-          <button class="btn btn-secondary btn-sm" onclick="runApplyExistingCertTemplates(true)">🔗 選択項目のみに反映</button>
-          <button class="btn btn-secondary btn-sm" onclick="downloadCertTemplateIdList()">⬇ 証明書テンプレートID一覧CSV</button>
+          <button class="btn btn-primary btn-sm" onclick="runApplyExistingCertTemplates()"><span data-i18n="btn_apply_templates">🔗 テンプレートを自動反映（未選択なら全件）</span></button>
+          <button class="btn btn-secondary btn-sm" onclick="downloadCertTemplateIdList()"><span data-i18n="btn_dl_cert_id_list">⬇ 証明書テンプレートID一覧CSV</span></button>
         </div>
-        <p style="font-size:11px;color:var(--muted);margin-top:8px;">既存の cert-template を Program タイトルと名前で照合し、Template ID を自動設定します（テンプレートの再作成はしません）。「⬇ 証明書テンプレートID一覧CSV」で name→template_id の対応表をダウンロードできます。Program CSV に cert_template_id / cert_issuer_id / cert_enabled / cert_threshold 列を追加すると、「📋 Program 情報のみ」実行時に証明書設定も一緒に反映されます（列が無ければ証明書設定は現状維持）。</p>
+        <p style="font-size:11px;color:var(--muted);margin-top:8px;" data-i18n="cert_apply_settings_hint">既存の cert-template を Program タイトルと名前で照合し、Template ID を自動設定します（テンプレートの再作成はしません）。「⬇ 証明書テンプレートID一覧CSV」で name→template_id の対応表をダウンロードできます。Program CSV に cert_template_id / cert_issuer_id / cert_enabled / cert_threshold 列を追加すると、「📋 Program 情報のみ」実行時に証明書設定も一緒に反映されます（列が無ければ証明書設定は現状維持）。</p>
       </div>
       <div style="overflow-x:auto;">
         <table id="prog-list-table" style="display:none;">
           <thead><tr>
             <th><input type="checkbox" id="prog-list-check-all" onchange="toggleAllPrograms(this.checked)"></th>
-            <th>Program 名</th>
-            <th style="text-align:center;">Content数</th>
-            <th style="text-align:center;">状態</th>
-            <th style="text-align:center;">証明書</th>
-            <th>操作</th>
+            <th data-i18n="th_prog_name">Program 名</th>
+            <th style="text-align:center;" data-i18n="th_content_count">Content数</th>
+            <th style="text-align:center;" data-i18n="th_state">状態</th>
+            <th style="text-align:center;" data-i18n="th_cert">証明書</th>
+            <th data-i18n="col_action">操作</th>
           </tr></thead>
           <tbody id="prog-list-tbody"></tbody>
         </table>
-        <div id="prog-list-empty" style="color:var(--muted);font-size:12px;padding:20px;text-align:center;">「読み込み」を押してください</div>
+        <div id="prog-list-empty" style="color:var(--muted);font-size:12px;padding:20px;text-align:center;" data-i18n="press_load">「読み込み」を押してください</div>
       </div>
     </div>
     <div class="card" id="prog-list-log-card" style="display:none;">
-      <div class="card-title">📋 削除ログ
+      <div class="card-title"><span data-i18n="delete_log_title">📋 削除ログ</span>
         <button class="btn btn-secondary btn-xs" style="margin-left:auto;" onclick="document.getElementById('prog-list-log-card').style.display='none'">✕</button>
       </div>
       <div class="log-box" id="prog-list-log"></div>
     </div>
-      <p style="color:var(--muted);font-size:12px;margin-bottom:16px;">テンプレートをダウンロード → 入力 → アップロードで自動作成</p>
+    <div class="card">
+      <div class="card-title" data-i18n="prog_title">Excel 匯入建立 Program</div>
+      <p style="color:var(--muted);font-size:12px;margin-bottom:16px;" data-i18n="prog_desc">テンプレートをダウンロード → 入力 → アップロードで自動作成</p>
       <div class="btn-row" style="margin-bottom:20px;">
-        <button class="btn btn-secondary" onclick="downloadProgramTemplate()">⬇ テンプレートDL</button>
-        <button class="btn btn-secondary" id="export-prog-btn" onclick="exportProgramCsv()">⬇ 既存Program CSV匯出</button>
-        <button class="btn btn-secondary" id="export-cpm-vod-btn" onclick="exportCpmVodCsv()">⬇ CPM VOD 一覧CSV</button>
-        <button class="btn btn-secondary" onclick="document.getElementById('prog-csv-input').dataset.mode='program_only';document.getElementById('prog-csv-input').click()">⬆ CSV（Program 情報）</button>
-        <button class="btn btn-secondary" onclick="document.getElementById('prog-csv-input').dataset.mode='arrangement_only';document.getElementById('prog-csv-input').click()">⬆ CSV（Arrangement）</button>
+        <button class="btn btn-secondary" onclick="downloadProgramTemplate()"><span data-i18n="btn_template">⬇ テンプレートDL</span></button>
+        <button class="btn btn-secondary" id="export-prog-btn" onclick="exportProgramCsv()"><span data-i18n="btn_export_prog">⬇ 既存Program CSV匯出</span></button>
+        <button class="btn btn-secondary" onclick="document.getElementById('prog-csv-input').dataset.mode='program_only';document.getElementById('prog-csv-input').click()"><span data-i18n="btn_csv_prog_info">⬆ CSV（Program 情報）</span></button>
+        <button class="btn btn-secondary" onclick="document.getElementById('prog-csv-input').dataset.mode='arrangement_only';document.getElementById('prog-csv-input').click()"><span data-i18n="btn_csv_arrangement">⬆ CSV（Arrangement）</span></button>
         <input type="file" id="prog-csv-input" accept=".csv" style="display:none" onchange="handleProgramCSV(event)">
       </div>
       <div id="prog-preview" style="display:none;">
-        <div style="font-weight:600;font-size:12px;margin-bottom:10px;">プレビュー</div>
+        <div style="font-weight:600;font-size:12px;margin-bottom:10px;" data-i18n="preview_label">プレビュー</div>
         <div id="prog-preview-list"></div>
         <div class="btn-row" style="margin-top:12px;">
-          <button class="btn btn-secondary btn-sm" id="prod-arr-preview-btn" onclick="runProdArrangementPreview()">🔍 Prod Arrangement プレビュー（QA ID 変換）</button>
-        <button class="btn btn-primary" id="prog-import-btn" onclick="runProgramImport('program_only')">📋 Program 情報のみ（新規作成あり）</button>
-        <button class="btn btn-secondary" id="arr-import-btn" onclick="runProgramImport('arrangement_only')">🎬 Arrangement のみ（新規作成なし）</button>
-        <button class="btn btn-secondary" style="background:rgba(251,191,36,.15);border-color:rgba(251,191,36,.4);color:var(--yellow,#fbbf24);" onclick="runRestoreProgramMeta()" title="このCSVの about・highlight・background・author情報だけを復元します。Arrangement と証明書設定は現在の値をそのまま保持します">🩹 説明・縮圖のみ復元（Arrangement/証明書は保持）</button>
-          <button class="btn btn-secondary" onclick="clearProgramPreview()">✕ クリア</button>
+          <button class="btn btn-secondary btn-sm" id="prod-arr-preview-btn" onclick="runProdArrangementPreview()"><span data-i18n="btn_prod_arr_preview">🔍 Prod Arrangement プレビュー（QA ID 変換）</span></button>
+        <button class="btn btn-primary" id="prog-import-btn" onclick="runProgramImport('program_only')"><span data-i18n="btn_prog_only">📋 Program 情報のみ（新規作成あり）</span></button>
+        <button class="btn btn-secondary" id="arr-import-btn" onclick="runProgramImport('arrangement_only')"><span data-i18n="btn_arr_only">🎬 Arrangement のみ（新規作成なし）</span></button>
+          <button class="btn btn-secondary" onclick="clearProgramPreview()"><span data-i18n="btn_clear">✕ クリア</span></button>
         </div>
       </div>
     </div>
     <div class="card">
-      <div class="card-title">🖼️ Thumbnail 一括アップロード</div>
-      <p style="color:var(--muted);font-size:12px;margin-bottom:12px;">画像をドラッグ → Program名でマッチング → 16:9トリミング → アップロード</p>
+      <div class="card-title" data-i18n="thumb_title">🖼️ Thumbnail 一括アップロード</div>
+      <p style="color:var(--muted);font-size:12px;margin-bottom:12px;" data-i18n="thumb_desc">画像をドラッグ → Program名でマッチング → 16:9トリミング → アップロード</p>
       <div style="display:flex;gap:8px;align-items:center;margin-bottom:10px;flex-wrap:wrap;">
-        <button class="btn btn-secondary btn-sm" onclick="loadProgramListForThumb()">🔄 Program一覧読み込み</button>
-        <button class="btn btn-secondary btn-sm" id="step6-thumb-btn" onclick="runStep6Only()">🔁 Prod → QA Thumbnail 同期</button>
-        <button class="btn btn-secondary btn-sm" id="dl-prod-thumb-btn" onclick="downloadProdThumbnails()">📦 Prod 縮圖一括DL（ZIP）</button>
-        <span id="prog-list-count" style="font-size:11px;color:var(--muted);"></span>
+        <button class="btn btn-secondary btn-sm" onclick="loadProgramList()"><span data-i18n="btn_load_prog">🔄 Program一覧読み込み</span></button>
+        <button class="btn btn-secondary btn-sm" id="step6-thumb-btn" onclick="runStep6Only()"><span data-i18n="btn_step6_thumb">🔁 Prod → QA Thumbnail 同期</span></button>
+        <button class="btn btn-secondary btn-sm" id="dl-prod-thumb-btn" onclick="downloadProdThumbnails()"><span data-i18n="btn_dl_prod_thumb">📦 Prod 縮圖一括DL（ZIP）</span></button>
+        <span style="font-size:11px;color:var(--muted);" data-i18n="thumb_shared_list_hint">（Program 一覧カードと共通のデータを使用します）</span>
       </div>
       <div class="upload-zone" id="thumb-zone" onclick="document.getElementById('thumb-input').click()" ondragover="event.preventDefault();this.classList.add('drag-over')" ondragleave="this.classList.remove('drag-over')" ondrop="handleThumbDrop(event)">
         <input type="file" id="thumb-input" accept="image/*" multiple style="display:none" onchange="handleThumbSelect(event)">
-        🖼️ クリックまたはドラッグ（複数可）
+        <span data-i18n="thumb_drop">🖼️ クリックまたはドラッグ（複数可）</span>
       </div>
       <div id="thumb-list" style="display:none;margin-top:12px;">
-        <table><thead><tr><th>ファイル名</th><th>Program</th><th>プレビュー</th><th></th></tr></thead>
+        <table><thead><tr><th data-i18n="th_filename">ファイル名</th><th>Program</th><th data-i18n="th_preview">プレビュー</th><th></th></tr></thead>
         <tbody id="thumb-tbody"></tbody></table>
         <div class="btn-row" style="margin-top:10px;">
-          <button class="btn btn-primary" onclick="runThumbUpload()">🚀 一括アップロード</button>
-          <button class="btn btn-secondary" onclick="clearThumbList()">✕ クリア</button>
+          <button class="btn btn-primary" onclick="runThumbUpload()"><span data-i18n="thumb_run">🚀 一括アップロード</span></button>
+          <button class="btn btn-secondary" onclick="clearThumbList()"><span data-i18n="btn_clear">✕ クリア</span></button>
         </div>
       </div>
     </div>
     <div class="card">
-      <div class="card-title">🏆 証明書テンプレート 一括作成</div>
-      <p style="color:var(--muted);font-size:12px;margin-bottom:12px;">Logo・Background は共通の1枚を全テンプレートで使い回せます。Badge だけテンプレートごとに違う画像を、CSVのファイル名でマッチングします。</p>
+      <div class="card-title" data-i18n="cert_batch_title">🏆 証明書テンプレート 一括作成</div>
+      <p style="color:var(--muted);font-size:12px;margin-bottom:12px;" data-i18n="cert_batch_desc">Logo・Background は共通の1枚を全テンプレートで使い回せます。Badge だけテンプレートごとに違う画像を、CSVのファイル名でマッチングします。</p>
       <div style="display:flex;gap:16px;flex-wrap:wrap;margin-bottom:14px;padding:10px;background:var(--surface2);border-radius:8px;">
         <div>
-          <div style="font-size:11px;color:var(--muted);margin-bottom:4px;">共通 Logo（全テンプレート共通）</div>
-          <button class="btn btn-secondary btn-sm" onclick="document.getElementById('cert-shared-logo-input').click()">🖼️ 選択してアップロード</button>
+          <div style="font-size:11px;color:var(--muted);margin-bottom:4px;" data-i18n="shared_logo_label">共通 Logo（全テンプレート共通）</div>
+          <button class="btn btn-secondary btn-sm" onclick="document.getElementById('cert-shared-logo-input').click()"><span data-i18n="btn_select_upload">🖼️ 選択してアップロード</span></button>
           <input type="file" id="cert-shared-logo-input" accept="image/*" style="display:none" onchange="handleSharedCertImage(event,'logo')">
-          <div id="cert-shared-logo-status" style="font-size:11px;color:var(--muted);margin-top:4px;">未設定</div>
+          <div id="cert-shared-logo-status" style="font-size:11px;color:var(--muted);margin-top:4px;" data-i18n="status_unset">未設定</div>
         </div>
         <div>
-          <div style="font-size:11px;color:var(--muted);margin-bottom:4px;">共通 Background（全テンプレート共通）</div>
-          <button class="btn btn-secondary btn-sm" onclick="document.getElementById('cert-shared-bg-input').click()">🖼️ 選択してアップロード</button>
+          <div style="font-size:11px;color:var(--muted);margin-bottom:4px;" data-i18n="shared_bg_label">共通 Background（全テンプレート共通）</div>
+          <button class="btn btn-secondary btn-sm" onclick="document.getElementById('cert-shared-bg-input').click()"><span data-i18n="btn_select_upload">🖼️ 選択してアップロード</span></button>
           <input type="file" id="cert-shared-bg-input" accept="image/*" style="display:none" onchange="handleSharedCertImage(event,'background')">
-          <div id="cert-shared-bg-status" style="font-size:11px;color:var(--muted);margin-top:4px;">未設定</div>
+          <div id="cert-shared-bg-status" style="font-size:11px;color:var(--muted);margin-top:4px;" data-i18n="status_unset">未設定</div>
         </div>
       </div>
       <div style="padding:10px;background:var(--surface2);border-radius:8px;margin-bottom:14px;">
         <label style="display:flex;align-items:center;gap:6px;font-size:12px;margin-bottom:6px;">
           <input type="checkbox" id="cert-auto-apply" checked style="width:14px;height:14px;">
-          作成した Template ID を、同名の Program の証明書設定に自動反映する（有効化 + Template ID 設定）
+          <span data-i18n="cert_auto_apply_label">作成した Template ID を、同名の Program の証明書設定に自動反映する（有効化 + Template ID 設定）</span>
         </label>
-        <p style="font-size:11px;color:var(--muted);">CSVの「name」列と、Program一覧のタイトルを照合します。事前に「Program 一覧・バッチ削除」カードで読み込みを行い、Issuer ID・合格閾値もそちらで設定しておいてください。</p>
+        <p style="font-size:11px;color:var(--muted);" data-i18n="cert_auto_apply_hint">CSVの「name」列と、Program一覧のタイトルを照合します。事前に「Program 一覧・バッチ削除」カードで読み込みを行い、Issuer ID・合格閾値もそちらで設定しておいてください。</p>
       </div>
       <div class="btn-row" style="margin-bottom:12px;">
-        <button class="btn btn-secondary" onclick="downloadCertTemplateCsv()">⬇ テンプレートDL</button>
-        <button class="btn btn-secondary" onclick="document.getElementById('cert-csv-input').click()">⬆ CSV アップロード</button>
+        <button class="btn btn-secondary" onclick="downloadCertTemplateCsv()"><span data-i18n="btn_template">⬇ テンプレートDL</span></button>
+        <button class="btn btn-secondary" onclick="document.getElementById('cert-csv-input').click()"><span data-i18n="btn_upload_csv">⬆ CSV アップロード</span></button>
         <input type="file" id="cert-csv-input" accept=".csv" style="display:none" onchange="handleCertCsv(event)">
       </div>
       <div class="upload-zone" id="cert-img-zone" onclick="document.getElementById('cert-img-input').click()" ondragover="event.preventDefault();this.classList.add('drag-over')" ondragleave="this.classList.remove('drag-over')" ondrop="handleCertImageDrop(event)">
         <input type="file" id="cert-img-input" accept="image/*" multiple style="display:none" onchange="handleCertImageSelect(event)">
-        🖼️ Badge 画像をまとめてドラッグ（複数可、CSVで指定したファイル名と一致させてください）
+        <span data-i18n="badge_drop">🖼️ Badge 画像をまとめてドラッグ（複数可、CSVで指定したファイル名と一致させてください）</span>
       </div>
       <div id="cert-img-filelist" style="display:none;margin-top:8px;font-size:11px;color:var(--muted);"></div>
       <div id="cert-preview" style="display:none;margin-top:12px;">
         <table>
-          <thead><tr><th>テンプレート名</th><th>Logo</th><th>Badge</th><th>Background</th><th>Program</th><th></th></tr></thead>
+          <thead><tr><th data-i18n="th_template_name">テンプレート名</th><th>Logo</th><th>Badge</th><th>Background</th><th>Program</th><th></th></tr></thead>
           <tbody id="cert-preview-tbody"></tbody>
         </table>
         <div class="btn-row" style="margin-top:10px;">
-          <button class="btn btn-primary" onclick="runCertBatchCreate()">🚀 一括作成</button>
-          <button class="btn btn-secondary" onclick="clearCertBatch()">✕ クリア</button>
+          <button class="btn btn-primary" onclick="runCertBatchCreate()"><span data-i18n="btn_batch_create">🚀 一括作成</span></button>
+          <button class="btn btn-secondary" onclick="clearCertBatch()"><span data-i18n="btn_clear">✕ クリア</span></button>
         </div>
       </div>
     </div>
     <div class="card" id="cert-batch-log-card" style="display:none;">
-      <div class="card-title">📋 証明書テンプレート作成ログ <button class="btn btn-secondary btn-xs" style="margin-left:auto;" onclick="document.getElementById('cert-batch-log-card').style.display='none'">✕</button></div>
+      <div class="card-title"><span data-i18n="cert_batch_log_title">📋 証明書テンプレート作成ログ</span> <button class="btn btn-secondary btn-xs" style="margin-left:auto;" onclick="document.getElementById('cert-batch-log-card').style.display='none'">✕</button></div>
       <div class="log-box" id="cert-batch-log"></div>
     </div>
     <!-- Prod Arrangement プレビュー -->
   <div class="card" id="prod-arr-preview-card" style="display:none;">
-    <div class="card-title">🔍 Prod Arrangement → QA ID 変換プレビュー
-      <button class="btn btn-secondary btn-xs" style="margin-left:auto;" onclick="exportProdArrangementCsv()">📥 CSV ダウンロード</button>
+    <div class="card-title"><span data-i18n="prod_arr_preview_title">🔍 Prod Arrangement → QA ID 変換プレビュー</span>
+      <button class="btn btn-secondary btn-xs" style="margin-left:auto;" onclick="exportProdArrangementCsv()"><span data-i18n="btn_csv_download">📥 CSV ダウンロード</span></button>
     </div>
-    <p style="font-size:11px;color:var(--muted);margin-bottom:10px;">Prod の Arrangement 構造を QA の program_id と content_id に変換したプレビューです。✅=マッチ / ⚠️=QAになし</p>
+    <p style="font-size:11px;color:var(--muted);margin-bottom:10px;" data-i18n="prod_arr_preview_hint">Prod の Arrangement 構造を QA の program_id と content_id に変換したプレビューです。✅=マッチ / ⚠️=QAになし</p>
     <div id="prod-arr-preview-summary" style="font-size:12px;margin-bottom:10px;"></div>
     <div style="max-height:400px;overflow-y:auto;">
       <table id="prod-arr-preview-table">
         <thead><tr>
-          <th>Program 名</th>
+          <th data-i18n="th_prog_name">Program 名</th>
           <th>Section</th>
-          <th>Content 名</th>
+          <th data-i18n="th_content_name">Content 名</th>
           <th>QA program_id</th>
           <th>QA content_id</th>
-          <th>状態</th>
+          <th data-i18n="th_state">状態</th>
         </tr></thead>
         <tbody id="prod-arr-preview-tbody"></tbody>
       </table>
     </div>
   </div>
-      <div class="card-title">📋 実行ログ <button class="btn btn-secondary btn-xs" style="margin-left:auto;" onclick="document.getElementById('prog-log-card').style.display='none'">✕</button></div>
+    <div class="card" id="prog-log-card" style="display:none;">
+      <div class="card-title"><span data-i18n="log_title">📋 実行ログ</span> <button class="btn btn-secondary btn-xs" style="margin-left:auto;" onclick="document.getElementById('prog-log-card').style.display='none'">✕</button></div>
       <div class="log-box" id="prog-log"></div>
     </div>
   </div>
@@ -726,23 +726,23 @@ tr:last-child td{border-bottom:none;}
 <!-- 字幕アップロード Modal -->
 <div id="sub-upload-modal" style="display:none;" class="modal-bg" onclick="if(event.target===this)this.style.display='none'">
   <div class="modal">
-    <div class="modal-title">📄 字幕アップロード</div>
-    <div class="form-group" style="margin-bottom:12px;"><label>動画</label><div id="sub-upload-vod-name" style="padding:8px;background:var(--surface2);border-radius:6px;font-size:12px;"></div></div>
-    <div class="form-group" style="margin-bottom:12px;"><label>言語</label>
+    <div class="modal-title"><span data-i18n="sub_upload_modal_title">📄 字幕アップロード</span></div>
+    <div class="form-group" style="margin-bottom:12px;"><label data-i18n="col_vod">動画</label><div id="sub-upload-vod-name" style="padding:8px;background:var(--surface2);border-radius:6px;font-size:12px;"></div></div>
+    <div class="form-group" style="margin-bottom:12px;"><label data-i18n="label_lang">言語</label>
       <select id="sub-upload-lang"><option value="ja-JP">日本語 (ja-JP)</option><option value="en-US">English (en-US)</option><option value="zh-TW">繁體中文 (zh-TW)</option><option value="zh-CN">简体中文 (zh-CN)</option><option value="ko-KR">한국어 (ko-KR)</option></select>
     </div>
-    <div class="form-group" style="margin-bottom:12px;"><label>表示名</label><input type="text" id="sub-upload-display" placeholder="例：日本語"></div>
+    <div class="form-group" style="margin-bottom:12px;"><label data-i18n="label_display">表示名</label><input type="text" id="sub-upload-display" placeholder="例：日本語"></div>
     <div class="upload-zone" id="sub-file-zone" onclick="document.getElementById('sub-file-input').click()" ondragover="event.preventDefault();this.classList.add('drag-over')" ondragleave="this.classList.remove('drag-over')" ondrop="handleSubFileDrop(event)">
       <input type="file" id="sub-file-input" accept=".srt,.vtt" style="display:none" onchange="handleSubFileSelect(event)">
-      <span id="sub-file-name">クリックまたはドラッグ（.srt / .vtt）</span>
+      <span id="sub-file-name" data-i18n="sub_file_drop">クリックまたはドラッグ（.srt / .vtt）</span>
     </div>
     <div id="sub-upload-progress" style="display:none;margin-top:10px;">
       <div class="progress-bar-wrap"><div class="progress-bar" id="sub-progress-bar" style="width:0%"></div></div>
       <div id="sub-progress-msg" style="font-size:11px;color:var(--muted);margin-top:4px;"></div>
     </div>
     <div class="btn-row" style="margin-top:16px;">
-      <button class="btn btn-primary" onclick="uploadSubtitle()">⬆ アップロード</button>
-      <button class="btn btn-secondary" onclick="document.getElementById('sub-upload-modal').style.display='none'">キャンセル</button>
+      <button class="btn btn-primary" onclick="uploadSubtitle()"><span data-i18n="btn_upload">⬆ アップロード</span></button>
+      <button class="btn btn-secondary" onclick="document.getElementById('sub-upload-modal').style.display='none'" data-i18n="btn_cancel">キャンセル</button>
     </div>
   </div>
 </div>
@@ -807,6 +807,136 @@ const I18N = {
     log_del_done:(ok,fail)=>`🏁 完成：刪除 ${ok} / 失敗 ${fail}`,
     confirm_delete:(n)=>`確定刪除 ${n} 筆嗎？此操作無法復原。`,
     sum_fill:'補足',
+    tab_outline:'🗂️ Outline', tab_cpmvod:'🎬 VOD',
+    // 字幕管理
+    btn_batch_upload:'📄 批量上傳', btn_zip:'📥 ZIP 下載',
+    batch_sub_title:'📄 批量字幕上傳（自動比對影片名稱）',
+    batch_sub_drop:'📄 點擊或拖曳（多個 .srt / .vtt）',
+    batch_sub_match_hint:'比對檔名與影片名稱自動配對',
+    col_sub_file:'字幕檔案', col_match_vod:'比對影片', col_state:'狀態',
+    label_lang:'語言', label_display:'顯示名稱',
+    // 共用
+    btn_upload:'⬆ 上傳', btn_cancel:'取消',
+    col_vod:'影片', col_state2:'狀態',
+    badge_drop:'🖼️ 把 Badge 圖片一次拖進來（可多選，需與 CSV 指定的檔名一致）',
+    btn_add_cpm_batch:'＋ 批次加入 CPM',
+    btn_arr_only:'🎬 僅 Arrangement（不新建）',
+    btn_batch_create:'🚀 批次建立',
+    btn_cert_off:'🏆 證書 OFF',
+    btn_cert_on:'🏆 證書 ON',
+    btn_compare_run:'🔍 執行比較',
+    btn_csv:'📥 CSV',
+    btn_csv_arrangement:'⬆ CSV（Arrangement）',
+    btn_csv_download:'📥 下載 CSV',
+    btn_csv_prog_info:'⬆ CSV（Program 資訊）',
+    btn_csv_title_overwrite:'⬆ 用 CSV 覆蓋 title',
+    btn_delete_selected:'🗑 刪除選取',
+    btn_diff_csv:'📥 差異 CSV',
+    btn_dl_cert_id_list:'⬇ 證書範本 ID 清單 CSV',
+    btn_apply_templates:'🔗 自動套用範本（未勾選就套用全部）',
+    thumb_shared_list_hint:'（與 Program 一覧卡片共用同一份資料）',
+    btn_dl_prod_thumb:'📦 Prod 縮圖批次下載（ZIP）',
+    btn_export_outline_prod:'⬇ Prod Outline → QA CSV',
+    btn_export_outline_qa:'⬇ 匯出 Outline CSV（QA）',
+    btn_export_prog:'⬇ 匯出既有 Program CSV',
+    btn_export_quiz:'⬇ 匯出既有 Quiz CSV',
+    btn_full_sync_run:'🚀 執行全同步',
+    btn_import_create:'🚀 匯入/新建',
+    btn_import_csv:'⬆ CSV 匯入',
+    btn_import_quiz_csv:'⬆ CSV 匯入/新建',
+    btn_missing_csv:'📥 僅未存在 CSV',
+    btn_preset:'預設值',
+    btn_prod_arr_preview:'🔍 Prod Arrangement 預覽（QA ID 轉換）',
+    btn_prog_only:'📋 僅 Program 資訊（含新建）',
+    btn_publish:'✅ 公開',
+    btn_select_upload:'🖼️ 選擇並上傳',
+    btn_step6_thumb:'🔁 Prod → QA Thumbnail 同步',
+    btn_sync_arr_only:'🔁 僅補完 Arrangement',
+    btn_test_prod:'🔗 測試 Prod 連線',
+    btn_unpublish:'⏸ 取消公開',
+    btn_vod_match:'🔎 VOD 比對',
+    cert_apply_settings_hint:'比對既有 cert-template 的名稱與 Program 標題，自動設定 Template ID（不會重新建立範本）。可用「⬇ 証明書テンプレートID一覧CSV」下載 name→template_id 對照表。Program CSV 加上 cert_template_id / cert_issuer_id / cert_enabled / cert_threshold 欄位，執行「📋 Program 情報のみ」時會一併套用證書設定（沒填欄位就維持現狀）。',
+    cert_apply_settings_title:'🏆 證書範本 套用設定（共用）',
+    cert_auto_apply_hint:'會比對 CSV 的「name」欄跟 Program 清單的標題。請先在「Program 清單・批次刪除」卡片裡載入清單，Issuer ID、合格閾值也請在那裡先設定。',
+    cert_auto_apply_label:'把建立好的 Template ID，自動套用到同名 Program 的證書設定（啟用 + 設定 Template ID）',
+    cert_batch_desc:'Logo・Background 可以全部範本共用同一張。只有 Badge 每個範本不同，用 CSV 的檔名去比對。',
+    cert_batch_log_title:'📋 證書範本建立 Log',
+    cert_batch_title:'🏆 證書範本 批次建立',
+    cert_enable_label:'啟用證書',
+    cert_issuer_id_label:'Issuer ID',
+    cert_modal_title:'證書設定',
+    cert_template_id_label:'Template ID',
+    cert_threshold_label:'合格閾值（%）',
+    compare_card_hint:'比較 Prod 與 QA 的 Program（Arrangement）及 Outline（分類階層）的 Content。請先在設定頁面輸入 Prod Token。<br>※ API 呼叫次數較多，可能需要數分鐘。',
+    compare_card_title:'📚 Program / Outline → Content 比較',
+    compare_page_title:'🔍 Prod vs QA 比較',
+    cpmvod_title:'🎬 CPM VOD 管理',
+    delete_log_title:'📋 刪除 Log',
+    filter_dup_title:'🔴 重複標題',
+    filter_has_content:'✅ 有 content',
+    filter_missing_arr:'❌ Arr 未登錄',
+    filter_missing_content:'⚠️ Content 未存在',
+    filter_no_content:'⚠️ 無 content',
+    filter_ok:'✅ 正常',
+    filter_outline_only:'🗂 僅 Outline',
+    filter_program_only:'📚 僅 Program',
+    force_regen:'強制重新生成',
+    full_sync_desc:'請先確認 VOD 已上傳到 QA CMS 再執行。<br>會自動依序執行：② CPM VOD 追加 → ③ Program 建立 → ④ Arrangement 補完 → ⑤ Outline 同步 → ⑥ Thumbnail 同步。',
+    full_sync_log_title:'🚀 全同步 Log',
+    full_sync_title:'🚀 Prod → QA 全同步',
+    full_sync_warn:'⚠️ 請務必確認設定裡的 Base URL 是 <b>QA</b>（api.one-qa.kkstream.io）。如果還是 Prod URL 就執行，會覆蓋 Prod 的資料。',
+    issuer_id_common_label:'Issuer ID（全部共用）',
+    lang_colon:'語言：',
+    log_title_plain:'Log',
+    nav_compare:'Prod vs QA',
+    need_cpm_hint:'VOD 已存在於 QA。請先加入 CPM，再與 Arrangement 建立關聯',
+    need_cpm_title:'⚠️ VOD 存在但 CPM 未登錄',
+    no_vod_hint:'需要先把 VOD 上傳到 QA',
+    no_vod_title:'🚫 VOD 在 QA 不存在',
+    outline_mgmt_desc:'用 CSV 匯出/匯入 大分類 → 中分類 → Space → Program 的階層結構',
+    outline_mgmt_title:'🗂️ Outline 管理',
+    press_load:'請按「載入」',
+    press_refresh:'請按「更新」',
+    preview_label:'預覽',
+    prod_arr_preview_hint:'把 Prod 的 Arrangement 結構轉換成 QA 的 program_id 與 content_id 的預覽。✅=有比對到 / ⚠️=QA 沒有',
+    prod_arr_preview_title:'🔍 Prod Arrangement → QA ID 轉換預覽',
+    prod_conn_hint:'上方設定為 QA 用。在這裡輸入 Prod 的 Token 與 Site ID，就能使用「Prod vs QA 比較」頁面。',
+    prod_conn_title:'🔄 Prod 連線資訊（Prod vs QA 比較用）',
+    prod_org_label:'Prod Org ID',
+    prod_site_label:'Prod CPM Site ID',
+    prod_token_label:'Prod API Token',
+    prog_list_title:'📋 Program 清單・批次刪除',
+    quiz_batch_title:'🧠 Quiz 批次生成',
+    quiz_csv_preview_title:'📋 Quiz CSV 預覽',
+    shared_bg_label:'共用 Background（全部範本共用）',
+    shared_logo_label:'共用 Logo（全部範本共用）',
+    status_unset:'未設定',
+    step2_label:'② VOD→CPM 追加',
+    step3_label:'③ Program 建立',
+    step4_label:'④ Arrangement 補完',
+    step5_label:'⑤ Outline 同步',
+    step6_label:'🖼️ Thumbnail 同步（Prod→QA）',
+    step_individual_title:'個別執行（可單獨執行）',
+    sub_file_drop:'點擊或拖曳（.srt / .vtt）',
+    sub_upload_modal_title:'📄 字幕上傳',
+    th_arr_space:'Arrangement / Space',
+    th_cert:'證書',
+    th_content_count:'Content 數',
+    th_content_name:'Content 名稱',
+    th_cpm_title:'標題',
+    th_filename:'檔案名稱',
+    th_kind:'種別',
+    th_preview:'預覽',
+    th_prog_name:'Program 名稱',
+    th_prog_outline_name:'Program / Outline 名稱',
+    th_state:'狀態',
+    th_status:'狀態',
+    th_template_name:'範本名稱',
+    th_vod_name:'VOD 名稱',
+    display_name_ph:'顯示名稱',
+    search_ph:'🔍 搜尋...',
+    sub_search_ph:'🔍 用影片名稱搜尋...',
+    vod_search_ph:'🔍 搜尋影片名稱...',
   },
   ja: {
     nav_settings:'設定', nav_vods:'動画管理', nav_subtitles:'字幕管理', nav_cpm:'CPM 管理',
@@ -864,6 +994,134 @@ const I18N = {
     log_del_done:(ok,fail)=>`🏁 完了：削除${ok} / 失敗${fail}`,
     confirm_delete:(n)=>`${n}件を削除しますか？この操作は取り消せません。`,
     sum_fill:'補足',
+    tab_outline:'🗂️ Outline', tab_cpmvod:'🎬 VOD',
+    btn_batch_upload:'📄 一括アップロード', btn_zip:'📥 ZIP ダウンロード',
+    batch_sub_title:'📄 字幕一括アップロード（動画名を自動マッチング）',
+    batch_sub_drop:'📄 クリックまたはドラッグ（複数 .srt / .vtt）',
+    batch_sub_match_hint:'ファイル名と動画名を比較して自動マッチング',
+    col_sub_file:'字幕ファイル', col_match_vod:'対象動画', col_state:'状態',
+    label_lang:'言語', label_display:'表示名',
+    btn_upload:'⬆ アップロード', btn_cancel:'キャンセル',
+    col_vod:'動画', col_state2:'状態',
+    badge_drop:'🖼️ Badge 画像をまとめてドラッグ（複数可、CSVで指定したファイル名と一致させてください）',
+    btn_add_cpm_batch:'＋ CPM 一括追加',
+    btn_arr_only:'🎬 Arrangement のみ（新規作成なし）',
+    btn_batch_create:'🚀 一括作成',
+    btn_cert_off:'🏆 証明書 OFF',
+    btn_cert_on:'🏆 証明書 ON',
+    btn_compare_run:'🔍 比較実行',
+    btn_csv:'📥 CSV',
+    btn_csv_arrangement:'⬆ CSV（Arrangement）',
+    btn_csv_download:'📥 CSV ダウンロード',
+    btn_csv_prog_info:'⬆ CSV（Program 情報）',
+    btn_csv_title_overwrite:'⬆ CSV で title 上書き',
+    btn_delete_selected:'🗑 選択を削除',
+    btn_diff_csv:'📥 差分 CSV',
+    btn_dl_cert_id_list:'⬇ 証明書テンプレートID一覧CSV',
+    btn_apply_templates:'🔗 テンプレートを自動反映（未選択なら全件）',
+    thumb_shared_list_hint:'（Program 一覧カードと共通のデータを使用します）',
+    btn_dl_prod_thumb:'📦 Prod 縮圖一括DL（ZIP）',
+    btn_export_outline_prod:'⬇ Prod Outline → QA CSV',
+    btn_export_outline_qa:'⬇ Outline CSV 匯出（QA）',
+    btn_export_prog:'⬇ 既存Program CSV匯出',
+    btn_export_quiz:'⬇ 既存 Quiz CSV 匯出',
+    btn_full_sync_run:'🚀 全同期実行',
+    btn_import_create:'🚀 匯入/新建',
+    btn_import_csv:'⬆ CSV 匯入',
+    btn_import_quiz_csv:'⬆ CSV 匯入/新建',
+    btn_missing_csv:'📥 未存在のみ CSV',
+    btn_preset:'プリセット',
+    btn_prod_arr_preview:'🔍 Prod Arrangement プレビュー（QA ID 変換）',
+    btn_prog_only:'📋 Program 情報のみ（新規作成あり）',
+    btn_publish:'✅ 公開',
+    btn_select_upload:'🖼️ 選択してアップロード',
+    btn_step6_thumb:'🔁 Prod → QA Thumbnail 同期',
+    btn_sync_arr_only:'🔁 Arrangement 補完のみ',
+    btn_test_prod:'🔗 Prod 接続テスト',
+    btn_unpublish:'⏸ 非公開',
+    btn_vod_match:'🔎 VOD 照合',
+    cert_apply_settings_hint:'既存の cert-template を Program タイトルと名前で照合し、Template ID を自動設定します（テンプレートの再作成はしません）。「⬇ 証明書テンプレートID一覧CSV」で name→template_id の対応表をダウンロードできます。Program CSV に cert_template_id / cert_issuer_id / cert_enabled / cert_threshold 列を追加すると、「📋 Program 情報のみ」実行時に証明書設定も一緒に反映されます（列が無ければ証明書設定は現状維持）。',
+    cert_apply_settings_title:'🏆 証明書テンプレート 反映設定（共通）',
+    cert_auto_apply_hint:'CSVの「name」列と、Program一覧のタイトルを照合します。事前に「Program 一覧・バッチ削除」カードで読み込みを行い、Issuer ID・合格閾値もそちらで設定しておいてください。',
+    cert_auto_apply_label:'作成した Template ID を、同名の Program の証明書設定に自動反映する（有効化 + Template ID 設定）',
+    cert_batch_desc:'Logo・Background は共通の1枚を全テンプレートで使い回せます。Badge だけテンプレートごとに違う画像を、CSVのファイル名でマッチングします。',
+    cert_batch_log_title:'📋 証明書テンプレート作成ログ',
+    cert_batch_title:'🏆 証明書テンプレート 一括作成',
+    cert_enable_label:'証明書を有効にする',
+    cert_issuer_id_label:'Issuer ID',
+    cert_modal_title:'証明書設定',
+    cert_template_id_label:'Template ID',
+    cert_threshold_label:'合格閾値（%）',
+    compare_card_hint:'Prod と QA の Program（Arrangement）と Outline（カテゴリー階層）の Content を比較します。設定ページで Prod Token を先に入力してください。<br>※ API 呼び出し数が多いため数分かかる場合があります。',
+    compare_card_title:'📚 Program / Outline → Content 比較',
+    compare_page_title:'🔍 Prod vs QA 比較',
+    cpmvod_title:'🎬 CPM VOD 管理',
+    delete_log_title:'📋 削除ログ',
+    filter_dup_title:'🔴 重複タイトル',
+    filter_has_content:'✅ content あり',
+    filter_missing_arr:'❌ Arr 未登録',
+    filter_missing_content:'⚠️ Content 未存在',
+    filter_no_content:'⚠️ content なし',
+    filter_ok:'✅ 正常',
+    filter_outline_only:'🗂 Outline のみ',
+    filter_program_only:'📚 Program のみ',
+    force_regen:'強制重産',
+    full_sync_desc:'VOD が QA CMS にアップロード済みであることを確認してから実行してください。<br>② CPM VOD 追加 → ③ Program 作成 → ④ Arrangement 補完 → ⑤ Outline 同期 → ⑥ Thumbnail 同期 を自動実行します。',
+    full_sync_log_title:'🚀 全同期ログ',
+    full_sync_title:'🚀 Prod → QA 全同期',
+    full_sync_warn:'⚠️ 設定の Base URL が <b>QA</b>（api.one-qa.kkstream.io）になっていることを必ず確認してください。Prod URL のまま実行すると Prod のデータが上書きされます。',
+    issuer_id_common_label:'Issuer ID（全件共通）',
+    lang_colon:'語言：',
+    log_title_plain:'ログ',
+    nav_compare:'Prod vs QA',
+    need_cpm_hint:'VOD は QA にあります。CPM に追加してから Arrangement に紐付けてください',
+    need_cpm_title:'⚠️ VOD はあるが CPM 未登録',
+    no_vod_hint:'まず VOD を QA にアップロードする必要があります',
+    no_vod_title:'🚫 VOD が QA に存在しない',
+    outline_mgmt_desc:'大分類 → 中分類 → Space → Program の階層構造を CSV で匯出/匯入',
+    outline_mgmt_title:'🗂️ Outline 管理',
+    press_load:'「読み込み」を押してください',
+    press_refresh:'「更新」を押してください',
+    preview_label:'プレビュー',
+    prod_arr_preview_hint:'Prod の Arrangement 構造を QA の program_id と content_id に変換したプレビューです。✅=マッチ / ⚠️=QAになし',
+    prod_arr_preview_title:'🔍 Prod Arrangement → QA ID 変換プレビュー',
+    prod_conn_hint:'上の設定は QA 用。こちらに Prod の Token と Site ID を入力すると「Prod vs QA 比較」ページが使えます。',
+    prod_conn_title:'🔄 Prod 接続情報（Prod vs QA 比較用）',
+    prod_org_label:'Prod Org ID',
+    prod_site_label:'Prod CPM Site ID',
+    prod_token_label:'Prod API Token',
+    prog_list_title:'📋 Program 一覧・バッチ削除',
+    quiz_batch_title:'🧠 Quiz 一括生成',
+    quiz_csv_preview_title:'📋 Quiz CSV プレビュー',
+    shared_bg_label:'共通 Background（全テンプレート共通）',
+    shared_logo_label:'共通 Logo（全テンプレート共通）',
+    status_unset:'未設定',
+    step2_label:'② VOD→CPM 追加',
+    step3_label:'③ Program 作成',
+    step4_label:'④ Arrangement 補完',
+    step5_label:'⑤ Outline 同期',
+    step6_label:'🖼️ Thumbnail 同期（Prod→QA）',
+    step_individual_title:'個別実行（単独で実行可能）',
+    sub_file_drop:'クリックまたはドラッグ（.srt / .vtt）',
+    sub_upload_modal_title:'📄 字幕アップロード',
+    th_arr_space:'Arrangement / Space',
+    th_cert:'証明書',
+    th_content_count:'Content数',
+    th_content_name:'Content 名',
+    th_cpm_title:'タイトル',
+    th_filename:'ファイル名',
+    th_kind:'種別',
+    th_preview:'プレビュー',
+    th_prog_name:'Program 名',
+    th_prog_outline_name:'Program / Outline 名',
+    th_state:'状態',
+    th_status:'状態',
+    th_template_name:'テンプレート名',
+    th_vod_name:'VOD 名',
+    display_name_ph:'表示名',
+    search_ph:'🔍 検索...',
+    sub_search_ph:'🔍 動画名で検索...',
+    vod_search_ph:'🔍 動画名を検索...',
   }
 };
 let currentLang = localStorage.getItem('bv_ui_lang') || 'zh';
@@ -888,7 +1146,14 @@ function applyLang(){
   document.querySelectorAll('[data-i18n]').forEach(el=>{
     const key = el.getAttribute('data-i18n');
     const val = t(key);
-    if(val !== key) el.textContent = val; // キーがそのまま返った場合は更新しない
+    if(val === key) return; // キーがそのまま返った場合は更新しない
+    if(el.hasAttribute('data-i18n-html')) el.innerHTML = val;
+    else el.textContent = val;
+  });
+  document.querySelectorAll('[data-i18n-ph]').forEach(el=>{
+    const key = el.getAttribute('data-i18n-ph');
+    const val = t(key);
+    if(val !== key) el.setAttribute('placeholder', val);
   });
   const set=(id,key)=>{ const el=document.getElementById(id); if(el) el.textContent=t(key); };
   set('nav-subtitle','subtitle');
@@ -5001,7 +5266,7 @@ async function exportCpmVodCsv(){
     toast(`✅ CPM VOD ${all.length}件匯出`,'success');
   }catch(e){ reset(); toast('失敗: '+e.message,'error'); }
 }
-let programImportData=[], programListCache=[], thumbFiles=[];
+let programImportData=[], thumbFiles=[];
 
 function switchTab(tab){
   document.querySelectorAll('.tab-btn').forEach(b=>b.classList.remove('active'));
@@ -5328,70 +5593,6 @@ function renderProgramPreview(){
   }).join('');
 }
 function clearProgramPreview(){ programImportData=[]; document.getElementById('prog-preview').style.display='none'; }
-
-// バックアップCSV（横向き programs CSV）から about・highlight・background・author 情報だけを復元する。
-// Arrangement と証明書設定は「現在の値」をそのまま使う（バックアップの値では上書きしない）。
-async function runRestoreProgramMeta(){
-  if(!programImportData.length){ toast('先に「⬆ CSV（Program 情報）」でバックアップCSVを読み込んでください','error'); return; }
-  if(!programListData.length){ toast('先に「🔄 読み込み」でProgram一覧を取得してください','error'); return; }
-  const site=siteId();
-  const isValidUUID=s=>/^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$/i.test(s||'');
-  const log=makeLog('prog-log','prog-log-card');
-  log(`▶ 説明・縮圖の復元開始：${programImportData.length}件（Arrangement・証明書設定はそのまま保持します）`);
-  let ok=0, fail=0, skip=0;
-  for(let i=0;i<programImportData.length;i++){
-    const prog=programImportData[i];
-    const f=prog._fields||{};
-    log(`[${i+1}/${programImportData.length}] ${esc(prog.title)}`);
-    try{
-      let progId=(prog.program_id&&programListData.some(p=>p.id===prog.program_id))?prog.program_id:'';
-      if(!progId){
-        const match=programListData.find(p=>p.title.trim()===prog.title.trim());
-        progId=match?.id||'';
-      }
-      if(!progId){ log('  ⚠️ 対応する Program が見つかりません → スキップ','error'); skip++; continue; }
-
-      const existRes=await fetch(`${BASE()}/bv/cpm/v1alpha1/sites/${site}/programs/${progId}?action=GET_FORM_REQUEST_ACTION_CURRENT&mode=FORM_MODE_EDIT`,{headers:HDR()});
-      if(!existRes.ok) throw new Error(`現在情報の取得に失敗: ${existRes.status}`);
-      const ep=(await existRes.json()).program||{};
-
-      const mergedHighlight=[...(ep.highlight?.texts||['','',''])];
-      if(f.highlight?.[0]) mergedHighlight[0]=f.highlight[0];
-      if(f.highlight?.[1]) mergedHighlight[1]=f.highlight[1];
-      if(f.highlight?.[2]) mergedHighlight[2]=f.highlight[2];
-
-      const mergedAuthor={...(ep.author_info||{}),displayable:true};
-      if(f.author_name) mergedAuthor.name=f.author_name;
-      if(f.author_title) mergedAuthor.title=f.author_title;
-      if(f.author_desc) mergedAuthor.description=f.author_desc;
-      if(f.author_avatar_library_id && isValidUUID(f.author_avatar_library_id)) mergedAuthor.avatar_library_id=f.author_avatar_library_id;
-
-      const mergedBg=(f.background_library_id && isValidUUID(f.background_library_id))
-        ? {type:'PROGRAM_BACKGROUND_TYPE_IMAGE', image:{id:f.background_library_id}}
-        : (ep.background||{type:'PROGRAM_BACKGROUND_TYPE_DEFAULT'});
-
-      const putBody={
-        title: ep.title||prog.title||'',
-        highlight: {displayable:true, texts:mergedHighlight},
-        about: {displayable:true, html_content: f.about_html?f.about_html:(ep.about?.html_content||'')},
-        author_info: mergedAuthor,
-        label_info: ep.label_info||{displayable:true,labels:[]},
-        arrangement: ep.arrangement||{displayable:true,items:[]},   // ← 現状維持。バックアップでは絶対に上書きしない
-        clip: ep.clip||{displayable:true,clips:[]},
-        rating: ep.rating||{displayable:false},
-        level_info: ep.level_info||{displayable:false,level:'PROGRAM_LEVEL_BEGINNER'},
-        relation: ep.relation||{displayable:true,related_contents:[]},
-        certification: ep.certification||{setting:{enabled:false,template_id:'',issuer_id:'',passing_threshold:0}}, // ← 現状維持
-        background: mergedBg,
-      };
-      await cpmPut(`/bv/cpm/v1alpha1/sites/${site}/programs/${progId}`,{program:putBody});
-      log(`  ✅ 復元完了（about: ${f.about_html?'あり':'既存維持'} / background: ${f.background_library_id?'あり':'既存維持'}）`,'done');
-      ok++;
-    }catch(e){ log(`  ❌ ${e.message}`,'error'); fail++; }
-  }
-  log(`🏁 完了：復元 ${ok}件 / 失敗 ${fail}件 / スキップ ${skip}件`,'done');
-  toast(`復元完了：${ok}件 / 失敗:${fail}件`, ok>0?'success':'error');
-}
 
 // arrangement の items から、指定した content_id を持つ content を再帰的に除外する
 function stripBadContentIds(items, badIdSet){
@@ -5890,33 +6091,13 @@ async function downloadProdThumbnails(){
   }
 }
 // ── Prod 縮圖一括ダウンロード 終 ─────────────────────
-async function loadProgramListForThumb(){
-  const el=document.getElementById('prog-list-count');
-  if(el) el.textContent='読み込み中...';
-  try{
-    const site=cfg('site_id');
-    if(!site){ if(el) el.textContent='Site ID 未設定'; return; }
-    programListCache=[];
-    let page=1;
-    while(true){
-      const r=await fetch(`${BASE()}/bv/cpm/v1alpha1/sites/${site}/contents?current_page=${page}&items_per_page=100&filter.content_types=CONTENT_TYPE_PROGRAM`,{headers:HDR()});
-      const d=await r.json();
-      const items=d.contents||[];
-      programListCache.push(...items.map(c=>({id:c.content_id,title:c.title})));
-      if(items.length<100) break;
-      page++;
-    }
-    if(el) el.textContent=`${programListCache.length}件`;
-  }catch(e){ if(el) el.textContent='失敗: '+e.message; }
-}
-
 function handleThumbSelect(e){ addThumbFiles([...e.target.files]); }
 function handleThumbDrop(e){ e.preventDefault(); document.getElementById('thumb-zone').classList.remove('drag-over'); addThumbFiles([...e.dataTransfer.files]); }
 function cropTo169(file){ return new Promise(resolve=>{ const img=new Image(); img.onload=()=>{ const canvas=document.createElement('canvas'); const W=1280,H=720; const sr=img.width/img.height,tr=16/9; let sx,sy,sw,sh; if(sr>tr){sh=img.height;sw=sh*tr;sy=0;sx=(img.width-sw)/2;}else{sw=img.width;sh=sw/tr;sx=0;sy=(img.height-sh)/2;} canvas.width=W;canvas.height=H; canvas.getContext('2d').drawImage(img,sx,sy,sw,sh,0,0,W,H); canvas.toBlob(blob=>resolve(blob),'image/jpeg',0.9); }; img.src=URL.createObjectURL(file); }); }
-function matchProg(filename){ const base=filename.replace(/\.[^/.]+$/,'').toLowerCase(); return programListCache.find(p=>p.title.toLowerCase()===base||p.title.toLowerCase().includes(base)||base.includes(p.title.toLowerCase().substring(0,8)))||null; }
+function matchProg(filename){ const base=filename.replace(/\.[^/.]+$/,'').toLowerCase(); return programListData.find(p=>p.title.toLowerCase()===base||p.title.toLowerCase().includes(base)||base.includes(p.title.toLowerCase().substring(0,8)))||null; }
 async function addThumbFiles(files){
-  // programListCache が空なら自動読み込み
-  if(!programListCache.length) await loadProgramListForThumb();
+  // programListData が空なら自動読み込み（Program 一覧カードと共通）
+  if(!programListData.length) await loadProgramList();
   for(const file of files){
     const blob=await cropTo169(file);
     const matched=matchProg(file.name);
@@ -5931,7 +6112,7 @@ function renderThumbList(){
     const preview=URL.createObjectURL(item.blob);
     return `<tr><td style="font-size:11px;">${esc(item.file.name)}</td>
       <td><select style="font-size:11px;" onchange="thumbFiles[${i}].progId=this.value;thumbFiles[${i}].progTitle=this.options[this.selectedIndex].text;">
-        <option value="">— 未マッチ</option>${programListCache.map(p=>`<option value="${p.id}" ${p.id===item.progId?'selected':''}>${esc(p.title)}</option>`).join('')}
+        <option value="">— 未マッチ</option>${programListData.map(p=>`<option value="${p.id}" ${p.id===item.progId?'selected':''}>${esc(p.title)}</option>`).join('')}
       </select>${item.matched?' <span class="badge badge-green" style="font-size:10px;">自動</span>':''}</td>
       <td><img src="${preview}" style="height:36px;width:64px;object-fit:cover;border-radius:4px;"></td>
       <td><button class="btn btn-secondary btn-xs" onclick="thumbFiles.splice(${i},1);renderThumbList()">✕</button></td></tr>`;
@@ -6185,13 +6366,10 @@ async function fetchAllCertTemplates(){
 
 // すでに作成済みの cert-template を、同名の Program に反映するだけ（再作成なし）
 // selectedOnly=true の場合、Program 一覧でチェックを入れた項目だけを対象にする
-async function runApplyExistingCertTemplates(selectedOnly){
+async function runApplyExistingCertTemplates(){
   if(!programListData.length){ toast('先に「🔄 読み込み」でProgram一覧を取得してください','error'); return; }
-  let targets=programListData;
-  if(selectedOnly){
-    if(!selectedProgramIds.size){ toast('Programにチェックを入れてください','error'); return; }
-    targets=programListData.filter(p=>selectedProgramIds.has(p.id));
-  }
+  const selectedOnly=selectedProgramIds.size>0;
+  let targets=selectedOnly?programListData.filter(p=>selectedProgramIds.has(p.id)):programListData;
   const issuerId=document.getElementById('cert-batch-issuer-id').value.trim();
   const threshold=parseInt(document.getElementById('cert-batch-threshold').value)||0;
   const log=makeLog('prog-list-log','prog-list-log-card');
