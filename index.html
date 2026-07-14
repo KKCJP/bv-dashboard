@@ -4799,6 +4799,8 @@ async function saveCertSetting(){
     // 既存の Program 全フィールドを取得してから certification だけ差し替える（他フィールドの消失を防止）
     const existRes=await fetch(`${BASE()}/bv/cpm/v1alpha1/sites/${site}/programs/${certCurrentId}?action=GET_FORM_REQUEST_ACTION_CURRENT&mode=FORM_MODE_EDIT`,{headers:HDR()});
     const ep=(await existRes.json()).program||{};
+    // issuer_id が空欄なら既存値を維持（空文字を送るとUUIDバリデーションで失敗するため）
+    if(!certSetting.issuer_id) certSetting.issuer_id = ep.certification?.setting?.issuer_id || '';
     const putBody=buildCertPutBody(ep, certSetting);
     const r=await fetch(`${BASE()}/bv/cpm/v1alpha1/sites/${site}/programs/${certCurrentId}`,{
       method:'PUT', headers:{...HDR(),'Content-Type':'application/json'},
@@ -6350,16 +6352,19 @@ async function applyCertToProgram(program, certSetting){
   const existRes=await fetch(`${BASE()}/bv/cpm/v1alpha1/sites/${site}/programs/${program.id}?action=GET_FORM_REQUEST_ACTION_CURRENT&mode=FORM_MODE_EDIT`,{headers:HDR()});
   if(!existRes.ok) throw new Error(`現在の Program 情報取得に失敗: ${existRes.status}`);
   const ep=(await existRes.json()).program||{};
-  const putBody=buildCertPutBody(ep, certSetting);
+  // issuer_id が空欄の場合は、この Program に既に設定されている値をそのまま使う（空文字を送って API の UUID バリデーションに落ちるのを防ぐ）
+  const mergedSetting={...certSetting};
+  if(!mergedSetting.issuer_id) mergedSetting.issuer_id = ep.certification?.setting?.issuer_id || '';
+  const putBody=buildCertPutBody(ep, mergedSetting);
   const r=await fetch(`${BASE()}/bv/cpm/v1alpha1/sites/${site}/programs/${program.id}`,{
     method:'PUT', headers:{...HDR(),'Content-Type':'application/json'},
     body:JSON.stringify({program:putBody})
   });
   if(!r.ok) throw new Error(`${r.status}: ${(await r.text()).substring(0,150)}`);
-  program.certEnabled=certSetting.enabled;
-  program.certTemplateId=certSetting.template_id;
-  program.certIssuerId=certSetting.issuer_id;
-  program.certThreshold=certSetting.passing_threshold;
+  program.certEnabled=mergedSetting.enabled;
+  program.certTemplateId=mergedSetting.template_id;
+  program.certIssuerId=mergedSetting.issuer_id;
+  program.certThreshold=mergedSetting.passing_threshold;
 }
 
 // 既存の cert-templates を全ページ取得
