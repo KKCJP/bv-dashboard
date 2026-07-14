@@ -552,21 +552,19 @@ tr:last-child td{border-bottom:none;}
         <button class="filter-btn" onclick="setProgramListFilter('has_content')" data-i18n="filter_has_content">✅ content あり</button>
         <button class="filter-btn" onclick="setProgramListFilter('duplicate')" data-i18n="filter_dup_title">🔴 重複タイトル</button>
       </div>
-      <!-- バッチ操作 -->
-      <div id="prog-list-batch" style="display:none;background:var(--surface2);border-radius:6px;padding:8px 12px;margin-bottom:10px;font-size:12px;">
-        <span id="prog-list-selected-count" style="color:var(--accent);font-weight:600;margin-right:12px;"></span>
-        <button class="btn btn-danger btn-sm" onclick="batchDeletePrograms()" style="background:#e53935;color:#fff;border:none;"><span data-i18n="btn_delete_selected">🗑 選択を削除</span></button>
-        <button class="btn btn-secondary btn-sm" onclick="batchCertUpdate(true)" style="margin-left:8px;"><span data-i18n="btn_cert_on">🏆 証明書 ON</span></button>
-        <button class="btn btn-secondary btn-sm" onclick="batchCertUpdate(false)"><span data-i18n="btn_cert_off">🏆 証明書 OFF</span></button>
-      </div>
-      <!-- 証明書テンプレート 反映設定（Program一覧・証明書欄向け共通設定） -->
-      <div style="padding:10px;background:var(--surface2);border-radius:8px;margin-bottom:12px;">
-        <div style="font-size:12px;font-weight:600;margin-bottom:8px;" data-i18n="cert_apply_settings_title">🏆 証明書テンプレート 反映設定（共通）</div>
-        <div style="display:flex;gap:16px;flex-wrap:wrap;align-items:flex-end;">
+      <!-- バッチ操作 + 証明書テンプレート 反映設定（合併） -->
+      <div id="prog-list-batch" style="display:none;background:var(--surface2);border-radius:8px;padding:12px 14px;margin-bottom:12px;font-size:12px;">
+        <div style="display:flex;align-items:center;gap:10px;flex-wrap:wrap;margin-bottom:10px;">
+          <span id="prog-list-selected-count" style="color:var(--accent);font-weight:600;white-space:nowrap;"></span>
+          <button class="btn btn-danger btn-sm" onclick="batchDeletePrograms()" style="background:#e53935;color:#fff;border:none;"><span data-i18n="btn_delete_selected">🗑 選択を削除</span></button>
+          <button class="btn btn-secondary btn-sm" onclick="batchCertUpdate(true)"><span data-i18n="btn_cert_on">🏆 証明書 ON</span></button>
+          <button class="btn btn-secondary btn-sm" onclick="batchCertUpdate(false)"><span data-i18n="btn_cert_off">🏆 証明書 OFF</span></button>
+        </div>
+        <div style="display:flex;gap:16px;flex-wrap:wrap;align-items:flex-end;border-top:1px solid var(--border);padding-top:10px;">
           <div>
             <div style="font-size:11px;color:var(--muted);margin-bottom:4px;" data-i18n="issuer_id_common_label">Issuer ID（全件共通）</div>
             <div style="display:flex;gap:6px;">
-              <input type="text" id="cert-batch-issuer-id" placeholder="issuer_id" style="width:280px;">
+              <input type="text" id="cert-batch-issuer-id" placeholder="issuer_id" style="width:260px;">
               <button class="btn btn-secondary btn-xs" onclick="document.getElementById('cert-batch-issuer-id').value='772c8921-3ca3-426e-bc44-fb80cd30bd72'" data-i18n="btn_preset">プリセット</button>
             </div>
           </div>
@@ -856,7 +854,6 @@ const I18N = {
     btn_unpublish:'⏸ 取消公開',
     btn_vod_match:'🔎 VOD 比對',
     cert_apply_settings_hint:'比對既有 cert-template 的名稱與 Program 標題，自動設定 Template ID（不會重新建立範本）。可用「⬇ 証明書テンプレートID一覧CSV」下載 name→template_id 對照表。Program CSV 加上 cert_template_id / cert_issuer_id / cert_enabled / cert_threshold 欄位，執行「📋 Program 情報のみ」時會一併套用證書設定（沒填欄位就維持現狀）。',
-    cert_apply_settings_title:'🏆 證書範本 套用設定（共用）',
     cert_auto_apply_hint:'會比對 CSV 的「name」欄跟 Program 清單的標題。請先在「Program 清單・批次刪除」卡片裡載入清單，Issuer ID、合格閾值也請在那裡先設定。',
     cert_auto_apply_label:'把建立好的 Template ID，自動套用到同名 Program 的證書設定（啟用 + 設定 Template ID）',
     cert_batch_desc:'Logo・Background 可以全部範本共用同一張。只有 Badge 每個範本不同，用 CSV 的檔名去比對。',
@@ -886,6 +883,7 @@ const I18N = {
     full_sync_title:'🚀 Prod → QA 全同步',
     full_sync_warn:'⚠️ 請務必確認設定裡的 Base URL 是 <b>QA</b>（api.one-qa.kkstream.io）。如果還是 Prod URL 就執行，會覆蓋 Prod 的資料。',
     issuer_id_common_label:'Issuer ID（全部共用）',
+    no_selection_all_target:'未勾選 → 對象為全部',
     lang_colon:'語言：',
     log_title_plain:'Log',
     nav_compare:'Prod vs QA',
@@ -1041,7 +1039,6 @@ const I18N = {
     btn_unpublish:'⏸ 非公開',
     btn_vod_match:'🔎 VOD 照合',
     cert_apply_settings_hint:'既存の cert-template を Program タイトルと名前で照合し、Template ID を自動設定します（テンプレートの再作成はしません）。「⬇ 証明書テンプレートID一覧CSV」で name→template_id の対応表をダウンロードできます。Program CSV に cert_template_id / cert_issuer_id / cert_enabled / cert_threshold 列を追加すると、「📋 Program 情報のみ」実行時に証明書設定も一緒に反映されます（列が無ければ証明書設定は現状維持）。',
-    cert_apply_settings_title:'🏆 証明書テンプレート 反映設定（共通）',
     cert_auto_apply_hint:'CSVの「name」列と、Program一覧のタイトルを照合します。事前に「Program 一覧・バッチ削除」カードで読み込みを行い、Issuer ID・合格閾値もそちらで設定しておいてください。',
     cert_auto_apply_label:'作成した Template ID を、同名の Program の証明書設定に自動反映する（有効化 + Template ID 設定）',
     cert_batch_desc:'Logo・Background は共通の1枚を全テンプレートで使い回せます。Badge だけテンプレートごとに違う画像を、CSVのファイル名でマッチングします。',
@@ -1071,6 +1068,7 @@ const I18N = {
     full_sync_title:'🚀 Prod → QA 全同期',
     full_sync_warn:'⚠️ 設定の Base URL が <b>QA</b>（api.one-qa.kkstream.io）になっていることを必ず確認してください。Prod URL のまま実行すると Prod のデータが上書きされます。',
     issuer_id_common_label:'Issuer ID（全件共通）',
+    no_selection_all_target:'未選択 → 全件が対象',
     lang_colon:'語言：',
     log_title_plain:'ログ',
     nav_compare:'Prod vs QA',
@@ -4679,6 +4677,7 @@ async function loadProgramList(){
     document.getElementById('prog-list-table').style.display='table';
     document.getElementById('prog-list-empty').style.display='none';
     document.getElementById('prog-list-filter-row').style.display='flex';
+    document.getElementById('prog-list-batch').style.display='block';
     countEl.textContent=`${programListData.length}件 / 空:${programListData.filter(p=>p.isEmpty).length}件 / 重複:${programListData.filter(p=>p.isDuplicate).length}件`;
   }catch(e){ toast('取得失敗: '+e.message,'error'); }
   finally{ btn.disabled=false; btn.textContent='🔄 読み込み'; }
@@ -4847,13 +4846,14 @@ function toggleAllPrograms(checked){
 }
 
 function updateProgramBatchBar(){
-  const bar=document.getElementById('prog-list-batch');
   const countEl=document.getElementById('prog-list-selected-count');
+  if(!countEl) return;
   if(selectedProgramIds.size>0){
-    bar.style.display='block';
     countEl.textContent=`${selectedProgramIds.size}件選択中`;
+    countEl.style.color='var(--accent)';
   } else {
-    bar.style.display='none';
+    countEl.textContent=t('no_selection_all_target');
+    countEl.style.color='var(--muted)';
   }
 }
 
