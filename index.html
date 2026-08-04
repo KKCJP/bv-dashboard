@@ -5513,6 +5513,13 @@ async function exportProgramCsv(){
 function downloadProgramTemplate(){
   const aboutSample='今日のように事業環境の変化が激しい状況下では、事業戦略を実行して、実際の収支の状況を見ながら、適切と思われる打ち手を講じていく必要があります。\n\n**学習対象者**\n- 経営企画、事業企画、管理部門など事業の計画と管理にかかわる方々\n- 事業計画を実行・管理する事業リーダーやマネジャー、管理職 など\n\n※本講座の字幕およびテストは、生成AIによって作成されています。\n\n==資料のダウンロードは== [こちら](https://example.com/document.pdf) ==から==';
   const rows=[['field','value'],['',''],['# ===== Program 1 =====',''],['# about は普通の文章でOK。空行=段落、- =箇条書き、**太字**、[リンク名](URL)、==強調== が使えます。',''],['program_title','マネージャー層に必要とされるビジネス環境の先読み力'],['topic_labels','ビジネス基礎力,VUCA'],['highlight_1','激動の時代における企業経営の基本的な考え方'],['highlight_2','VUCAの時代に事業戦略を担うためのスキルセット'],['highlight_3','新規事業のアイデア創出のためのテクニックと検証方法'],['about',aboutSample],['author_name','佐古 雅亮'],['author_title','Spready株式会社 代表取締役'],['author_desc','著者説明文'],['author_avatar_library_id',''],['background_library_id',''],['part_numbers','E1000078'],['visibility','CONTENT_VISIBILITY_DRAFT'],['cert_template_id','（⬇証明書テンプレートID一覧CSVからコピー、空欄なら証明書設定は現状維持）'],['cert_issuer_id',''],['cert_enabled','true'],['cert_threshold','80'],['',''],['# --- コンテンツ構成 ---',''],['main_category','ビジネス環境の先読み力 前半'],['sub_category','Part 1'],['content','71_1 VUCA変化の激しい時代'],['content','71_2 ビジネス環境を「読む」ためのマインドセット'],['sub_category','Part 2'],['content','71_3 ビジネス環境を「読む」ためのスキルセット'],['main_category','ビジネス環境の先読み力 後半'],['content','71_4 ビジネス環境先読みの王道'],['',''],['---',''],['',''],['# ===== Program 2 =====',''],['program_title','次のコースタイトル'],['highlight_1','学習ポイント1'],['visibility','CONTENT_VISIBILITY_DRAFT'],['main_category','メインカテゴリ名'],['content','実際の動画名']];
+  rows.splice(4,0,
+    ['# about の書き方：空行 → 段落（p）',''],
+    ['# about の書き方：- または ・ → 箇条書き（ul/li）',''],
+    ['# about の書き方：**文字** → 太字',''],
+    ['# about の書き方：[文字](URL) → リンク',''],
+    ['# about の書き方：==文字== → 青背景の強調表示','']
+  );
   const csv=rows.map(r=>r.map(c=>`"${(c||'').replace(/"/g,'""')}"`).join(',')).join('\n');
   const a=document.createElement('a'); a.href='data:text/csv;charset=utf-8,\uFEFF'+encodeURIComponent(csv); a.download='bv_program_template.csv'; a.click();
   toast('テンプレートをダウンロードしました','success');
