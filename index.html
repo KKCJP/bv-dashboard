@@ -2823,6 +2823,49 @@ function normalizeProgramAboutHtml(raw){
   flushBullets();
   return blocks.join('');
 }
+function normalizeAboutUrl(href){
+  const raw=String(href||'').replace(/&amp;/g,'&');
+  const md=raw.match(/\]\((https?:\/\/[^)]+)\)$/);
+  return md ? md[1] : raw;
+}
+function cleanProgramAboutText(text){
+  return String(text||'')
+    .replace(/\*\*==([^*\n]+)==\*\*/g,'==$1==')
+    .replace(/\[\*\*==([^\]]+)==\*\*\]\(([^)]+)\)/g,'[==$1==]($2)')
+    .replace(/([^\s])(\[==)/g,'$1 $2')
+    .replace(/(\]\([^)]+\))(?===)/g,'$1 ')
+    .replace(/[ \t]+\n/g,'\n')
+    .replace(/\n{3,}/g,'\n\n')
+    .trim();
+}
+function programAboutHtmlToReadable(raw){
+  const html=String(raw||'').trim();
+  if(!html || !hasHtmlTags(html)) return html;
+  const doc=new DOMParser().parseFromString(`<div>${html}</div>`,'text/html');
+  const root=doc.body.firstElementChild||doc.body;
+  const walk=(node, ctx={})=>{
+    if(node.nodeType===Node.TEXT_NODE) return node.textContent||'';
+    if(node.nodeType!==Node.ELEMENT_NODE) return '';
+    const tag=node.tagName.toLowerCase();
+    const inner=()=>[...node.childNodes].map(n=>walk(n,ctx)).join('');
+    if(tag==='br') return '\n';
+    if(tag==='p') return inner().trim() ? `${inner().trim()}\n\n` : '\n';
+    if(tag==='ul') return `\n${inner()}\n`;
+    if(tag==='li') return `- ${inner().trim()}\n`;
+    if(tag==='a'){
+      const text=inner().trim();
+      const href=normalizeAboutUrl(node.getAttribute('href')||'');
+      return href ? `[${text}](${href})` : text;
+    }
+    if(tag==='mark') return `==${inner().trim()}==`;
+    if(tag==='strong'||tag==='b'){
+      const text=inner().trim();
+      return /^==[\s\S]*==$/.test(text) ? text : `**${text}**`;
+    }
+    return inner();
+  };
+  return cleanProgramAboutText([...root.childNodes].map(n=>walk(n)).join(''));
+}
 
 function makeLog(elId, cardId){
   const logEl=document.getElementById(elId);
@@ -5440,7 +5483,7 @@ async function exportProgramCsv(){
       const texts=p.highlight?.texts||['','',''];
       const author=p.author_info||{};
       const bg=p.background||{};
-      const aboutHtml=(p.about?.html_content||'').replace(/\r?\n/g,' ').replace(/\s{2,}/g,' ').trim();
+      const aboutHtml=programAboutHtmlToReadable(p.about?.html_content||'');
       const certSetting=p.certification?.setting||{};
       const clipTags=(p.clip?.clips||[]).map(c=>c.name||'').filter(Boolean).join(',');
 
