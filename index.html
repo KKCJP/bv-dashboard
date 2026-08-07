@@ -5782,8 +5782,8 @@ async function runProgramImport(mode='program_only'){
   const isArrOnly=mode==='arrangement_only';
   log(`▶ ${isProgramOnly?'Program 情報のみ匯入':'Arrangement のみ匯入'}：${programImportData.length}件`);
 
-  // QA CPM の VOD・FORM 全件取得（content_id 変換用）
-  log('  📋 QA CPM コンテンツ取得中...');
+  // 現在の接続先 CPM の VOD・FORM 全件取得（content_id 変換用）
+  log('  📋 CPM コンテンツ取得中...');
   const arrangementCpmMap={};
   const arrangementCpmIds=new Set();
   const arrangementCpmTypeById={}; // content_id -> 実際の CONTENT_TYPE（VOD/FORM）。これが無いと FORM(テスト等) も VOD 扱いになり存在確認に失敗する
@@ -5804,8 +5804,8 @@ async function runProgramImport(mode='program_only'){
         p++;
       }
     }
-    log(`  ✅ QA CPM コンテンツ: ${Object.keys(arrangementCpmMap).length}件（VOD+FORM）`);
-  }catch(e){ log(`  ⚠️ QA CPM 取得失敗: ${e.message}`); }
+    log(`  ✅ CPM コンテンツ: ${Object.keys(arrangementCpmMap).length}件（VOD+FORM）`);
+  }catch(e){ log(`  ⚠️ CPM コンテンツ取得失敗: ${e.message}`); }
 
   // vodsData が空なら VOD を全件取得（content name 検索のため）
   if(!vodsData.length){
@@ -5848,11 +5848,11 @@ async function runProgramImport(mode='program_only'){
       // program_id で既存を照合（IDがあればID優先、なければタイトル照合）
       let progId=prog.program_id||'';
       if(progId){
-        // ID指定あり → QA に存在するか確認
+        // ID指定あり → 現在の接続先に存在するか確認
         const byId=existingProgs.find(p=>p.content_id===progId);
         if(!byId){
-          // Prod の ID → QA のタイトルで再照合
-          log(`  ⚠️ program_id が QA に存在しません → タイトルで再照合`);
+          // 他環境の ID かもしれない → タイトルで再照合
+          log(`  ⚠️ program_id が現在の接続先に存在しません → タイトルで再照合`);
           progId='';
         }
         // 同名のプログラムが他にあれば警告
@@ -5879,11 +5879,11 @@ async function runProgramImport(mode='program_only'){
 
       if(!progId){
         if(isArrOnly){
-          log(`  ⚠️ QA に Program が見つかりません → スキップ`,'error');
+          log(`  ⚠️ 現在の接続先に Program が見つかりません → スキップ`,'error');
           skipCount++; continue;
         }
         // program_only モード → 新規作成
-        log(`  ➕ QA に Program が見つかりません → 新規作成`);
+        log(`  ➕ 現在の接続先に Program が見つかりません → 新規作成`);
         try{
           const r=await fetch(`${BASE()}/bv/cpm/v1alpha1/sites/${site}/programs`,{
             method:'POST', headers:{...HDR(),'Content-Type':'application/json'},
@@ -5929,7 +5929,7 @@ async function runProgramImport(mode='program_only'){
               if(fuzzy){ contentId=fuzzy.value.id; contentType=fuzzy.value.type; }
             }
           }
-          // content_id が QA CPM に存在しない場合は fuzzy で再検索。存在する場合も、実際の type（VOD/FORM）で上書きする
+          // content_id が現在の接続先 CPM に存在しない場合は fuzzy で再検索。存在する場合も、実際の type（VOD/FORM）で上書きする
           if(contentId && arrangementCpmIds.has(contentId)){
             contentType=arrangementCpmTypeById[contentId]||contentType;
           } else if(contentId && !arrangementCpmIds.has(contentId) && searchName){
@@ -5982,7 +5982,15 @@ async function runProgramImport(mode='program_only'){
         s.section?.items?.flatMap(i=>i.module?.items||[i])||s.module?.items||[s]
       ).filter(i=>i.type==='PROGRAM_ARRANGEMENT_ITEM_TYPE_CONTENT').length;
       log(`  📋 arrangement: ${finalArrangement.length}件（content ${contentCount}本）${contentCount===0?' ⚠️ content なし、大/小カテゴリのみ':''}`);
-      // arrangement が全部空でも PUT を試みる（基本情報だけ更新）
+      // Arrangement-only は「一部だけ成功」を許可しない。異常があれば既存 Arrangement を触らず skip。
+      if(isArrOnly && missingContents.length){
+        log(`  ❌ content 未找到のため Arrangement 更新をスキップ（既存内容は変更しません）`,'error');
+        skipCount++; continue;
+      }
+      if(isArrOnly && contentCount===0){
+        log(`  ❌ 更新後 Arrangement が空になるためスキップ（既存内容は変更しません）`,'error');
+        skipCount++; continue;
+      }
       if(finalArrangement.length===0) log(`  ℹ️ arrangement 空のため基本情報のみ更新`);
 
       const isValidUUID=s=>/^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$/i.test(s||'');
@@ -6036,9 +6044,6 @@ async function runProgramImport(mode='program_only'){
         let putBody;
         const countItems=items=>items.reduce((n,it)=>n+(it.type==='PROGRAM_ARRANGEMENT_ITEM_TYPE_CONTENT'?1:(it.section?.items?countItems(it.section.items):it.module?.items?countItems(it.module.items):0)),0);
         const existingArrRaw=ep.arrangement||{displayable:true,items:[]};
-        const existingArrCleaned=stripEmptyContentIds(JSON.parse(JSON.stringify(existingArrRaw.items||[])));
-        const removedEmptyCount=countItems(existingArrRaw.items||[])-countItems(existingArrCleaned);
-        if(removedEmptyCount>0) log(`  🩹 既存 Arrangement 内の空ID項目を${removedEmptyCount}件除去しました`,'error');
 
         if(isArrOnly){
           // Arrangement のみ更新（メタ情報は既存を保持）
@@ -6065,7 +6070,7 @@ async function runProgramImport(mode='program_only'){
             about:{displayable:true,html_content:f.about_html!==undefined?f.about_html:(ep.about?.html_content||'')},
             author_info:mergedAuthor,
             label_info:{displayable:true,labels:(f.labels!==undefined?f.labels:(ep.label_info?.labels||[]).map(l=>typeof l==='object'?(l.name||l):l)).map(l=>({name:l}))},
-            arrangement: {displayable:true, items:existingArrCleaned},
+            arrangement: existingArrRaw,
             clip:mergedClip,
             rating:{displayable:false},
             level_info:ep.level_info||{displayable:false,level:'PROGRAM_LEVEL_BEGINNER'},
@@ -6081,7 +6086,7 @@ async function runProgramImport(mode='program_only'){
             try{ await cpmPut(`/bv/cpm/v1alpha1/sites/${site}/programs/${progId}`,{program:currentPutBody}); putBody=currentPutBody; break; }
             catch(e){
               const badIds=[...String(e.message).matchAll(/CONTENT_TYPE_\w+:([0-9a-fA-F-]{36})/g)].map(m=>m[1]);
-              if(badIds.length && currentPutBody.arrangement?.items?.length){
+              if(badIds.length && currentPutBody.arrangement?.items?.length && !isProgramOnly && !isArrOnly){
                 log(`  ⚠️ 存在しない content を検出 → 除外して再試行: ${badIds.join(', ')}`,'error');
                 let stripped=stripBadContentIds(currentPutBody.arrangement.items, new Set(badIds));
                 stripped=cleanArrangement(stripped);
@@ -6089,24 +6094,16 @@ async function runProgramImport(mode='program_only'){
                 currentPutBody={...currentPutBody, arrangement:{displayable:true, items:stripped}};
                 continue;
               }
+              if((isProgramOnly||isArrOnly) && badIds.length){
+                throw new Error(`存在しない content を検出したため更新を中止（既存内容は変更しません）: ${badIds.join(', ')}`);
+              }
               if(attempt<2) await new Promise(r=>setTimeout(r,2000)); else throw e;
             }
           }
         }
 
-        // contents/setting も有値フィールドのみ更新（QA では失敗する場合あり → 無視）
-        try{
-          const existContent=existingProgs.find(p=>p.content_id===progId)||{};
-          await cpmPut(`/bv/cpm/v1alpha1/sites/${site}/contents/setting`,{content:{
-            content_id:progId,content_type:'CONTENT_TYPE_PROGRAM',
-            visibility:f.visibility||existContent.visibility||'CONTENT_VISIBILITY_DRAFT',
-            labels:f.labels!==undefined?f.labels:(existContent.labels||[]),
-            part_numbers:f.part_numbers!==undefined?f.part_numbers:(existContent.part_numbers||[]),
-            schedule:{start_time:null,end_time:null},
-            license_setting:{license:'CONTENT_LICENSE_LICENSE_ONLY',custom_url_resource:''},
-            note:'',form_type:null
-          }});
-        }catch(e){ /* /contents/setting は QA で失敗する場合があるが無視 */ }
+        // Safety: do not PUT /contents/setting here. That endpoint can carry
+        // license_setting/license_level and may overwrite existing license data.
 
       } else {
         // ── 新規 → POST → PUT（全フィールド送る） ──
@@ -6119,7 +6116,7 @@ async function runProgramImport(mode='program_only'){
           about:{displayable:true,html_content:f.about_html||''},
           author_info:authorInfo,
           label_info:{displayable:true,labels:(f.labels||[]).map(l=>({name:l}))},
-          arrangement:{displayable:true,items:finalArrangement},
+          arrangement:{displayable:true,items:isProgramOnly?[]:finalArrangement},
           clip:{displayable:true,clips:(f.clip_tags||[]).map((name,i)=>({name,vod_id:'',sequence:i+1}))},rating:{displayable:false},
           level_info:{displayable:false,level:'PROGRAM_LEVEL_BEGINNER'},
           relation:{displayable:true,related_contents:[]},
@@ -6136,7 +6133,7 @@ async function runProgramImport(mode='program_only'){
             try{ await cpmPut(`/bv/cpm/v1alpha1/sites/${site}/programs/${progId}`,{program:currentPutBody}); break; }
             catch(e){
               const badIds=[...String(e.message).matchAll(/CONTENT_TYPE_\w+:([0-9a-fA-F-]{36})/g)].map(m=>m[1]);
-              if(badIds.length && currentPutBody.arrangement?.items?.length){
+              if(badIds.length && currentPutBody.arrangement?.items?.length && !isProgramOnly && !isArrOnly){
                 log(`  ⚠️ 存在しない content を検出 → 除外して再試行: ${badIds.join(', ')}`,'error');
                 let stripped=stripBadContentIds(currentPutBody.arrangement.items, new Set(badIds));
                 stripped=cleanArrangement(stripped);
@@ -6144,11 +6141,14 @@ async function runProgramImport(mode='program_only'){
                 currentPutBody={...currentPutBody, arrangement:{displayable:true, items:stripped}};
                 continue;
               }
+              if((isProgramOnly||isArrOnly) && badIds.length){
+                throw new Error(`存在しない content を検出したため更新を中止（既存内容は変更しません）: ${badIds.join(', ')}`);
+              }
               if(attempt<2) await new Promise(r=>setTimeout(r,2000)); else throw e;
             }
           }
         }
-        await cpmPut(`/bv/cpm/v1alpha1/sites/${site}/contents/setting`,{content:{content_id:progId,content_type:'CONTENT_TYPE_PROGRAM',visibility:f.visibility||'CONTENT_VISIBILITY_DRAFT',labels:f.labels||[],part_numbers:f.part_numbers||[],schedule:{start_time:null,end_time:null},license_setting:{license:'CONTENT_LICENSE_LICENSE_ONLY',custom_url_resource:''},note:'',form_type:null}});
+        // Safety: do not PUT /contents/setting here to avoid overwriting license_level/license_setting.
       }
       log(`  ✅ 完了（ID: ${progId.substring(0,16)}...）`,'done');
     }catch(e){ log(`  ❌ ${e.message}`,'error'); }
