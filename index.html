@@ -5999,6 +5999,10 @@ async function runProgramImport(mode='program_only'){
       const f=prog._fields||{};
       const hasContents=(prog.contents||[]).length>0;
 
+      if(isArrOnly && (f.author_name!==undefined||f.author_title!==undefined||f.author_desc!==undefined)){
+        log('  ℹ️ Arrangement のみモードでは author_name / author_title / author_desc は更新しません。Program 情報のみモードを使用してください。','error');
+      }
+
       if(progId){
         // ── 既存 → GET して merge（patch モード） ──
         log(`  ♻️ 既存 Program を更新（ID: ${progId.substring(0,16)}...）`);
@@ -6016,7 +6020,7 @@ async function runProgramImport(mode='program_only'){
 
         const mergedAuthor={...(ep.author_info||{}),displayable:true};
         if(f.author_name!==undefined) mergedAuthor.name=f.author_name;
-        if(f.author_title!==undefined) mergedAuthor.author_title=f.author_title;
+        if(f.author_title!==undefined) mergedAuthor.title=f.author_title;
         if(f.author_desc!==undefined) mergedAuthor.description=f.author_desc;
         if(f.author_avatar_library_id!==undefined){
           if(isValidUUID(f.author_avatar_library_id)) mergedAuthor.avatar_library_id=f.author_avatar_library_id;
