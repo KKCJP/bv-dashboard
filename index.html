@@ -4020,7 +4020,7 @@ async function runOutlineImport(){
   const btn=document.getElementById('outline-import-btn');
   if(btn){btn.disabled=true;btn.textContent='⏳ 実行中...';}
   const log=makeLog('outline-log','outline-log-card');
-  log(`▶ Outline 匯入開始：${outlineImportData.length}行（修正版 v2）`);
+  log(`▶ Outline 匯入開始：${outlineImportData.length}行（修正版 v3）`);
 
   // vodsData が空なら VOD を全件取得（content name 検索のため）
   if(!vodsData.length){
@@ -4194,13 +4194,14 @@ async function runOutlineImport(){
               // c.id が QA CPM に存在するか確認（Prod の ID が混入している可能性）
               const qaEntry=cpmContentIdMap.get(c.id);
               if(qaEntry){
-                resolved.push({id:c.id,type:c.type||qaEntry.type||'CONTENT_TYPE_PROGRAM'});
+                // ID を持つ CPM レコードの実際の type を CSV より優先する。
+                resolved.push({id:c.id,type:qaEntry.type||c.type||'CONTENT_TYPE_PROGRAM'});
               } else if(c._search_name||c.name||c.title){
                 // QA に存在しない ID → name で fuzzy 検索
                 const searchName=(c._search_name||c.name||c.title||'').trim();
                 const cpmEntry=cpmContentTitleMap[searchName]||
                   fuzzyFindInMap(cpmContentTitleMap, searchName, 0.8)?.value||null;
-                if(cpmEntry) resolved.push({id:cpmEntry.id,type:c.type||cpmEntry.type||'CONTENT_TYPE_PROGRAM'});
+                if(cpmEntry) resolved.push({id:cpmEntry.id,type:cpmEntry.type||c.type||'CONTENT_TYPE_PROGRAM'});
                 else missing.push(searchName||c.id);
               } else {
                 missing.push(c.id);
@@ -4230,7 +4231,7 @@ async function runOutlineImport(){
                 }
 
                 if(cpmEntry){
-                  resolved.push({id:cpmEntry.id,type:c.type||cpmEntry.type||'CONTENT_TYPE_PROGRAM'});
+                  resolved.push({id:cpmEntry.id,type:cpmEntry.type||c.type||'CONTENT_TYPE_PROGRAM'});
                 } else {
                   missing.push(searchName);
                 }
@@ -4276,7 +4277,8 @@ async function runOutlineImport(){
     });
     if(!r.ok){
       const err=await r.text();
-      throw new Error(`${r.status}: ${err.substring(0,200)}`);
+      // ネストした build エラーの末尾に原因が出るため、全文を表示する。
+      throw new Error(`${r.status}: ${err}`);
     }
     await r.json();
     log(`  ✅ Outline 更新完了`,'done');
