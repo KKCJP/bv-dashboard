@@ -4020,7 +4020,7 @@ async function runOutlineImport(){
   const btn=document.getElementById('outline-import-btn');
   if(btn){btn.disabled=true;btn.textContent='⏳ 実行中...';}
   const log=makeLog('outline-log','outline-log-card');
-  log(`▶ Outline 匯入開始：${outlineImportData.length}行（修正版 v3）`);
+  log(`▶ Outline 匯入開始：${outlineImportData.length}行（修正版 v4）`);
 
   // vodsData が空なら VOD を全件取得（content name 検索のため）
   if(!vodsData.length){
@@ -4040,7 +4040,7 @@ async function runOutlineImport(){
   }
 
   try{
-    const outlineId=outlineImportData[0]?.outline_id||outlineImportData[0]?.['ライセンスOutline_ID']||'';
+    let outlineId=outlineImportData[0]?.outline_id||outlineImportData[0]?.['ライセンスOutline_ID']||'';
     if(!outlineId) throw new Error('outline_id が見つかりません');
 
     console.log('[outline] first row=', JSON.stringify(outlineImportData[0]));
@@ -4118,6 +4118,52 @@ async function runOutlineImport(){
     console.log('[outline import] catMap size=', catMap.size, [...catMap.values()].map(c=>c.name+':'+c.sub_categories.length+'subs'));
 
     let categories=[...catMap.values()];
+
+    // CSV の ID が別版・別環境由来でも、現在の Outline を基準に安全に補正する。
+    const currentOutline=await fetchOutline(BASE(),HDR(),site);
+    if(currentOutline.id&&currentOutline.id!==outlineId){
+      log(`  ⚠️ Outline ID を現在の接続先に補正：${outlineId.substring(0,8)}... → ${currentOutline.id.substring(0,8)}...`);
+      outlineId=currentOutline.id;
+    }
+    let correctedCategoryIds=0, newCategories=0, correctedSpaceIds=0;
+    const reconcileCategories=(incoming,current,path='')=>{
+      for(const node of incoming||[]){
+        const nodeType=node.type||'CATEGORY_TYPE_NONE';
+        const nodeName=node.name||'';
+        const currentSiblings=current||[];
+        let matched=currentSiblings.find(c=>c.id&&c.id===node.id);
+        if(!matched){
+          matched=currentSiblings.find(c=>(c.type||'CATEGORY_TYPE_NONE')===nodeType&&(c.name||'')===nodeName);
+        }
+        const nodePath=path?`${path} > ${nodeName}`:nodeName;
+        if(matched){
+          if(node.id!==matched.id){
+            node.id=matched.id;
+            correctedCategoryIds++;
+            log(`  🔧 Category ID 補正：${nodePath}`);
+          }
+          if(nodeType==='CATEGORY_TYPE_SPACE'&&matched.space_id&&node.space_id!==matched.space_id){
+            node.space_id=matched.space_id;
+            correctedSpaceIds++;
+            log(`  🔧 Space ID 補正：${nodePath}`);
+          }
+          reconcileCategories(node.sub_categories||node.categories||[],matched.sub_categories||matched.categories||[],nodePath);
+        }else{
+          if(node.id){
+            delete node.id;
+            newCategories++;
+            log(`  ➕ 現在の Outline にない Category は名称から再作成：${nodePath}`);
+          }
+          reconcileCategories(node.sub_categories||node.categories||[],[],nodePath);
+        }
+      }
+    };
+    if(currentOutline.categories?.length){
+      reconcileCategories(categories,currentOutline.categories);
+      log(`  📋 Category 補正完了：ID ${correctedCategoryIds}件、Space ${correctedSpaceIds}件、再作成 ${newCategories}件`);
+    }else{
+      log(`  ⚠️ 現在の Outline 構造を取得できないため、Category ID 自動補正をスキップ`);
+    }
 
     // 不完全な Space を送ると API 側が build sub category failed になるため、PUT 前に明示検証する。
     const missingSpaceIds=[];
