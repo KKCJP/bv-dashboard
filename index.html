@@ -4020,7 +4020,7 @@ async function runOutlineImport(){
   const btn=document.getElementById('outline-import-btn');
   if(btn){btn.disabled=true;btn.textContent='⏳ 実行中...';}
   const log=makeLog('outline-log','outline-log-card');
-  log(`▶ Outline 匯入開始：${outlineImportData.length}行`);
+  log(`▶ Outline 匯入開始：${outlineImportData.length}行（修正版 v2）`);
 
   // vodsData が空なら VOD を全件取得（content name 検索のため）
   if(!vodsData.length){
@@ -4075,14 +4075,16 @@ async function runOutlineImport(){
             : subCat.sub_categories.find(s=>s.name===row.space_name);
           if(!space){
             space=row.space_id
-              ? {id:row.space_id,name:row.space_name,type:'CATEGORY_TYPE_SPACE',sub_categories:[],contents:[]}
-              : {name:row.space_name,type:'CATEGORY_TYPE_SPACE',sub_categories:[],contents:[]};
+              ? {id:row.space_id,name:row.space_name,type:'CATEGORY_TYPE_SPACE',space_id:row.space_cat_id||'',sub_categories:[],contents:[]}
+              : {name:row.space_name,type:'CATEGORY_TYPE_SPACE',space_id:row.space_cat_id||'',sub_categories:[],contents:[]};
             subCat.sub_categories.push(space);
           }
           if(space){
+            // CSV の「第三階層内Space_ID」は Outline API が実体 Space を解決するために必須。
+            if(row.space_cat_id) space.space_id=row.space_cat_id;
             // content_id があればそのまま、なければ name を検索キーとして保存
             const contentEntry=row.content_id
-              ? {id:row.content_id,type:row.content_type||'CONTENT_TYPE_PROGRAM'}
+              ? {id:row.content_id,_search_name:row.content_name||'',type:row.content_type||'CONTENT_TYPE_PROGRAM'}
               : row.content_name
                 ? {_search_name:row.content_name,type:row.content_type||'CONTENT_TYPE_PROGRAM'}
                 : null;
@@ -4096,13 +4098,14 @@ async function runOutlineImport(){
         let space=cat.sub_categories.find(s=>s.id===row.space_id);
         if(!space){
           space=row.space_id
-          ? {id:row.space_id,name:row.space_name,type:'CATEGORY_TYPE_SPACE',sub_categories:[],contents:[]}
-          : {name:row.space_name,type:'CATEGORY_TYPE_SPACE',sub_categories:[],contents:[]};
+          ? {id:row.space_id,name:row.space_name,type:'CATEGORY_TYPE_SPACE',space_id:row.space_cat_id||'',sub_categories:[],contents:[]}
+          : {name:row.space_name,type:'CATEGORY_TYPE_SPACE',space_id:row.space_cat_id||'',sub_categories:[],contents:[]};
           cat.sub_categories.push(space);
         }
         if(space){
+          if(row.space_cat_id) space.space_id=row.space_cat_id;
           const contentEntry=row.content_id
-            ? {id:row.content_id,type:row.content_type||'CONTENT_TYPE_PROGRAM'}
+            ? {id:row.content_id,_search_name:row.content_name||'',type:row.content_type||'CONTENT_TYPE_PROGRAM'}
             : row.content_name
               ? {_search_name:row.content_name,type:row.content_type||'CONTENT_TYPE_PROGRAM'}
               : null;
@@ -4115,6 +4118,21 @@ async function runOutlineImport(){
     console.log('[outline import] catMap size=', catMap.size, [...catMap.values()].map(c=>c.name+':'+c.sub_categories.length+'subs'));
 
     let categories=[...catMap.values()];
+
+    // 不完全な Space を送ると API 側が build sub category failed になるため、PUT 前に明示検証する。
+    const missingSpaceIds=[];
+    const validateSpaceIds=(cats)=>{
+      for(const cat of cats||[]){
+        if(cat.type==='CATEGORY_TYPE_SPACE'&&!cat.space_id){
+          missingSpaceIds.push(cat.name||cat.id||'(名称なし)');
+        }
+        validateSpaceIds(cat.sub_categories||cat.categories||[]);
+      }
+    };
+    validateSpaceIds(categories);
+    if(missingSpaceIds.length){
+      throw new Error(`第三階層内Space_ID が空です：${missingSpaceIds.join('、')}`);
+    }
 
     // Space 数を再帰でカウント
     const countSpaces=(cats)=>cats.reduce((sum,cat)=>{
@@ -4138,6 +4156,7 @@ async function runOutlineImport(){
     // _search_name を持つ content を name で検索して CPM content_id を解決
     // CPM contents 全種類（VOD・Program・Form）を先に全件取得（title → {content_id, content_type} マップ）
     const cpmContentTitleMap={};  // title → {id, type}
+    const cpmContentIdMap=new Map(); // content_id → {id, type, title}
     try{
       const fetchTypes=['CONTENT_TYPE_PROGRAM','CONTENT_TYPE_VOD','CONTENT_TYPE_FORM'];
       for(const ct of fetchTypes){
@@ -4146,7 +4165,16 @@ async function runOutlineImport(){
           const _r=await fetch(`${BASE()}/bv/cpm/v1alpha1/sites/${site}/contents?current_page=${_p}&items_per_page=100&filter.content_types=${ct}`,{headers:HDR()});
           const _d=await _r.json();
           const _items=_d.contents||[];
-          _items.forEach(c=>{ const _t=(c.title||'').replace(/\.mp4$/i,'').trim(); if(_t&&c.content_id) cpmContentTitleMap[_t]={id:c.content_id,type:ct}; });
+          _items.forEach(c=>{
+            const _t=(c.title||'').replace(/\.mp4$/i,'').trim();
+            if(!_t||!c.content_id) return;
+            const entry={id:c.content_id,type:ct,title:_t};
+            cpmContentIdMap.set(c.content_id,entry);
+            // Outline は Program が中心。同名の Form / VOD で Program を上書きしない。
+            if(!cpmContentTitleMap[_t]||ct==='CONTENT_TYPE_PROGRAM'){
+              cpmContentTitleMap[_t]=entry;
+            }
+          });
           if(_items.length<100) break;
           _p++;
         }
@@ -4164,9 +4192,9 @@ async function runOutlineImport(){
           for(const c of child.contents||[]){
             if(c.id){
               // c.id が QA CPM に存在するか確認（Prod の ID が混入している可能性）
-              const qaEntry=Object.values(cpmContentTitleMap).find(e=>e.id===c.id);
+              const qaEntry=cpmContentIdMap.get(c.id);
               if(qaEntry){
-                resolved.push(c);
+                resolved.push({id:c.id,type:c.type||qaEntry.type||'CONTENT_TYPE_PROGRAM'});
               } else if(c._search_name||c.name||c.title){
                 // QA に存在しない ID → name で fuzzy 検索
                 const searchName=(c._search_name||c.name||c.title||'').trim();
@@ -4236,7 +4264,7 @@ async function runOutlineImport(){
     if(allContentIds.length>0) log(`  例: ${allContentIds.slice(0,3).map(c=>c.name?.substring(0,16)+'... ('+c.type+')').join('、')}`);
 
     // 送る ID のうち実際に QA CPM に存在するか抽出してログ
-    const allCpmIds=new Set(Object.values(cpmContentTitleMap).map(e=>e.id));
+    const allCpmIds=new Set(cpmContentIdMap.keys());
     const notInCpm=allContentIds.filter(c=>!allCpmIds.has(c.name));
     if(notInCpm.length) log(`  ⚠️ QA CPM に存在しない ID: ${notInCpm.length}件 例: ${notInCpm.slice(0,3).map(c=>c.name?.substring(0,16)+'...').join('、')}`,'error');
 
