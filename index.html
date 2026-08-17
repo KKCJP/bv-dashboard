@@ -3965,23 +3965,35 @@ function handleOutlineCsv(event){
       if(!lines.length){ toast('データがありません','error'); return; }
       const header=parseCSVLine(lines[0]).map(h=>h.trim());
       const getCol=(row,key)=>{ const i=header.findIndex(h=>h.toLowerCase()===key.toLowerCase()||h===key); return i>=0?(row[i]||'').trim():''; };
+      const hasCol=key=>header.some(h=>h.toLowerCase()===key.toLowerCase()||h===key);
+      const getAny=(row,...keys)=>{ for(const key of keys){ const value=getCol(row,key); if(value) return value; } return ''; };
+      // 原始英語 CSV は space_id=実体 Space、space_cat_id=Outline 上の分類 ID。
+      // 日本語エクスポートは 第三階層ID=分類 ID、第三階層内Space_ID=実体 Space。
+      const originalEnglishSpaceSchema=hasCol('space_id')&&!hasCol('第三階層ID');
 
       const rows=[];
       for(const line of lines.slice(1)){
         const row=parseCSVLine(line);
         if(!row.length||row.every(c=>!c.trim())) continue;
+        const spaceNodeId=originalEnglishSpaceSchema
+          ? getCol(row,'space_cat_id')
+          : getAny(row,'第三階層ID','space_cat_id');
+        const realSpaceId=originalEnglishSpaceSchema
+          ? getCol(row,'space_id')
+          : getAny(row,'第三階層内Space_ID','space_id');
         rows.push({
-          outline_id: getCol(row,'ライセンスOutline_ID')||getCol(row,'outline_id'),
-          cat_id: getCol(row,'第一階層ID'),
-          cat_name: getCol(row,'第一階層Name'),
-          sub_cat_id: getCol(row,'第二階層ID'),
-          sub_cat_name: getCol(row,'第二階層Name'),
-          space_id: getCol(row,'第三階層ID'),
-          space_name: getCol(row,'第三階層Name'),
-          space_cat_id: getCol(row,'第三階層内Space_ID'),
-          content_id: getCol(row,'コンテンツID'),
-          content_name: getCol(row,'コンテンツName'),
-          content_type: getCol(row,'コンテンツType')||'CONTENT_TYPE_PROGRAM',
+          outline_id: getAny(row,'ライセンスOutline_ID','outline_id'),
+          cat_id: getAny(row,'第一階層ID','cat_id'),
+          cat_name: getAny(row,'第一階層Name','cat_name'),
+          sub_cat_id: getAny(row,'第二階層ID','sub_cat_id'),
+          sub_cat_name: getAny(row,'第二階層Name','sub_cat_name'),
+          // 既存処理では space_id=分類ノード ID、space_cat_id=実体 Space ID として扱う。
+          space_id: spaceNodeId,
+          space_name: getAny(row,'第三階層Name','space_name'),
+          space_cat_id: realSpaceId,
+          content_id: getAny(row,'コンテンツID','content_id'),
+          content_name: getAny(row,'コンテンツName','content_name'),
+          content_type: getAny(row,'コンテンツType','content_type')||'CONTENT_TYPE_PROGRAM',
         });
       }
 
@@ -4020,7 +4032,7 @@ async function runOutlineImport(){
   const btn=document.getElementById('outline-import-btn');
   if(btn){btn.disabled=true;btn.textContent='⏳ 実行中...';}
   const log=makeLog('outline-log','outline-log-card');
-  log(`▶ Outline 匯入開始：${outlineImportData.length}行（修正版 v4）`);
+  log(`▶ Outline 匯入開始：${outlineImportData.length}行（修正版 v5）`);
 
   // vodsData が空なら VOD を全件取得（content name 検索のため）
   if(!vodsData.length){
@@ -4177,7 +4189,7 @@ async function runOutlineImport(){
     };
     validateSpaceIds(categories);
     if(missingSpaceIds.length){
-      throw new Error(`第三階層内Space_ID が空です：${missingSpaceIds.join('、')}`);
+      throw new Error(`Space ID（英語: space_id／日本語: 第三階層内Space_ID）が空です：${missingSpaceIds.join('、')}`);
     }
 
     // Space 数を再帰でカウント
